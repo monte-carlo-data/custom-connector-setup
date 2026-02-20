@@ -66,7 +66,7 @@ class MetadataSchema(DataClassJsonMixin):
 
 
 #############################################
-# Create Fixtures
+# Add Metadata Fixtures
 #############################################
 @pytest.fixture(scope="session")
 def database(integration) -> str:
