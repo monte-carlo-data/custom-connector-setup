@@ -69,9 +69,9 @@ class MetadataSchema(DataClassJsonMixin):
 # Add Metadata Fixtures
 #############################################
 @pytest.fixture(scope="session")
-def database(integration) -> str:
-    query = integration.render_template(
-        integration.get_databases_query_template,
+def database(integration, templates) -> str:
+    query = templates.render_template(
+        templates.get_databases_query_template,
     )
     results = integration.execute_and_fetch_all(query)
 
@@ -79,9 +79,9 @@ def database(integration) -> str:
 
 
 @pytest.fixture(scope="session")
-def schemas(integration, database) -> List[str]:
-    query = integration.render_template(
-        integration.get_schemas_query_template,
+def schemas(integration, templates, database) -> List[str]:
+    query = templates.render_template(
+        templates.get_schemas_query_template,
         database_name=database
     )
     results = integration.execute_and_fetch_all(query)
@@ -90,11 +90,11 @@ def schemas(integration, database) -> List[str]:
 
 
 @pytest.fixture(scope="session")
-def tables(integration, database, schemas) -> List[MetadataSchema]:
+def tables(integration, templates, database, schemas) -> List[MetadataSchema]:
     offset = 0
     limit = 5000
-    query = integration.render_template(
-        integration.get_tables_query_template,
+    query = templates.render_template(
+        templates.get_tables_query_template,
         database_name=database,
         schemas=", ".join([f"'{sch}'" for sch in schemas]),
         offset=offset,
@@ -204,9 +204,9 @@ def test_freshness(tables):
     fixture="integration",
     func="get_columns_query_template"
 )
-def test_fetch_columns(integration, database, tables):
-    query = integration.render_template(
-        integration.get_columns_query_template,
+def test_fetch_columns(integration, templates, database, tables):
+    query = templates.render_template(
+        templates.get_columns_query_template,
         tables=", ".join([f"'{table.full_table_id}'" for table in tables]),
         database_name=database
     )
@@ -233,13 +233,13 @@ def test_fetch_columns(integration, database, tables):
     fixture="integration",
     func="get_query_logs_query_template"
 )
-def test_get_query_logs(integration):
-    if not integration.get_query_logs_query_template():
+def test_get_query_logs(integration, templates):
+    if not templates.get_query_logs_query_template():
         pytest.xfail("Optional feature: query log collection not implemented.")
     end_time = datetime.now(tz=UTC)
     start_time = end_time - timedelta(hours=1)
-    query = integration.render_template(
-        integration.get_query_logs_query_template,
+    query = templates.render_template(
+        templates.get_query_logs_query_template,
         start_time=start_time,
         end_time=end_time
     )

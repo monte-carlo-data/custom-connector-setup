@@ -23,6 +23,8 @@ class BaseIntegration:
     def fetch_all_results(self) -> List[Any]:
         pass
 
+
+class MetadataQueryTemplates:
     ########################################
     # Metadata Job Related Methods
     ########################################
@@ -38,12 +40,16 @@ class BaseIntegration:
     def get_columns_query_template(self) -> str:
         pass
 
+
+class QueryLogCollectionTemplates:
     ########################################
     # Query Log Job Related Methods
     ########################################
     def get_query_logs_query_template(self) -> str:
         pass
 
+
+class CustomSQLMonitorTemplates:
     ###################################################
     # Custom SQL Monitors Related Methods
     ###################################################
@@ -56,6 +62,8 @@ class BaseIntegration:
     def get_count_all_expression_template(self) -> str:
         pass
 
+
+class QueryLanguageTemplates:
     ###################################################
     # QueryLanguage Related Methods
     ###################################################
