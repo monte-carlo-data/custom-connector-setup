@@ -31,7 +31,43 @@ def get_avg_function_template(self) -> str:
 
 Each method has a docstring documenting its Jinja variables, example implementations for common databases, tier, and which metrics it enables.
 
-### 3. Run the tests
+### 3. Configure credentials
+
+If your database requires credentials, override `credential_env_vars()` in `BaseIntegration` to map credential keys to environment variable names:
+
+```python
+def credential_env_vars(self) -> dict[str, str]:
+    return {
+        "host": "PGHOST",
+        "port": "PGPORT",
+        "database": "PGDATABASE",
+        "user": "PGUSER",
+        "password": "PGPASSWORD",
+    }
+```
+
+Then use `self.credentials` in `create_connection()`:
+
+```python
+def create_connection(self):
+    import psycopg2
+    return psycopg2.connect(
+        host=self.credentials["host"],
+        port=self.credentials.get("port", "5432"),
+        database=self.credentials["database"],
+        user=self.credentials["user"],
+        password=self.credentials["password"],
+    )
+```
+
+Set the environment variables directly or copy `.env.example` to `.env` and fill in your values (requires `python-dotenv`):
+
+```bash
+cp .env.example .env
+# edit .env with your database credentials
+```
+
+### 4. Run the tests
 
 ```bash
 # Run everything
@@ -48,7 +84,7 @@ pytest --tier standard
 pytest --tier advanced
 ```
 
-### 4. Review capabilities
+### 5. Review capabilities
 
 After a test run, a `capabilities.json` file is generated in the project root. It contains:
 

@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, date
 from typing import Callable, List, Any, Optional
 
@@ -12,8 +13,22 @@ pytest_plugins = ["tests.capabilities_plugin"]
 
 class TestIntegration(BaseIntegration):
     def __init__(self):
+        self.credentials = self._load_credentials_from_env()
         self.connection = self.create_connection()
         self.cursor = self.create_cursor()
+
+    def _load_credentials_from_env(self) -> dict[str, str]:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except ImportError:
+            pass
+        creds = {}
+        for key, env_var in self.credential_env_vars().items():
+            val = os.environ.get(env_var)
+            if val is not None:
+                creds[key] = val
+        return creds
 
     def execute_and_fetch_all(self, query: str) -> List[Any]:
         self.execute_query(query)

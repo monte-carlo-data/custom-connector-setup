@@ -5,22 +5,67 @@ class BaseIntegration:
     ########################################
     # Connection Related Methods
     ########################################
+    def credential_env_vars(self) -> dict[str, str]:
+        """Override to map credential keys to environment variable names."""
+        return {}
+
     def create_connection(self) -> Any:
+        """Create and return a database connection.
+
+        Use self.credentials to access any values mapped by credential_env_vars().
+
+        Examples:
+            PostgreSQL: psycopg2.connect(host=self.credentials["host"], ...)
+            Snowflake: snowflake.connector.connect(account=self.credentials["account"], ...)
+        """
         pass
 
     def create_cursor(self) -> Any:
+        """Create and return a cursor from the active connection.
+
+        Called immediately after create_connection(). The returned cursor is
+        used by execute_query() and fetch_all_results().
+
+        Examples:
+            PostgreSQL: self.connection.cursor()
+            Snowflake: self.connection.cursor()
+        """
         pass
 
     def close_connection(self):
+        """Clean up the cursor and connection when the test session ends.
+
+        Examples:
+            PostgreSQL: self.cursor.close(); self.connection.close()
+            Snowflake: self.cursor.close(); self.connection.close()
+        """
         pass
 
     ########################################
     # Execution Related Methods
     ########################################
     def execute_query(self, query: str) -> None:
+        """Execute a SQL query using the active cursor.
+
+        Args:
+            query (str): The rendered SQL query string to execute.
+
+        Examples:
+            PostgreSQL: self.cursor.execute(query)
+            Snowflake: self.cursor.execute(query)
+        """
         pass
 
     def fetch_all_results(self) -> List[Any]:
+        """Fetch and return all rows from the last executed query.
+
+        Returns:
+            List of tuples, one per result row.
+
+        Examples:
+            PostgreSQL: self.cursor.fetchall()
+            Snowflake: self.cursor.fetchall()
+        """
         pass
 
 
