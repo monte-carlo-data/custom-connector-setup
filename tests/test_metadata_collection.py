@@ -6,6 +6,8 @@ from uuid import UUID
 import pytest
 from dataclasses_json import DataClassJsonMixin
 
+pytestmark = [pytest.mark.metadata]
+
 
 #############################################
 # Data classes
