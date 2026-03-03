@@ -4,6 +4,7 @@ pytestmark = [pytest.mark.query_language]
 
 
 @pytest.mark.template(func="get_absolute_value_function_template")
+@pytest.mark.template(func="supports_literal_select_template")
 def test_absolute_value(ql):
     """ABS(-5) -> 5."""
     abs_expr = ql.render(ql.templates.get_absolute_value_function_template, field="-5")

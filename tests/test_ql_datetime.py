@@ -6,6 +6,7 @@ pytestmark = [pytest.mark.query_language]
 
 
 @pytest.mark.template(func="current_timestamp_func_template")
+@pytest.mark.template(func="convert_to_unix_timestamp_func_template")
 def test_current_timestamp(ql):
     """SELECT current_timestamp, verify within 120s of Python now."""
     ts_expr = ql.render(ql.templates.current_timestamp_func_template)
@@ -28,6 +29,7 @@ def test_current_date(ql):
 
 
 @pytest.mark.template(func="get_is_yesterday_expression_template")
+@pytest.mark.template(func="literal_datetime_template")
 def test_is_yesterday(ql):
     """CTE with yesterday_noon + today_noon timestamps, COUNT WHERE is_yesterday -> 1."""
     now = datetime.now(tz=timezone.utc)
@@ -184,3 +186,150 @@ def test_in_past_hours(ql):
     query = f"{cte} {select_clause} {from_clause} WHERE {past_hours}"
     result = ql.execute_scalar(query)
     assert int(result) == 1
+
+
+@pytest.mark.template(func="add_days_timestamp_func_template")
+def test_add_days_timestamp(ql):
+    """current_timestamp + 1 day > current_timestamp -> true."""
+    ts_expr = ql.render(ql.templates.current_timestamp_func_template)
+    plus_one = ql.render(ql.templates.add_days_timestamp_func_template, field=ts_expr, days=1)
+    gt_expr = ql.render(ql.templates.get_is_gt_expression_template, field1=plus_one, field2=ts_expr)
+    case_expr = ql.render(
+        ql.templates.get_case_when_func_template,
+        condition=gt_expr, true_value="1", false_value="0",
+    )
+    result = ql.select_expression(case_expr)
+    assert int(result) == 1
+
+
+@pytest.mark.template(func="truncate_to_day_template")
+def test_truncate_to_day(ql):
+    """Truncate timestamp to day, verify time portion removed."""
+    escaped = ql.render(ql.templates.escape_string_template, value="2024-06-15 14:30:45")
+    literal = ql.render(ql.templates.string_literal_template, value=escaped)
+    ts_cast = ql.render(ql.templates.default_cast_to_timestamp_func_template, field=literal)
+    truncated = ql.render(ql.templates.truncate_to_day_template, field=ts_cast)
+    to_str = ql.render(ql.templates.cast_to_string_func_template, field=truncated)
+    result = str(ql.select_expression(to_str))
+    assert "2024" in result
+    assert "14:30:45" not in result
+
+
+@pytest.mark.template(func="truncate_to_hour_template")
+def test_truncate_to_hour(ql):
+    """Truncate timestamp to hour, verify minutes/seconds removed."""
+    escaped = ql.render(ql.templates.escape_string_template, value="2024-06-15 14:30:45")
+    literal = ql.render(ql.templates.string_literal_template, value=escaped)
+    ts_cast = ql.render(ql.templates.default_cast_to_timestamp_func_template, field=literal)
+    truncated = ql.render(ql.templates.truncate_to_hour_template, field=ts_cast)
+    to_str = ql.render(ql.templates.cast_to_string_func_template, field=truncated)
+    result = str(ql.select_expression(to_str))
+    assert "2024" in result
+    assert "30:45" not in result
+
+
+@pytest.mark.template(func="truncate_to_week_template")
+def test_truncate_to_week(ql):
+    """Truncate timestamp to week, verify result is a valid date."""
+    escaped = ql.render(ql.templates.escape_string_template, value="2024-06-15 14:30:45")
+    literal = ql.render(ql.templates.string_literal_template, value=escaped)
+    ts_cast = ql.render(ql.templates.default_cast_to_timestamp_func_template, field=literal)
+    truncated = ql.render(ql.templates.truncate_to_week_template, field=ts_cast)
+    to_str = ql.render(ql.templates.cast_to_string_func_template, field=truncated)
+    result = str(ql.select_expression(to_str))
+    assert "2024" in result
+    assert "06" in result or "Jun" in result
+
+
+@pytest.mark.template(func="truncate_to_month_template")
+def test_truncate_to_month(ql):
+    """Truncate timestamp to month, verify day portion removed."""
+    escaped = ql.render(ql.templates.escape_string_template, value="2024-06-15 14:30:45")
+    literal = ql.render(ql.templates.string_literal_template, value=escaped)
+    ts_cast = ql.render(ql.templates.default_cast_to_timestamp_func_template, field=literal)
+    truncated = ql.render(ql.templates.truncate_to_month_template, field=ts_cast)
+    to_str = ql.render(ql.templates.cast_to_string_func_template, field=truncated)
+    result = str(ql.select_expression(to_str))
+    assert "2024" in result
+
+
+@pytest.mark.template(func="truncate_to_year_template")
+def test_truncate_to_year(ql):
+    """Truncate timestamp to year."""
+    escaped = ql.render(ql.templates.escape_string_template, value="2024-06-15 14:30:45")
+    literal = ql.render(ql.templates.string_literal_template, value=escaped)
+    ts_cast = ql.render(ql.templates.default_cast_to_timestamp_func_template, field=literal)
+    truncated = ql.render(ql.templates.truncate_to_year_template, field=ts_cast)
+    to_str = ql.render(ql.templates.cast_to_string_func_template, field=truncated)
+    result = str(ql.select_expression(to_str))
+    assert "2024" in result
+
+
+@pytest.mark.template(func="get_days_of_week_expression_template")
+def test_days_of_week(ql):
+    """Render days-of-week expression, verify non-empty result."""
+    ts_expr = ql.render(ql.templates.current_timestamp_func_template)
+    dow_expr = ql.render(ql.templates.get_days_of_week_expression_template, field=ts_expr)
+    result = ql.select_expression(dow_expr)
+    assert result is not None
+
+
+@pytest.mark.template(func="get_in_past_calendar_week_expression_template")
+def test_in_past_calendar_week(ql):
+    """CTE with recent + old timestamps, past calendar week -> 1."""
+    now = datetime.now(tz=timezone.utc)
+    three_days_ago = now - timedelta(days=3)
+    sixty_days_ago = now - timedelta(days=60)
+
+    lit_3d = ql.render(ql.templates.literal_datetime_template, value=three_days_ago)
+    lit_60d = ql.render(ql.templates.literal_datetime_template, value=sixty_days_ago)
+
+    alias_3d = ql.render(ql.templates.alias_field_template, field=lit_3d, alias="ts_val")
+    alias_60d = ql.render(ql.templates.alias_field_template, field=lit_60d, alias="ts_val")
+    sel1 = ql.render(ql.templates.add_select_clause_template, fields=alias_3d)
+    sel2 = ql.render(ql.templates.add_select_clause_template, fields=alias_60d)
+    unioned = ql.render(ql.templates.union_queries_template, queries=[sel1, sel2])
+    cte = ql.render(ql.templates.build_cte_template, alias="ts_data", query=unioned)
+
+    past_week = ql.render(ql.templates.get_in_past_calendar_week_expression_template, field="ts_val", weeks=1)
+    count_expr = ql.render(ql.templates.get_count_all_expression_template)
+    from_clause = ql.render(ql.templates.add_from_clause_template, table="ts_data")
+    select_clause = ql.render(ql.templates.add_select_clause_template, fields=count_expr)
+
+    query = f"{cte} {select_clause} {from_clause} WHERE {past_week}"
+    result = ql.execute_scalar(query)
+    assert int(result) >= 1
+
+
+@pytest.mark.template(func="get_in_past_calendar_month_expression_template")
+def test_in_past_calendar_month(ql):
+    """CTE with recent + old timestamps, past calendar month -> 1."""
+    now = datetime.now(tz=timezone.utc)
+    five_days_ago = now - timedelta(days=5)
+    one_year_ago = now - timedelta(days=365)
+
+    lit_5d = ql.render(ql.templates.literal_datetime_template, value=five_days_ago)
+    lit_1y = ql.render(ql.templates.literal_datetime_template, value=one_year_ago)
+
+    alias_5d = ql.render(ql.templates.alias_field_template, field=lit_5d, alias="ts_val")
+    alias_1y = ql.render(ql.templates.alias_field_template, field=lit_1y, alias="ts_val")
+    sel1 = ql.render(ql.templates.add_select_clause_template, fields=alias_5d)
+    sel2 = ql.render(ql.templates.add_select_clause_template, fields=alias_1y)
+    unioned = ql.render(ql.templates.union_queries_template, queries=[sel1, sel2])
+    cte = ql.render(ql.templates.build_cte_template, alias="ts_data", query=unioned)
+
+    past_month = ql.render(ql.templates.get_in_past_calendar_month_expression_template, field="ts_val", months=1)
+    count_expr = ql.render(ql.templates.get_count_all_expression_template)
+    from_clause = ql.render(ql.templates.add_from_clause_template, table="ts_data")
+    select_clause = ql.render(ql.templates.add_select_clause_template, fields=count_expr)
+
+    query = f"{cte} {select_clause} {from_clause} WHERE {past_month}"
+    result = ql.execute_scalar(query)
+    assert int(result) >= 1
+
+
+@pytest.mark.template(func="utc_literal_template")
+def test_utc_literal(ql):
+    """Render UTC literal, verify non-empty."""
+    result = ql.render(ql.templates.utc_literal_template)
+    assert result and len(result.strip()) > 0

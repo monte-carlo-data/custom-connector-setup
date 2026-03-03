@@ -77,6 +77,12 @@ pytest
 pytest -m metadata
 pytest -m query_language
 pytest -m custom_monitors
+
+# Export passing templates to .j2 files (default dir: templates/)
+pytest --export-templates
+
+# Export to a custom directory
+pytest --export-templates=my_templates
 ```
 
 ### 5. Review capabilities

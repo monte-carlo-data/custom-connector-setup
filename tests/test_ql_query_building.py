@@ -4,6 +4,8 @@ pytestmark = [pytest.mark.query_language]
 
 
 @pytest.mark.template(func="build_cte_template")
+@pytest.mark.template(func="add_from_clause_template")
+@pytest.mark.template(func="add_select_clause_template")
 def test_select_from_cte(ql):
     """CTE with 2 rows, SELECT both cols, verify values."""
     data = [
@@ -40,6 +42,7 @@ def test_arbitrary_where_clause(ql):
 
 
 @pytest.mark.template(func="ascending_order_template")
+@pytest.mark.template(func="descending_order_template")
 def test_ordering(ql):
     """CTE [3,1,2], ORDER BY ASC -> [1,2,3], DESC -> [3,2,1]."""
     data = [{"val": 3}, {"val": 1}, {"val": 2}]
@@ -61,6 +64,7 @@ def test_ordering(ql):
 
 
 @pytest.mark.template(func="string_literal_template")
+@pytest.mark.template(func="escape_string_template")
 def test_string_literal_with_escaping(ql):
     """SELECT literal with single quote, verify "it's a test"."""
     escaped = ql.render(ql.templates.escape_string_template, value="it's a test")
@@ -91,6 +95,7 @@ def test_case_when(ql):
 
 
 @pytest.mark.template(func="escape_field_name_template")
+@pytest.mark.template(func="alias_field_template")
 def test_escape_field_name(ql):
     """Verify escaped identifier works in query."""
     escaped = ql.render(ql.templates.escape_field_name_template, field_name="my field")
@@ -144,3 +149,38 @@ def test_all_fields_expression(ql):
     rows = ql.execute(query)
     assert len(rows) == 1
     assert len(rows[0]) >= 2
+
+
+@pytest.mark.template(func="get_field_or_alias_template")
+def test_field_or_alias(ql):
+    """Render get_field_or_alias_template, verify non-empty output."""
+    result = ql.render(ql.templates.get_field_or_alias_template, field="my_col", alias="my_alias")
+    assert result and len(result.strip()) > 0
+
+
+@pytest.mark.template(func="supports_literal_group_by_template")
+def test_supports_literal_group_by(ql):
+    """Boolean flag: renders to 'true' or 'false'."""
+    result = ql.templates.supports_literal_group_by_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")
+
+
+@pytest.mark.template(func="supports_group_by_on_subquery_template")
+def test_supports_group_by_on_subquery(ql):
+    """Boolean flag: renders to 'true' or 'false'."""
+    result = ql.templates.supports_group_by_on_subquery_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")
+
+
+@pytest.mark.template(func="literal_table_from_value_list_template")
+def test_literal_table_from_value_list(ql):
+    """Render literal_table_from_value_list_template, verify non-empty."""
+    result = ql.render(
+        ql.templates.literal_table_from_value_list_template,
+        values=["1", "2", "3"],
+        alias="t",
+        column_name="val",
+    )
+    assert result and len(result.strip()) > 0

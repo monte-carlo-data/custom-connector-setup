@@ -72,3 +72,37 @@ def test_approx_distinct(ql):
     approx_expr = ql.render(ql.templates.approx_distinct_func_template, field="val")
     result = ql.select_from_data_source(data, approx_expr)
     assert 8 <= int(result) <= 12
+
+
+@pytest.mark.template(func="get_distinct_func_template")
+def test_distinct_func(ql):
+    """CTE [a,b,a,c], SELECT DISTINCT -> 3 rows."""
+    data = [{"val": "a"}, {"val": "b"}, {"val": "a"}, {"val": "c"}]
+    distinct_expr = ql.render(ql.templates.get_distinct_func_template, field="val")
+    count_expr = ql.render(ql.templates.get_count_all_expression_template)
+    cte, alias = ql.make_data_source(data)
+    from_clause = ql.render(ql.templates.add_from_clause_template, table=alias)
+    query = f"{cte} SELECT {count_expr} FROM (SELECT {distinct_expr} {from_clause}) AS distinct_sub"
+    result = ql.execute_scalar(query)
+    assert int(result) == 3
+
+
+@pytest.mark.template(func="get_approx_quantiles_func_template")
+def test_approx_quantiles(ql):
+    """CTE [1..100], approx quantiles at 0.5 ~ 50."""
+    data = [{"val": i} for i in range(1, 101)]
+    quantile_expr = ql.render(
+        ql.templates.get_approx_quantiles_func_template,
+        field="val", quantiles=100, index=50,
+    )
+    result = ql.select_from_data_source(data, quantile_expr)
+    assert 45 <= float(result) <= 55
+
+
+@pytest.mark.template(func="any_value_template")
+def test_any_value(ql):
+    """CTE [42,42,42], ANY_VALUE -> 42."""
+    data = [{"val": 42}, {"val": 42}, {"val": 42}]
+    any_val_expr = ql.render(ql.templates.any_value_template, field="val")
+    result = ql.select_from_data_source(data, any_val_expr)
+    assert int(result) == 42

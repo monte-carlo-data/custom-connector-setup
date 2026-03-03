@@ -28,6 +28,7 @@ def test_unpivot(ql):
 
 
 @pytest.mark.template(func="get_array_length_func_template")
+@pytest.mark.template(func="array_expr_template")
 def test_array_length(ql):
     """Array length check."""
     arr = ql.render(ql.templates.array_expr_template, values=[1, 2, 3])
@@ -85,3 +86,32 @@ def test_epoch_seconds(ql):
     result = ql.select_expression(epoch_expr)
     # 2024-01-01 00:00:00 UTC = 1704067200 epoch seconds
     assert abs(int(float(result)) - 1704067200) < 86400  # within 1 day tolerance for TZ
+
+
+@pytest.mark.template(func="get_not_is_timestamp_expression_template")
+def test_not_is_timestamp(ql):
+    """Validate non-timestamp string detection."""
+    escaped = ql.render(ql.templates.escape_string_template, value="not-a-timestamp")
+    literal = ql.render(ql.templates.string_literal_template, value=escaped)
+    not_ts = ql.render(ql.templates.get_not_is_timestamp_expression_template, field=literal)
+    case_expr = ql.render(
+        ql.templates.get_case_when_func_template,
+        condition=not_ts, true_value="1", false_value="0",
+    )
+    result = ql.select_expression(case_expr)
+    assert int(result) == 1
+
+
+@pytest.mark.template(func="get_epoch_seconds_parameter_template")
+def test_epoch_seconds_parameter(ql):
+    """Render epoch_seconds_parameter, verify non-empty."""
+    result = ql.render(ql.templates.get_epoch_seconds_parameter_template, field="ts_col")
+    assert result and len(result.strip()) > 0
+
+
+@pytest.mark.template(func="parses_timestamp_with_trailing_text_template")
+def test_parses_timestamp_with_trailing_text(ql):
+    """Boolean flag: renders to 'true' or 'false'."""
+    result = ql.templates.parses_timestamp_with_trailing_text_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")

@@ -4,6 +4,7 @@ pytestmark = [pytest.mark.query_language]
 
 
 @pytest.mark.template(func="get_isnan_expression_template")
+@pytest.mark.template(func="nan_expr_template")
 def test_isnan(ql):
     """Render nan_expr for NaN literal, use in get_isnan_expression, verify detection."""
     nan_literal = ql.render(ql.templates.nan_expr_template)

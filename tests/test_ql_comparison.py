@@ -14,6 +14,7 @@ def test_equality(ql):
 
 
 @pytest.mark.template(func="get_is_gt_expression_template")
+@pytest.mark.template(func="get_is_lt_expression_template")
 def test_gt_and_lt(ql):
     """CTE [5,10,15], COUNT WHERE >8 -> 2, <8 -> 1."""
     data = [{"val": 5}, {"val": 10}, {"val": 15}]
@@ -29,6 +30,7 @@ def test_gt_and_lt(ql):
 
 
 @pytest.mark.template(func="get_is_gte_expression_template")
+@pytest.mark.template(func="get_is_lte_expression_template")
 def test_gte_and_lte(ql):
     """Similar with boundary values."""
     data = [{"val": 5}, {"val": 10}, {"val": 15}]
@@ -70,6 +72,7 @@ def test_outside_range(ql):
 
 
 @pytest.mark.template(func="is_null_template")
+@pytest.mark.template(func="is_not_null_template")
 def test_null_checks(ql):
     """CTE [1,NULL,3], IS NULL -> 1, IS NOT NULL -> 2."""
     data = [{"val": 1}, {"val": None}, {"val": 3}]

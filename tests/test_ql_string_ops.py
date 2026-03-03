@@ -37,6 +37,7 @@ def test_is_empty_string(ql):
 
 
 @pytest.mark.template(func="get_regexp_expression_template")
+@pytest.mark.template(func="literal_regex_template")
 def test_regexp_match(ql):
     """CTE emails, COUNT WHERE matches email pattern -> 2."""
     data = [
@@ -67,3 +68,10 @@ def test_regexp_count(ql):
     gt_expr = ql.render(ql.templates.get_is_gt_expression_template, field1=regexp_count_expr, field2="0")
     result = ql.select_from_data_source(data, count_expr, condition=gt_expr)
     assert int(result) == 2
+
+
+@pytest.mark.template(func="literal_time_of_day_template")
+def test_literal_time_of_day(ql):
+    """Render time-of-day literal, verify non-empty."""
+    result = ql.render(ql.templates.literal_time_of_day_template, value="14:30:00")
+    assert result and len(result.strip()) > 0

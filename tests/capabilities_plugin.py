@@ -3,6 +3,17 @@ import json
 import os
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--export-templates",
+        action="store",
+        default=None,
+        const="templates",
+        nargs="?",
+        help="Export passing templates to .j2 files (default dir: templates/)",
+    )
+
+
 def pytest_configure(config):
     config._capabilities_results = {
         "templates": {},
@@ -84,5 +95,28 @@ def pytest_sessionfinish(session, exitstatus):
     output_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "capabilities.json")
     with open(output_path, "w") as f:
         json.dump(output, f, indent=4, sort_keys=True)
+
+    export_dir = session.config.getoption("--export-templates", default=None)
+    if export_dir is not None:
+        templates_instance = getattr(session.config, "_templates_instance", None)
+        if templates_instance is None:
+            return
+        export_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), export_dir)
+        os.makedirs(export_path, exist_ok=True)
+        for template_name, status in results["templates"].items():
+            if status != "passed":
+                continue
+            method = getattr(templates_instance, template_name, None)
+            if method is None:
+                continue
+            try:
+                template_string = method()
+            except Exception:
+                continue
+            if not template_string:
+                continue
+            filepath = os.path.join(export_path, f"{template_name}.j2")
+            with open(filepath, "w") as f:
+                f.write(template_string)
 
 

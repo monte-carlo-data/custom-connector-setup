@@ -135,8 +135,10 @@ def integration():
 
 
 @pytest.fixture(scope="session")
-def templates():
-    return Templates()
+def templates(request):
+    t = Templates()
+    request.config._templates_instance = t
+    return t
 
 
 @pytest.fixture(scope="session")
