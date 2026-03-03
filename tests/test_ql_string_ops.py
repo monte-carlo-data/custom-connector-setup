@@ -3,7 +3,6 @@ import pytest
 pytestmark = [pytest.mark.query_language]
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_length_template")
 def test_string_length(ql):
     """CTE ['hello','','world!'], SUM(LENGTH) -> 11."""
@@ -14,7 +13,6 @@ def test_string_length(ql):
     assert int(result) == 11
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="substring_func_template")
 def test_substring(ql):
     """SUBSTR('abcdef', 2, 3), verify 'bcd'."""
@@ -28,7 +26,6 @@ def test_substring(ql):
     assert str(result) == "bcd"
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_is_empty_string_expression_template")
 def test_is_empty_string(ql):
     """CTE ['hello','','world'], COUNT WHERE empty -> 1."""
@@ -39,7 +36,6 @@ def test_is_empty_string(ql):
     assert int(result) == 1
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_regexp_expression_template")
 def test_regexp_match(ql):
     """CTE emails, COUNT WHERE matches email pattern -> 2."""
@@ -58,7 +54,6 @@ def test_regexp_match(ql):
     assert int(result) == 2
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_regexp_count_expression_template")
 def test_regexp_count(ql):
     """CTE ['123','abc','456'], COUNT WHERE matches ^[0-9]+$ -> 2."""

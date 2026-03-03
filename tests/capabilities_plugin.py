@@ -1,23 +1,12 @@
 import csv
 import json
 import os
-import re
-
-
-def pytest_addoption(parser):
-    parser.addoption(
-        "--tier",
-        action="store",
-        default=None,
-        help="Only run tests for a specific tier: core, standard, or advanced",
-    )
 
 
 def pytest_configure(config):
     config._capabilities_results = {
         "templates": {},
         "capabilities": {},
-        "tiers": {},
     }
 
 
@@ -48,17 +37,6 @@ def pytest_runtest_makereport(item, call):
             else:
                 results["capabilities"][cap_name] = False
 
-    # Collect tier markers
-    for marker in item.iter_markers("tier"):
-        if marker.args:
-            tier_name = marker.args[0]
-            tier = results["tiers"].setdefault(tier_name, {"passed": 0, "failed": 0, "skipped": 0})
-            if call.excinfo is None:
-                tier["passed"] += 1
-            elif call.excinfo and call.excinfo.typename == "Skipped":
-                tier["skipped"] += 1
-            else:
-                tier["failed"] += 1
 
 
 def _load_metrics_mapping():
@@ -101,7 +79,6 @@ def pytest_sessionfinish(session, exitstatus):
         "templates": results["templates"],
         "capabilities": results["capabilities"],
         "metrics": metrics,
-        "tiers": results["tiers"],
     }
 
     output_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "capabilities.json")
@@ -109,32 +86,3 @@ def pytest_sessionfinish(session, exitstatus):
         json.dump(output, f, indent=4, sort_keys=True)
 
 
-def pytest_collection_modifyitems(config, items):
-    """Filter tests by tier if --tier option is provided, and parse -m tier('name') expressions."""
-    tier_filter = config.getoption("--tier", default=None)
-
-    # Also support -m "tier('core')" by parsing from the marker expression
-    if not tier_filter:
-        markexpr = config.getoption("-m", default="")
-        if markexpr:
-            match = re.search(r"tier\(['\"](\w+)['\"]\)", markexpr)
-            if match:
-                tier_filter = match.group(1)
-                # Clear the marker expression since we're handling it manually
-                config.option.markexpr = ""
-
-    if not tier_filter:
-        return
-
-    selected = []
-    deselected = []
-    for item in items:
-        tier_markers = list(item.iter_markers("tier"))
-        if tier_markers and tier_markers[0].args and tier_markers[0].args[0] == tier_filter:
-            selected.append(item)
-        else:
-            deselected.append(item)
-
-    items[:] = selected
-    if deselected:
-        config.hook.pytest_deselected(items=deselected)

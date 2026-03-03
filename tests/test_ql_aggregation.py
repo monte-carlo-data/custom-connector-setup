@@ -3,7 +3,6 @@ import pytest
 pytestmark = [pytest.mark.query_language]
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_avg_function_template")
 def test_avg(ql):
     """CTE [10,20,30], AVG -> 20.0."""
@@ -13,7 +12,6 @@ def test_avg(ql):
     assert float(result) == pytest.approx(20.0)
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_stddev_function_template")
 def test_stddev(ql):
     """CTE [10,20,30], STDDEV in (7.0, 11.0) (sample vs pop)."""
@@ -23,7 +21,6 @@ def test_stddev(ql):
     assert 7.0 < float(result) < 11.0
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_distinct_count_func_template")
 def test_distinct_count(ql):
     """CTE [a,b,a,c], COUNT(DISTINCT) -> 3."""
@@ -33,7 +30,6 @@ def test_distinct_count(ql):
     assert int(result) == 3
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_safe_divide_template")
 def test_safe_divide(ql):
     """10/2 -> 5.0, 10/0 -> NULL or 0 (no error)."""
@@ -47,7 +43,6 @@ def test_safe_divide(ql):
     assert result_zero is None or float(result_zero) == 0
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_conditional_count_expression_template")
 def test_conditional_count(ql):
     """CTE [5,-3,0,10], COUNT WHERE >0 -> 2."""
@@ -58,7 +53,6 @@ def test_conditional_count(ql):
     assert int(result) == 2
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_approx_percentile_func_template")
 def test_approx_percentile(ql):
     """CTE [1..100], median ~ 50 (+-5)."""
@@ -71,7 +65,6 @@ def test_approx_percentile(ql):
     assert 45 <= float(result) <= 55
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="approx_distinct_func_template")
 def test_approx_distinct(ql):
     """CTE with known distinct values, verify ~ count."""

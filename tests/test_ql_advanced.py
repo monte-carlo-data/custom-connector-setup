@@ -5,7 +5,6 @@ import pytest
 pytestmark = [pytest.mark.query_language]
 
 
-@pytest.mark.tier("advanced")
 @pytest.mark.template(func="unpivot_template")
 def test_unpivot(ql):
     """Columns to rows transformation."""
@@ -28,7 +27,6 @@ def test_unpivot(ql):
     assert int(result) == 3
 
 
-@pytest.mark.tier("advanced")
 @pytest.mark.template(func="get_array_length_func_template")
 def test_array_length(ql):
     """Array length check."""
@@ -38,7 +36,6 @@ def test_array_length(ql):
     assert int(result) == 3
 
 
-@pytest.mark.tier("advanced")
 @pytest.mark.template(func="max_time_func_template")
 def test_max_time(ql):
     """MAX of timestamps."""
@@ -64,7 +61,6 @@ def test_max_time(ql):
     assert "06" in result or "Jun" in result
 
 
-@pytest.mark.tier("advanced")
 @pytest.mark.template(func="get_is_timestamp_expression_template")
 def test_is_timestamp_expression(ql):
     """Validate timestamp string detection."""
@@ -79,7 +75,6 @@ def test_is_timestamp_expression(ql):
     assert int(result) == 1
 
 
-@pytest.mark.tier("advanced")
 @pytest.mark.template(func="get_epoch_seconds_expression_template")
 def test_epoch_seconds(ql):
     """Verify epoch seconds conversion."""

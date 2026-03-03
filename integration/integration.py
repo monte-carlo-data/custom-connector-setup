@@ -93,7 +93,6 @@ class MetadataQueryTemplates:
             PostgreSQL: "SELECT datname FROM pg_database WHERE datistemplate = false"
             BigQuery: "SELECT catalog_name FROM INFORMATION_SCHEMA.SCHEMATA GROUP BY 1"
 
-        Tier: core
         Enables: database discovery
         """
         pass
@@ -109,7 +108,6 @@ class MetadataQueryTemplates:
             PostgreSQL: "SELECT schema_name FROM information_schema.schemata WHERE catalog_name = '{{ database_name }}'"
             BigQuery: "SELECT schema_name FROM `{{ database_name }}`.INFORMATION_SCHEMA.SCHEMATA"
 
-        Tier: core
         Enables: schema discovery
         """
         pass
@@ -132,7 +130,6 @@ class MetadataQueryTemplates:
             PostgreSQL: "SELECT ... FROM information_schema.tables WHERE table_schema IN ({{ schemas }}) LIMIT {{ limit }} OFFSET {{ offset }}"
             BigQuery: "SELECT ... FROM `{{ database_name }}`.INFORMATION_SCHEMA.TABLES WHERE table_schema IN ({{ schemas }}) LIMIT {{ limit }} OFFSET {{ offset }}"
 
-        Tier: core
         Enables: table discovery, volume rows, volume bytes, freshness
         """
         pass
@@ -151,7 +148,6 @@ class MetadataQueryTemplates:
             PostgreSQL: "SELECT ... FROM information_schema.columns WHERE ..."
             BigQuery: "SELECT ... FROM `{{ database_name }}`.INFORMATION_SCHEMA.COLUMNS WHERE ..."
 
-        Tier: core
         Enables: schema collection
         """
         pass
@@ -173,7 +169,6 @@ class QueryLogCollectionTemplates:
             PostgreSQL: "SELECT ... FROM pg_stat_activity WHERE query_start >= '{{ start_time }}' AND query_start < '{{ end_time }}'"
             BigQuery: "SELECT ... FROM `region-us`.INFORMATION_SCHEMA.JOBS WHERE creation_time >= '{{ start_time }}' AND creation_time < '{{ end_time }}'"
 
-        Tier: standard
         Enables: query log collection, lineage, field lineage
         """
         pass
@@ -194,7 +189,6 @@ class CustomSQLMonitorTemplates:
             PostgreSQL: "SELECT COUNT(*) FROM ({{ query }}) AS count_query"
             BigQuery: "SELECT COUNT(*) FROM ({{ query }})"
 
-        Tier: core
         Enables: custom SQL monitor row counting
         """
         pass
@@ -211,7 +205,6 @@ class CustomSQLMonitorTemplates:
             PostgreSQL: "{{ query }} LIMIT {{ limit }}"
             BigQuery: "{{ query }} LIMIT {{ limit }}"
 
-        Tier: core
         Enables: custom SQL monitor row limiting
         """
         pass
@@ -227,7 +220,6 @@ class CustomSQLMonitorTemplates:
             PostgreSQL: "COUNT(*)"
             BigQuery: "COUNT(*)"
 
-        Tier: core
         Enables: row_count metric, row_count_change metric
         """
         pass
@@ -252,7 +244,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "WITH {{ alias }} AS ({{ query }})"
             BigQuery: "WITH {{ alias }} AS ({{ query }})"
 
-        Tier: core
         Enables: query assembly for all monitors
         """
         pass
@@ -268,7 +259,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "SELECT {{ fields }}"
             BigQuery: "SELECT {{ fields }}"
 
-        Tier: core
         Enables: query assembly for all monitors
         """
         pass
@@ -284,7 +274,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "FROM {{ table }}"
             BigQuery: "FROM {{ table }}"
 
-        Tier: core
         Enables: query assembly for all monitors
         """
         pass
@@ -300,7 +289,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ queries | join(' UNION ALL ') }}"
             BigQuery: "{{ queries | join(' UNION ALL ') }}"
 
-        Tier: core
         Enables: query assembly, CTE building
         """
         pass
@@ -317,7 +305,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} AS {{ alias }}"
             BigQuery: "{{ field }} AS {{ alias }}"
 
-        Tier: core
         Enables: query assembly for all monitors
         """
         pass
@@ -333,7 +320,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "*"
             BigQuery: "*"
 
-        Tier: core
         Enables: wildcard SELECT
         """
         pass
@@ -349,7 +335,6 @@ class QueryLanguageTemplates:
             PostgreSQL: '"{{ field_name }}"'
             BigQuery: "`{{ field_name }}`"
 
-        Tier: core
         Enables: safe column references
         """
         pass
@@ -367,7 +352,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ database }}.{{ schema }}.{{ table }}"
             BigQuery: "`{{ database }}.{{ schema }}.{{ table }}`"
 
-        Tier: core
         Enables: table references in queries
         """
         pass
@@ -383,7 +367,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "TRUE"
             BigQuery: "TRUE"
 
-        Tier: core
         Enables: default filter when no conditions specified
         """
         pass
@@ -399,7 +382,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} ASC"
             BigQuery: "{{ field }} ASC"
 
-        Tier: core
         Enables: query result ordering
         """
         pass
@@ -415,7 +397,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} DESC"
             BigQuery: "{{ field }} DESC"
 
-        Tier: core
         Enables: query result ordering
         """
         pass
@@ -433,7 +414,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "CASE WHEN {{ condition }} THEN {{ true_value }} ELSE {{ false_value }} END"
             BigQuery: "CASE WHEN {{ condition }} THEN {{ true_value }} ELSE {{ false_value }} END"
 
-        Tier: core
         Enables: conditional logic in queries
         """
         pass
@@ -449,7 +429,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "NOT({{ expression }})"
             BigQuery: "NOT({{ expression }})"
 
-        Tier: core
         Enables: boolean logic in filters
         """
         pass
@@ -468,7 +447,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ value | replace(\"'\", \"''\") }}"
             BigQuery: "{{ value | replace(\"'\", \"''\") }}"
 
-        Tier: core
         Enables: safe string literal construction
         """
         pass
@@ -484,7 +462,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "'{{ value }}'"
             BigQuery: "'{{ value }}'"
 
-        Tier: core
         Enables: string literal values in queries
         """
         pass
@@ -500,7 +477,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ value }}"
             BigQuery: "{{ value }}"
 
-        Tier: core
         Enables: typed literal values in queries
         """
         pass
@@ -516,7 +492,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "TIMESTAMP '{{ value.strftime('%Y-%m-%d %H:%M:%S') }}'"
             BigQuery: "TIMESTAMP '{{ value.strftime('%Y-%m-%d %H:%M:%S') }}'"
 
-        Tier: core
         Enables: datetime literal values
         """
         pass
@@ -532,7 +507,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "TIME '{{ value }}'"
             BigQuery: "TIME '{{ value }}'"
 
-        Tier: standard
         Enables: intraday filter predicates
         """
         pass
@@ -548,7 +522,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "'{{ value }}'"
             BigQuery: "r'{{ value }}'"
 
-        Tier: standard
         Enables: regex pattern literals in filter predicates
         """
         pass
@@ -564,7 +537,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "SELECT unnest(ARRAY[{{ values | join(', ') }}]) AS value"
             BigQuery: "SELECT value FROM UNNEST([{{ values | join(', ') }}]) AS value"
 
-        Tier: standard
         Enables: IN/NOT IN list predicates
         """
         pass
@@ -580,7 +552,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DATE '{{ value.strftime('%Y-%m-%d') }}'"
             BigQuery: "DATE '{{ value.strftime('%Y-%m-%d') }}'"
 
-        Tier: standard
         Enables: date literal values
         """
         pass
@@ -596,7 +567,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "TIMESTAMP WITH TIME ZONE '{{ value.strftime('%Y-%m-%d %H:%M:%S') }}+00'"
             BigQuery: "TIMESTAMP '{{ value.strftime('%Y-%m-%d %H:%M:%S') }} UTC'"
 
-        Tier: standard
         Enables: UTC timestamp literal values
         """
         pass
@@ -615,7 +585,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "CAST({{ field }} AS NUMERIC)"
             BigQuery: "CAST({{ field }} AS NUMERIC)"
 
-        Tier: core
         Enables: rate denominator for all *_rate metrics
         """
         pass
@@ -631,7 +600,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "CAST({{ field }} AS TEXT)"
             BigQuery: "CAST({{ field }} AS STRING)"
 
-        Tier: core
         Enables: string conversions for timestamp and JSON operations
         """
         pass
@@ -647,7 +615,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "CAST({{ field }} AS DECIMAL(38, 10))"
             BigQuery: "CAST({{ field }} AS BIGNUMERIC)"
 
-        Tier: standard
         Enables: sum metric
         """
         pass
@@ -663,7 +630,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "CAST({{ field }} AS TIMESTAMP)"
             BigQuery: "CAST({{ field }} AS TIMESTAMP)"
 
-        Tier: core
         Enables: time range filters when field type is unknown
         """
         pass
@@ -679,7 +645,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }}::TIMESTAMP"
             BigQuery: "SAFE_CAST({{ field }} AS TIMESTAMP)"
 
-        Tier: standard
         Enables: timestamp casting for string-typed time fields
         """
         pass
@@ -695,7 +660,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "TO_TIMESTAMP({{ field }})"
             BigQuery: "TIMESTAMP_SECONDS(CAST({{ field }} AS INT64))"
 
-        Tier: standard
         Enables: timestamp casting for epoch-typed time fields
         """
         pass
@@ -711,7 +675,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }}::TIMESTAMP"
             BigQuery: "CAST({{ field }} AS TIMESTAMP)"
 
-        Tier: standard
         Enables: timestamp casting for date-typed time fields
         """
         pass
@@ -727,7 +690,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "CAST({{ field }} AS TIMESTAMP)"
             BigQuery: "SAFE_CAST({{ field }} AS TIMESTAMP)"
 
-        Tier: standard
         Enables: fallback timestamp casting
         """
         pass
@@ -743,7 +705,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }}::DATE"
             BigQuery: "CAST({{ field }} AS DATE)"
 
-        Tier: standard
         Enables: timestamp-to-date conversion for filter predicates
         """
         pass
@@ -759,7 +720,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }}::TIMESTAMP WITHOUT TIME ZONE"
             BigQuery: "{{ field }}"
 
-        Tier: standard
         Enables: timezone-naive timestamp comparisons
         """
         pass
@@ -775,7 +735,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }}::TIMESTAMP WITH TIME ZONE"
             BigQuery: "{{ field }}"
 
-        Tier: standard
         Enables: timezone-aware timestamp comparisons
         """
         pass
@@ -791,7 +750,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "TIMESTAMP WITH TIME ZONE"
             BigQuery: "TIMESTAMP"
 
-        Tier: standard
         Enables: timezone-aware timestamp casting
         """
         pass
@@ -807,7 +765,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "TIMESTAMP WITHOUT TIME ZONE"
             BigQuery: "TIMESTAMP"
 
-        Tier: standard
         Enables: timezone-naive timestamp casting
         """
         pass
@@ -826,7 +783,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} AT TIME ZONE 'UTC'"
             BigQuery: "TIMESTAMP({{ field }}, 'UTC')"
 
-        Tier: standard
         Enables: UTC normalization for time range filters
         """
         pass
@@ -842,7 +798,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "CURRENT_DATE"
             BigQuery: "CURRENT_DATE()"
 
-        Tier: core
         Enables: date-based time range filters
         """
         pass
@@ -858,7 +813,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "NOW()"
             BigQuery: "CURRENT_TIMESTAMP()"
 
-        Tier: core
         Enables: time range filters across all monitor types
         """
         pass
@@ -875,7 +829,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} + INTERVAL '{{ days }} days'"
             BigQuery: "DATE_ADD({{ field }}, INTERVAL {{ days }} DAY)"
 
-        Tier: standard
         Enables: date arithmetic in time range filters
         """
         pass
@@ -892,7 +845,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} + INTERVAL '{{ days }} days'"
             BigQuery: "TIMESTAMP_ADD({{ field }}, INTERVAL {{ days }} DAY)"
 
-        Tier: standard
         Enables: timestamp arithmetic in time range filters
         """
         pass
@@ -909,7 +861,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} + INTERVAL '{{ hours }} hours'"
             BigQuery: "TIMESTAMP_ADD({{ field }}, INTERVAL {{ hours }} HOUR)"
 
-        Tier: standard
         Enables: hourly timestamp arithmetic
         """
         pass
@@ -926,7 +877,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DATE_TRUNC('{{ truncation }}', {{ field }})"
             BigQuery: "TIMESTAMP_TRUNC({{ field }}, {{ truncation }})"
 
-        Tier: standard
         Enables: time-bucketed aggregations
         """
         pass
@@ -942,7 +892,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DATE_TRUNC('day', {{ field }})"
             BigQuery: "TIMESTAMP_TRUNC({{ field }}, DAY)"
 
-        Tier: standard
         Enables: daily time bucketing
         """
         pass
@@ -958,7 +907,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DATE_TRUNC('hour', {{ field }})"
             BigQuery: "TIMESTAMP_TRUNC({{ field }}, HOUR)"
 
-        Tier: standard
         Enables: hourly time bucketing
         """
         pass
@@ -974,7 +922,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DATE_TRUNC('week', {{ field }})"
             BigQuery: "TIMESTAMP_TRUNC({{ field }}, WEEK)"
 
-        Tier: standard
         Enables: weekly time bucketing
         """
         pass
@@ -990,7 +937,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DATE_TRUNC('month', {{ field }})"
             BigQuery: "TIMESTAMP_TRUNC({{ field }}, MONTH)"
 
-        Tier: standard
         Enables: monthly time bucketing
         """
         pass
@@ -1006,7 +952,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DATE_TRUNC('year', {{ field }})"
             BigQuery: "TIMESTAMP_TRUNC({{ field }}, YEAR)"
 
-        Tier: standard
         Enables: yearly time bucketing
         """
         pass
@@ -1022,7 +967,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }}::DATE = CURRENT_DATE - INTERVAL '1 day'"
             BigQuery: "CAST({{ field }} AS DATE) = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)"
 
-        Tier: standard
         Enables: yesterday filter in time range expressions
         """
         pass
@@ -1039,7 +983,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} >= NOW() - INTERVAL '{{ days }} days'"
             BigQuery: "{{ field }} >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {{ days }} DAY)"
 
-        Tier: standard
         Enables: past-N-days time range filter
         """
         pass
@@ -1056,7 +999,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} >= NOW() - INTERVAL '{{ hours }} hours'"
             BigQuery: "{{ field }} >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {{ hours }} HOUR)"
 
-        Tier: standard
         Enables: past-N-hours time range filter
         """
         pass
@@ -1072,7 +1014,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DATE_TRUNC('week', {{ field }}) = DATE_TRUNC('week', CURRENT_DATE)"
             BigQuery: "TIMESTAMP_TRUNC({{ field }}, WEEK) = TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), WEEK)"
 
-        Tier: standard
         Enables: calendar week filter
         """
         pass
@@ -1088,7 +1029,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DATE_TRUNC('month', {{ field }}) = DATE_TRUNC('month', CURRENT_DATE)"
             BigQuery: "TIMESTAMP_TRUNC({{ field }}, MONTH) = TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)"
 
-        Tier: standard
         Enables: calendar month filter
         """
         pass
@@ -1106,7 +1046,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "EXTRACT(EPOCH FROM ({{ field2 }} - {{ field1 }})) / 86400"
             BigQuery: "DATE_DIFF({{ field2 }}, {{ field1 }}, DAY)"
 
-        Tier: standard
         Enables: date/timestamp difference in comparison monitors
         """
         pass
@@ -1122,7 +1061,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "EXTRACT(DOW FROM {{ field }})"
             BigQuery: "EXTRACT(DAYOFWEEK FROM {{ field }})"
 
-        Tier: standard
         Enables: day-of-week filtering
         """
         pass
@@ -1138,7 +1076,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "EXTRACT(EPOCH FROM {{ field }})"
             BigQuery: "UNIX_SECONDS({{ field }})"
 
-        Tier: standard
         Enables: Unix timestamp conversion for comparison monitors
         """
         pass
@@ -1159,7 +1096,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "true"
             BigQuery: "true"
 
-        Tier: core
         Enables: dialect flag for bare SELECT support
         """
         pass
@@ -1175,7 +1111,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "true"
             BigQuery: "true"
 
-        Tier: core
         Enables: dialect flag for GROUP BY with literals
         """
         pass
@@ -1191,7 +1126,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "true"
             BigQuery: "true"
 
-        Tier: core
         Enables: dialect flag for ORDER BY inside subqueries
         """
         pass
@@ -1209,7 +1143,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "false"
             BigQuery: "false"
 
-        Tier: standard
         Enables: dialect flag for lenient timestamp parsing
         """
         pass
@@ -1228,7 +1161,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} IS NULL"
             BigQuery: "{{ field }} IS NULL"
 
-        Tier: core
         Enables: null-check filter predicates
         """
         pass
@@ -1244,7 +1176,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} IS NOT NULL"
             BigQuery: "{{ field }} IS NOT NULL"
 
-        Tier: core
         Enables: not-null filter predicates
         """
         pass
@@ -1260,7 +1191,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "'NaN'::NUMERIC"
             BigQuery: "CAST('NaN' AS FLOAT64)"
 
-        Tier: standard
         Enables: NaN detection in data quality metrics
         """
         pass
@@ -1276,7 +1206,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} = 'NaN'::NUMERIC"
             BigQuery: "IS_NAN({{ field }})"
 
-        Tier: standard
         Enables: nan_count metric, nan_rate metric
         """
         pass
@@ -1296,7 +1225,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field1 }} = {{ field2 }}"
             BigQuery: "{{ field1 }} = {{ field2 }}"
 
-        Tier: standard
         Enables: threshold and custom rule evaluation in comparison monitors
         """
         pass
@@ -1313,7 +1241,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field1 }} > {{ field2 }}"
             BigQuery: "{{ field1 }} > {{ field2 }}"
 
-        Tier: standard
         Enables: threshold comparisons in comparison monitors
         """
         pass
@@ -1330,7 +1257,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field1 }} >= {{ field2 }}"
             BigQuery: "{{ field1 }} >= {{ field2 }}"
 
-        Tier: standard
         Enables: threshold comparisons in comparison monitors
         """
         pass
@@ -1347,7 +1273,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field1 }} < {{ field2 }}"
             BigQuery: "{{ field1 }} < {{ field2 }}"
 
-        Tier: standard
         Enables: range checks in comparison monitors
         """
         pass
@@ -1364,7 +1289,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field1 }} <= {{ field2 }}"
             BigQuery: "{{ field1 }} <= {{ field2 }}"
 
-        Tier: standard
         Enables: range checks in comparison monitors
         """
         pass
@@ -1382,7 +1306,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} >= {{ lower }} AND {{ field }} <= {{ upper }}"
             BigQuery: "{{ field }} BETWEEN {{ lower }} AND {{ upper }}"
 
-        Tier: standard
         Enables: range-based custom rule evaluation
         """
         pass
@@ -1400,7 +1323,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} < {{ lower }} OR {{ field }} > {{ upper }}"
             BigQuery: "NOT ({{ field }} BETWEEN {{ lower }} AND {{ upper }})"
 
-        Tier: standard
         Enables: range-based custom rule evaluation
         """
         pass
@@ -1419,7 +1341,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "AVG({{ field }})"
             BigQuery: "AVG({{ field }})"
 
-        Tier: standard
         Enables: numeric_mean metric
         """
         pass
@@ -1435,7 +1356,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "STDDEV_SAMP({{ field }})"
             BigQuery: "STDDEV({{ field }})"
 
-        Tier: standard
         Enables: numeric_stddev metric, text_std_length metric
         """
         pass
@@ -1451,7 +1371,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "COUNT(DISTINCT {{ field }})"
             BigQuery: "COUNT(DISTINCT {{ field }})"
 
-        Tier: standard
         Enables: approx_distinct_count metric, approx_distinctness metric
         """
         pass
@@ -1467,7 +1386,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "DISTINCT {{ field }}"
             BigQuery: "DISTINCT {{ field }}"
 
-        Tier: standard
         Enables: distinctness queries
         """
         pass
@@ -1484,7 +1402,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "CASE WHEN {{ denominator }} = 0 THEN NULL ELSE {{ numerator }} / {{ denominator }} END"
             BigQuery: "SAFE_DIVIDE({{ numerator }}, {{ denominator }})"
 
-        Tier: standard
         Enables: rate_count_if, capped_rate_sql calculations
         """
         pass
@@ -1500,7 +1417,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "COUNT(CASE WHEN {{ condition }} THEN 1 END)"
             BigQuery: "COUNTIF({{ condition }})"
 
-        Tier: standard
         Enables: zero_count, negative_count, nan_count, empty_string_count, true_count, false_count metrics
         """
         pass
@@ -1517,7 +1433,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {{ field }})"
             BigQuery: "APPROX_QUANTILES({{ field }}, {{ num_buckets }})"
 
-        Tier: standard
         Enables: approx_quantiles metric
         """
         pass
@@ -1534,7 +1449,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "PERCENTILE_CONT({{ percentile }}) WITHIN GROUP (ORDER BY {{ field }})"
             BigQuery: "APPROX_QUANTILES({{ field }}, 100)[OFFSET(CAST({{ percentile }} * 100 AS INT64))]"
 
-        Tier: standard
         Enables: numeric_median, percentile_20/40/60/80 metrics
         """
         pass
@@ -1550,7 +1464,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "COUNT(DISTINCT {{ field }})"
             BigQuery: "APPROX_COUNT_DISTINCT({{ field }})"
 
-        Tier: standard
         Enables: approximate unique count
         """
         pass
@@ -1566,7 +1479,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "MIN({{ field }})"
             BigQuery: "ANY_VALUE({{ field }})"
 
-        Tier: standard
         Enables: comparison monitor GROUP BY queries
         """
         pass
@@ -1585,7 +1497,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "LENGTH({{ field }})"
             BigQuery: "LENGTH({{ field }})"
 
-        Tier: standard
         Enables: text_mean_length, text_min_length, text_max_length, text_std_length metrics
         """
         pass
@@ -1603,7 +1514,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "SUBSTRING({{ field }} FROM {{ start }} FOR {{ length }})"
             BigQuery: "SUBSTR({{ field }}, {{ start }}, {{ length }})"
 
-        Tier: standard
         Enables: substring extraction
         """
         pass
@@ -1619,7 +1529,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} = ''"
             BigQuery: "{{ field }} = ''"
 
-        Tier: standard
         Enables: empty_string_count metric, empty_string_rate metric
         """
         pass
@@ -1636,7 +1545,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }} ~ {{ pattern }}"
             BigQuery: "REGEXP_CONTAINS({{ field }}, {{ pattern }})"
 
-        Tier: standard
         Enables: regex filter predicates, sampling
         """
         pass
@@ -1653,7 +1561,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "(SELECT COUNT(*) FROM REGEXP_MATCHES({{ field }}, {{ pattern }}, 'g'))"
             BigQuery: "ARRAY_LENGTH(REGEXP_EXTRACT_ALL({{ field }}, {{ pattern }}))"
 
-        Tier: standard
         Enables: text_int_count, text_number_count, text_uuid_count, text_email_address_count metrics
         """
         pass
@@ -1672,7 +1579,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "ARRAY[{{ values | join(', ') }}]"
             BigQuery: "[{{ values | join(', ') }}]"
 
-        Tier: advanced
         Enables: array literal construction
         """
         pass
@@ -1688,7 +1594,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "ARRAY_LENGTH({{ field }}, 1)"
             BigQuery: "ARRAY_LENGTH({{ field }})"
 
-        Tier: advanced
         Enables: array_null_rate metric
         """
         pass
@@ -1704,7 +1609,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }}::TIMESTAMP IS NOT NULL"
             BigQuery: "SAFE_CAST({{ field }} AS TIMESTAMP) IS NOT NULL"
 
-        Tier: advanced
         Enables: text_timestamp_count metric, text_timestamp_rate metric
         """
         pass
@@ -1720,7 +1624,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }}::TIMESTAMP IS NULL"
             BigQuery: "SAFE_CAST({{ field }} AS TIMESTAMP) IS NULL"
 
-        Tier: advanced
         Enables: text_not_timestamp_count metric
         """
         pass
@@ -1736,7 +1639,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "EXTRACT(EPOCH FROM {{ field }})"
             BigQuery: "UNIX_SECONDS({{ field }})"
 
-        Tier: advanced
         Enables: past_timestamp_count, future_timestamp_count, unix_zero_count metrics
         """
         pass
@@ -1752,7 +1654,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "EXTRACT(EPOCH FROM {{ field }})"
             BigQuery: "UNIX_SECONDS({{ field }})"
 
-        Tier: advanced
         Enables: epoch seconds parameter extraction
         """
         pass
@@ -1771,7 +1672,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "ABS({{ field }})"
             BigQuery: "ABS({{ field }})"
 
-        Tier: standard
         Enables: metric sample summary calculations in RCA
         """
         pass
@@ -1787,7 +1687,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "RANDOM()"
             BigQuery: "RAND()"
 
-        Tier: standard
         Enables: random sampling ORDER BY for RCA
         """
         pass
@@ -1806,7 +1705,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "MAX({{ field }})"
             BigQuery: "MAX({{ field }})"
 
-        Tier: advanced
         Enables: freshness/time-based RCA queries
         """
         pass
@@ -1825,7 +1723,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "SELECT {{ name_column }}, {{ value_column }} FROM ({{ query }}) src CROSS JOIN LATERAL (VALUES ...) AS unpivoted({{ name_column }}, {{ value_column }})"
             BigQuery: "SELECT * FROM ({{ query }}) UNPIVOT ({{ value_column }} FOR {{ name_column }} IN ({{ columns | join(', ') }}))"
 
-        Tier: advanced
         Enables: comparison monitor value transformations
         """
         pass
@@ -1844,7 +1741,6 @@ class QueryLanguageTemplates:
             PostgreSQL: "{{ field }}"
             BigQuery: "{{ field }}"
 
-        Tier: core
         Enables: field referencing in queries
         """
         pass

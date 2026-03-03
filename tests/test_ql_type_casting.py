@@ -3,7 +3,6 @@ import pytest
 pytestmark = [pytest.mark.query_language]
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="get_casting_to_numeric_expression_template")
 def test_cast_to_numeric(ql):
     """Cast '42.5' to numeric, verify 42.5."""
@@ -14,7 +13,6 @@ def test_cast_to_numeric(ql):
     assert float(result) == pytest.approx(42.5)
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="cast_to_string_func_template")
 def test_cast_to_string(ql):
     """Cast 123 to string, verify '123'."""
@@ -23,7 +21,6 @@ def test_cast_to_string(ql):
     assert str(result).strip() == "123"
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="get_casting_to_decimal_expression_template")
 def test_cast_to_decimal(ql):
     """Cast '3.14159', verify precision."""
@@ -34,7 +31,6 @@ def test_cast_to_decimal(ql):
     assert float(result) == pytest.approx(3.14159, abs=0.001)
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="default_cast_to_timestamp_func_template")
 def test_cast_to_timestamp(ql):
     """Cast string to timestamp, verify date parts."""
@@ -48,7 +44,6 @@ def test_cast_to_timestamp(ql):
     assert "15" in result
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="literal_value_template")
 def test_literal_value_int(ql):
     """SELECT literal(42), verify 42."""
@@ -57,7 +52,6 @@ def test_literal_value_int(ql):
     assert int(result) == 42
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="get_length_template")
 def test_length(ql):
     """LENGTH('hello') == 5."""

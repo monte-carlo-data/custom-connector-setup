@@ -3,7 +3,6 @@ import pytest
 pytestmark = [pytest.mark.custom_monitors]
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="transform_into_count_query_template")
 def test_transform_into_count_query(ql):
     """Wrap a SELECT in COUNT(*), execute, verify count."""
@@ -23,7 +22,6 @@ def test_transform_into_count_query(ql):
     assert int(result) == 3
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="add_row_limit_template")
 def test_add_row_limit(ql):
     """Add LIMIT to query, verify row count capped."""
@@ -44,7 +42,6 @@ def test_add_row_limit(ql):
     assert len(rows) == 5
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="get_count_all_expression_template")
 def test_count_all_expression(ql):
     """COUNT(*) on CTE, verify row count."""

@@ -3,7 +3,6 @@ import pytest
 pytestmark = [pytest.mark.query_language]
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_is_eq_expression_template")
 def test_equality(ql):
     """CTE [{x:10,y:10},{x:10,y:20}], COUNT WHERE x=y -> 1."""
@@ -14,7 +13,6 @@ def test_equality(ql):
     assert int(result) == 1
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_is_gt_expression_template")
 def test_gt_and_lt(ql):
     """CTE [5,10,15], COUNT WHERE >8 -> 2, <8 -> 1."""
@@ -30,7 +28,6 @@ def test_gt_and_lt(ql):
     assert int(result_lt) == 1
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_is_gte_expression_template")
 def test_gte_and_lte(ql):
     """Similar with boundary values."""
@@ -46,7 +43,6 @@ def test_gte_and_lte(ql):
     assert int(result_lte) == 2
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_is_inside_range_expression_template")
 def test_inside_range(ql):
     """CTE [1,5,10,15], range 5-10 -> 2."""
@@ -60,7 +56,6 @@ def test_inside_range(ql):
     assert int(result) == 2
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_is_outside_range_expression_template")
 def test_outside_range(ql):
     """Same data, outside 5-10 -> 2."""
@@ -74,7 +69,6 @@ def test_outside_range(ql):
     assert int(result) == 2
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="is_null_template")
 def test_null_checks(ql):
     """CTE [1,NULL,3], IS NULL -> 1, IS NOT NULL -> 2."""

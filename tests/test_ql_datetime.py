@@ -5,7 +5,6 @@ import pytest
 pytestmark = [pytest.mark.query_language]
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="current_timestamp_func_template")
 def test_current_timestamp(ql):
     """SELECT current_timestamp, verify within 120s of Python now."""
@@ -16,7 +15,6 @@ def test_current_timestamp(ql):
     assert abs(float(result) - now_epoch) < 120
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="current_date_func_template")
 def test_current_date(ql):
     """SELECT current_date, verify matches today (+-1 day for TZ)."""
@@ -29,7 +27,6 @@ def test_current_date(ql):
     assert any(d.isoformat() in result for d in [yesterday, today, tomorrow])
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_is_yesterday_expression_template")
 def test_is_yesterday(ql):
     """CTE with yesterday_noon + today_noon timestamps, COUNT WHERE is_yesterday -> 1."""
@@ -58,7 +55,6 @@ def test_is_yesterday(ql):
     assert int(result) == 1
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_in_past_days_expression_template")
 def test_in_past_days(ql):
     """CTE with 2_days_ago + 30_days_ago, past 7 days -> 1."""
@@ -86,7 +82,6 @@ def test_in_past_days(ql):
     assert int(result) == 1
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="add_days_func_template")
 def test_add_days(ql):
     """current_date + 1 > current_date -> true."""
@@ -101,7 +96,6 @@ def test_add_days(ql):
     assert int(result) == 1
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="add_hours_timestamp_func_template")
 def test_add_hours_timestamp(ql):
     """current_timestamp + 3h > current_timestamp -> true."""
@@ -116,7 +110,6 @@ def test_add_hours_timestamp(ql):
     assert int(result) == 1
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="time_truncate_func_template")
 def test_time_truncate(ql):
     """Truncate timestamp to DAY, verify time zeroed."""
@@ -130,7 +123,6 @@ def test_time_truncate(ql):
     assert "14:30" not in result
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_date_diff_func_template")
 def test_date_diff(ql):
     """Diff between two dates, verify expected days."""
@@ -145,7 +137,6 @@ def test_date_diff(ql):
     assert abs(int(result)) == 10
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="convert_to_utc_template")
 def test_convert_to_utc(ql):
     """Convert TZ timestamp, verify UTC result."""
@@ -156,7 +147,6 @@ def test_convert_to_utc(ql):
     assert result is not None and len(result) > 0
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="date_literal_template")
 def test_date_literal(ql):
     """Create date literal, verify roundtrip."""
@@ -169,7 +159,6 @@ def test_date_literal(ql):
     assert "15" in result
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_in_past_hours_expression_template")
 def test_in_past_hours(ql):
     """CTE with 1h_ago + 48h_ago, past 24h -> 1."""

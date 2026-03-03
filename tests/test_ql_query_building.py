@@ -3,7 +3,6 @@ import pytest
 pytestmark = [pytest.mark.query_language]
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="build_cte_template")
 def test_select_from_cte(ql):
     """CTE with 2 rows, SELECT both cols, verify values."""
@@ -22,7 +21,6 @@ def test_select_from_cte(ql):
     assert rows[1][0] == 2
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="union_queries_template")
 def test_union_all(ql):
     """CTE with 5 rows via union, COUNT(*) == 5."""
@@ -32,7 +30,6 @@ def test_union_all(ql):
     assert result == 5
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="get_arbitrary_where_clause_template")
 def test_arbitrary_where_clause(ql):
     """CTE + WHERE always-true, verify row returns."""
@@ -42,7 +39,6 @@ def test_arbitrary_where_clause(ql):
     assert result == 42
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="ascending_order_template")
 def test_ordering(ql):
     """CTE [3,1,2], ORDER BY ASC -> [1,2,3], DESC -> [3,2,1]."""
@@ -64,7 +60,6 @@ def test_ordering(ql):
     assert [r[0] for r in rows_desc] == [3, 2, 1]
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="string_literal_template")
 def test_string_literal_with_escaping(ql):
     """SELECT literal with single quote, verify "it's a test"."""
@@ -74,7 +69,6 @@ def test_string_literal_with_escaping(ql):
     assert result == "it's a test"
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="get_case_when_func_template")
 def test_case_when(ql):
     """CASE WHEN val > 5 THEN 'big' ELSE 'small', verify."""
@@ -96,7 +90,6 @@ def test_case_when(ql):
     assert rows[1][0] == "small"
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="escape_field_name_template")
 def test_escape_field_name(ql):
     """Verify escaped identifier works in query."""
@@ -111,7 +104,6 @@ def test_escape_field_name(ql):
     assert rows[0][0] == 1
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="negate_expression_template")
 def test_negate_expression(ql):
     """NOT(TRUE) -> false."""
@@ -126,7 +118,6 @@ def test_negate_expression(ql):
     assert result == 0
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="get_table_identifier_template")
 def test_get_table_identifier(ql):
     """Verify db.schema.table formatting."""
@@ -141,7 +132,6 @@ def test_get_table_identifier(ql):
     assert "my_table" in result
 
 
-@pytest.mark.tier("core")
 @pytest.mark.template(func="all_fields_expression_template")
 def test_all_fields_expression(ql):
     """SELECT * returns all columns."""

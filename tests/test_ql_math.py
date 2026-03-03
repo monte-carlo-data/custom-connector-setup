@@ -3,7 +3,6 @@ import pytest
 pytestmark = [pytest.mark.query_language]
 
 
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_absolute_value_function_template")
 def test_absolute_value(ql):
     """ABS(-5) -> 5."""
@@ -12,7 +11,6 @@ def test_absolute_value(ql):
     assert int(result) == 5
 
 
-@pytest.mark.tier("advanced")
 @pytest.mark.template(func="rand_func_template")
 def test_rand(ql):
     """RAND() between 0 and 1."""

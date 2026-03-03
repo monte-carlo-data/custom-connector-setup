@@ -29,7 +29,7 @@ def get_avg_function_template(self) -> str:
     return "AVG({{ field }})"
 ```
 
-Each method has a docstring documenting its Jinja variables, example implementations for common databases, tier, and which metrics it enables.
+Each method has a docstring documenting its Jinja variables, example implementations for common databases, and which metrics it enables.
 
 ### 3. Configure credentials
 
@@ -77,11 +77,6 @@ pytest
 pytest -m metadata
 pytest -m query_language
 pytest -m custom_monitors
-
-# Run by tier
-pytest --tier core
-pytest --tier standard
-pytest --tier advanced
 ```
 
 ### 5. Review capabilities
@@ -91,7 +86,6 @@ After a test run, a `capabilities.json` file is generated in the project root. I
 - **templates** — pass/fail status for each template method
 - **capabilities** — boolean flags for optional features (volume rows, freshness, schema, query logs, etc.)
 - **metrics** — which Pandora metrics your integration supports, derived from template results and the metrics mapping
-- **tiers** — pass/fail/skip counts per tier
 
 ## Project Structure
 
@@ -117,18 +111,6 @@ pandora-setup/
   pytest.toml                        # Pytest configuration and markers
   requirements.txt                   # Python dependencies
 ```
-
-## Test Tiers
-
-Tests are organized into three tiers reflecting implementation priority:
-
-| Tier | Count | What's covered |
-|------|-------|----------------|
-| **Core** | 19 | Query building, type casting, custom monitors — the minimum for a functional integration |
-| **Standard** | 31 | Comparisons, date/time, aggregations, string ops, NaN handling — covers most Pandora metrics |
-| **Advanced** | 6 | UNPIVOT, array functions, timestamp validation, epoch seconds — for full feature coverage |
-
-The remaining 9 tests (metadata collection) are untiered and run in all configurations.
 
 ## How Templates Work
 
@@ -159,7 +141,6 @@ def supports_literal_select_template(self) -> str:
 Tests use the `ql` fixture (a `QueryTestHelper` instance) that bridges your integration and templates:
 
 ```python
-@pytest.mark.tier("standard")
 @pytest.mark.template(func="get_avg_function_template")
 def test_avg(ql):
     data = [{"val": 10}, {"val": 20}, {"val": 30}]

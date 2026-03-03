@@ -5,5 +5,4 @@ markers = [
     "metadata: metadata collection tests",
     "query_language: query language tests",
     "custom_monitors: custom SQL monitor tests",
-    "tier(name): test tier - core, standard, or advanced",
 ]
