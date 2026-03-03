@@ -2,6 +2,10 @@ from typing import Any, List
 
 
 class BaseIntegration:
+    credentials: dict[str, str]
+    connection: Any
+    cursor: Any
+
     ########################################
     # Connection Related Methods
     ########################################
@@ -17,6 +21,7 @@ class BaseIntegration:
         Examples:
             PostgreSQL: psycopg2.connect(host=self.credentials["host"], ...)
             Snowflake: snowflake.connector.connect(account=self.credentials["account"], ...)
+            BigQuery: google.cloud.bigquery.Client(project=self.credentials["project"])
         """
         pass
 
@@ -27,8 +32,9 @@ class BaseIntegration:
         used by execute_query() and fetch_all_results().
 
         Examples:
-            PostgreSQL: self.connection.cursor()
             Snowflake: self.connection.cursor()
+            PostgreSQL: self.connection.cursor()
+            BigQuery: (not applicable -- use the client directly)
         """
         pass
 
@@ -36,8 +42,9 @@ class BaseIntegration:
         """Clean up the cursor and connection when the test session ends.
 
         Examples:
-            PostgreSQL: self.cursor.close(); self.connection.close()
             Snowflake: self.cursor.close(); self.connection.close()
+            PostgreSQL: self.cursor.close(); self.connection.close()
+            BigQuery: self.connection.close()
         """
         pass
 
@@ -51,8 +58,9 @@ class BaseIntegration:
             query (str): The rendered SQL query string to execute.
 
         Examples:
-            PostgreSQL: self.cursor.execute(query)
             Snowflake: self.cursor.execute(query)
+            PostgreSQL: self.cursor.execute(query)
+            BigQuery: self.cursor = self.connection.query(query)
         """
         pass
 
@@ -63,8 +71,9 @@ class BaseIntegration:
             List of tuples, one per result row.
 
         Examples:
-            PostgreSQL: self.cursor.fetchall()
             Snowflake: self.cursor.fetchall()
+            PostgreSQL: self.cursor.fetchall()
+            BigQuery: [row.values() for row in self.cursor.result()]
         """
         pass
 
@@ -74,7 +83,7 @@ class MetadataQueryTemplates:
     # Metadata Job Related Methods
     ########################################
     def get_databases_query_template(self) -> str:
-        """Jinja template that returns a list of accessible databases.
+        """Return a Jinja template string that produces a list of accessible databases.
 
         Jinja variables:
             None
@@ -82,6 +91,7 @@ class MetadataQueryTemplates:
         Examples:
             Snowflake: "SHOW DATABASES"
             PostgreSQL: "SELECT datname FROM pg_database WHERE datistemplate = false"
+            BigQuery: "SELECT catalog_name FROM INFORMATION_SCHEMA.SCHEMATA GROUP BY 1"
 
         Tier: core
         Enables: database discovery
@@ -89,7 +99,7 @@ class MetadataQueryTemplates:
         pass
 
     def get_schemas_query_template(self) -> str:
-        """Jinja template that returns schemas for a given database.
+        """Return a Jinja template string that produces schemas for a given database.
 
         Jinja variables:
             database_name (str): Name of the database to list schemas for.
@@ -97,6 +107,7 @@ class MetadataQueryTemplates:
         Examples:
             Snowflake: "SHOW SCHEMAS IN DATABASE {{ database_name }}"
             PostgreSQL: "SELECT schema_name FROM information_schema.schemata WHERE catalog_name = '{{ database_name }}'"
+            BigQuery: "SELECT schema_name FROM `{{ database_name }}`.INFORMATION_SCHEMA.SCHEMATA"
 
         Tier: core
         Enables: schema discovery
@@ -104,7 +115,7 @@ class MetadataQueryTemplates:
         pass
 
     def get_tables_query_template(self) -> str:
-        """Jinja template that returns tables and views for given schemas.
+        """Return a Jinja template string that produces tables and views for given schemas.
 
         Jinja variables:
             database_name (str): Name of the database.
@@ -116,19 +127,29 @@ class MetadataQueryTemplates:
             row_count (optional), byte_count (optional), last_update_time (optional),
             view_query (optional)
 
+        Examples:
+            Snowflake: "SELECT ... FROM {{ database_name }}.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ({{ schemas }}) LIMIT {{ limit }} OFFSET {{ offset }}"
+            PostgreSQL: "SELECT ... FROM information_schema.tables WHERE table_schema IN ({{ schemas }}) LIMIT {{ limit }} OFFSET {{ offset }}"
+            BigQuery: "SELECT ... FROM `{{ database_name }}`.INFORMATION_SCHEMA.TABLES WHERE table_schema IN ({{ schemas }}) LIMIT {{ limit }} OFFSET {{ offset }}"
+
         Tier: core
         Enables: table discovery, volume rows, volume bytes, freshness
         """
         pass
 
     def get_columns_query_template(self) -> str:
-        """Jinja template that returns column metadata for given tables.
+        """Return a Jinja template string that produces column metadata for given tables.
 
         Jinja variables:
             database_name (str): Name of the database.
             tables (str): Comma-separated, quoted full table identifiers.
 
         Returns columns: full_table_id, column_name, column_type
+
+        Examples:
+            Snowflake: "SELECT ... FROM {{ database_name }}.INFORMATION_SCHEMA.COLUMNS WHERE ..."
+            PostgreSQL: "SELECT ... FROM information_schema.columns WHERE ..."
+            BigQuery: "SELECT ... FROM `{{ database_name }}`.INFORMATION_SCHEMA.COLUMNS WHERE ..."
 
         Tier: core
         Enables: schema collection
@@ -141,11 +162,16 @@ class QueryLogCollectionTemplates:
     # Query Log Job Related Methods
     ########################################
     def get_query_logs_query_template(self) -> str:
-        """Jinja template that returns query logs within a time range.
+        """Return a Jinja template string that produces query logs within a time range.
 
         Jinja variables:
             start_time (datetime): Start of the time range.
             end_time (datetime): End of the time range.
+
+        Examples:
+            Snowflake: "SELECT ... FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY WHERE START_TIME >= '{{ start_time }}' AND START_TIME < '{{ end_time }}'"
+            PostgreSQL: "SELECT ... FROM pg_stat_activity WHERE query_start >= '{{ start_time }}' AND query_start < '{{ end_time }}'"
+            BigQuery: "SELECT ... FROM `region-us`.INFORMATION_SCHEMA.JOBS WHERE creation_time >= '{{ start_time }}' AND creation_time < '{{ end_time }}'"
 
         Tier: standard
         Enables: query log collection, lineage, field lineage
@@ -158,13 +184,14 @@ class CustomSQLMonitorTemplates:
     # Custom SQL Monitors Related Methods
     ###################################################
     def transform_into_count_query_template(self) -> str:
-        """Jinja template that wraps a query in a COUNT(*) outer query.
+        """Return a Jinja template string that wraps a query in a COUNT(*) outer query.
 
         Jinja variables:
             query (str): The inner SQL query to count rows from.
 
         Examples:
-            Snowflake/PostgreSQL: "SELECT COUNT(*) FROM ({{ query }}) AS count_query"
+            Snowflake: "SELECT COUNT(*) FROM ({{ query }}) AS count_query"
+            PostgreSQL: "SELECT COUNT(*) FROM ({{ query }}) AS count_query"
             BigQuery: "SELECT COUNT(*) FROM ({{ query }})"
 
         Tier: core
@@ -173,15 +200,16 @@ class CustomSQLMonitorTemplates:
         pass
 
     def add_row_limit_template(self) -> str:
-        """Jinja template that adds a row limit to a query.
+        """Return a Jinja template string that adds a row limit to a query.
 
         Jinja variables:
             query (str): The SQL query to limit.
             limit (int): Maximum number of rows.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ query }} LIMIT {{ limit }}"
-            SQL Server: "SELECT TOP {{ limit }} * FROM ({{ query }}) AS limited_query"
+            Snowflake: "{{ query }} LIMIT {{ limit }}"
+            PostgreSQL: "{{ query }} LIMIT {{ limit }}"
+            BigQuery: "{{ query }} LIMIT {{ limit }}"
 
         Tier: core
         Enables: custom SQL monitor row limiting
@@ -189,13 +217,15 @@ class CustomSQLMonitorTemplates:
         pass
 
     def get_count_all_expression_template(self) -> str:
-        """Jinja template for COUNT(*) expression.
+        """Return a Jinja template string for a COUNT(*) expression.
 
         Jinja variables:
             None
 
         Examples:
-            Snowflake/PostgreSQL/BigQuery: "COUNT(*)"
+            Snowflake: "COUNT(*)"
+            PostgreSQL: "COUNT(*)"
+            BigQuery: "COUNT(*)"
 
         Tier: core
         Enables: row_count metric, row_count_change metric
@@ -211,14 +241,16 @@ class QueryLanguageTemplates:
     # QueryLanguage: Core Query Building
     ###################################################
     def build_cte_template(self) -> str:
-        """Jinja template for building a CTE (Common Table Expression).
+        """Return a Jinja template string for building a CTE (Common Table Expression).
 
         Jinja variables:
             alias (str): Name for the CTE.
             query (str): The query body of the CTE.
 
         Examples:
-            Snowflake/PostgreSQL: "WITH {{ alias }} AS ({{ query }})"
+            Snowflake: "WITH {{ alias }} AS ({{ query }})"
+            PostgreSQL: "WITH {{ alias }} AS ({{ query }})"
+            BigQuery: "WITH {{ alias }} AS ({{ query }})"
 
         Tier: core
         Enables: query assembly for all monitors
@@ -226,13 +258,15 @@ class QueryLanguageTemplates:
         pass
 
     def add_select_clause_template(self) -> str:
-        """Jinja template for a SELECT clause.
+        """Return a Jinja template string for a SELECT clause.
 
         Jinja variables:
             fields (str): Comma-separated list of fields/expressions.
 
         Examples:
-            Snowflake/PostgreSQL: "SELECT {{ fields }}"
+            Snowflake: "SELECT {{ fields }}"
+            PostgreSQL: "SELECT {{ fields }}"
+            BigQuery: "SELECT {{ fields }}"
 
         Tier: core
         Enables: query assembly for all monitors
@@ -240,13 +274,15 @@ class QueryLanguageTemplates:
         pass
 
     def add_from_clause_template(self) -> str:
-        """Jinja template for a FROM clause.
+        """Return a Jinja template string for a FROM clause.
 
         Jinja variables:
             table (str): Table name or alias to select from.
 
         Examples:
-            Snowflake/PostgreSQL: "FROM {{ table }}"
+            Snowflake: "FROM {{ table }}"
+            PostgreSQL: "FROM {{ table }}"
+            BigQuery: "FROM {{ table }}"
 
         Tier: core
         Enables: query assembly for all monitors
@@ -254,13 +290,15 @@ class QueryLanguageTemplates:
         pass
 
     def union_queries_template(self) -> str:
-        """Jinja template that combines multiple queries with UNION ALL.
+        """Return a Jinja template string that combines multiple queries with UNION ALL.
 
         Jinja variables:
             queries (list[str]): List of SQL queries to union.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ queries | join(' UNION ALL ') }}"
+            Snowflake: "{{ queries | join(' UNION ALL ') }}"
+            PostgreSQL: "{{ queries | join(' UNION ALL ') }}"
+            BigQuery: "{{ queries | join(' UNION ALL ') }}"
 
         Tier: core
         Enables: query assembly, CTE building
@@ -268,14 +306,16 @@ class QueryLanguageTemplates:
         pass
 
     def alias_field_template(self) -> str:
-        """Jinja template for aliasing a field expression.
+        """Return a Jinja template string for aliasing a field expression.
 
         Jinja variables:
             field (str): The expression to alias.
             alias (str): The alias name.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field }} AS {{ alias }}"
+            Snowflake: "{{ field }} AS {{ alias }}"
+            PostgreSQL: "{{ field }} AS {{ alias }}"
+            BigQuery: "{{ field }} AS {{ alias }}"
 
         Tier: core
         Enables: query assembly for all monitors
@@ -283,13 +323,15 @@ class QueryLanguageTemplates:
         pass
 
     def all_fields_expression_template(self) -> str:
-        """Jinja template for selecting all fields (wildcard).
+        """Return a Jinja template string for selecting all fields (wildcard).
 
         Jinja variables:
             None
 
         Examples:
-            Snowflake/PostgreSQL/BigQuery: "*"
+            Snowflake: "*"
+            PostgreSQL: "*"
+            BigQuery: "*"
 
         Tier: core
         Enables: wildcard SELECT
@@ -297,15 +339,15 @@ class QueryLanguageTemplates:
         pass
 
     def escape_field_name_template(self) -> str:
-        """Jinja template for escaping a field/column identifier.
+        """Return a Jinja template string for escaping a field/column identifier.
 
         Jinja variables:
             field_name (str): The field name to escape.
 
         Examples:
             Snowflake: '"{{ field_name }}"'
-            BigQuery: "`{{ field_name }}`"
             PostgreSQL: '"{{ field_name }}"'
+            BigQuery: "`{{ field_name }}`"
 
         Tier: core
         Enables: safe column references
@@ -313,7 +355,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_table_identifier_template(self) -> str:
-        """Jinja template for a fully-qualified table identifier.
+        """Return a Jinja template string for a fully-qualified table identifier.
 
         Jinja variables:
             database (str): Database name.
@@ -322,6 +364,7 @@ class QueryLanguageTemplates:
 
         Examples:
             Snowflake: "{{ database }}.{{ schema }}.{{ table }}"
+            PostgreSQL: "{{ database }}.{{ schema }}.{{ table }}"
             BigQuery: "`{{ database }}.{{ schema }}.{{ table }}`"
 
         Tier: core
@@ -330,14 +373,15 @@ class QueryLanguageTemplates:
         pass
 
     def get_arbitrary_where_clause_template(self) -> str:
-        """Jinja template for an always-true WHERE clause.
+        """Return a Jinja template string for an always-true WHERE clause.
 
         Jinja variables:
             None
 
         Examples:
-            Snowflake/PostgreSQL: "TRUE"
-            MySQL: "1=1"
+            Snowflake: "TRUE"
+            PostgreSQL: "TRUE"
+            BigQuery: "TRUE"
 
         Tier: core
         Enables: default filter when no conditions specified
@@ -345,13 +389,15 @@ class QueryLanguageTemplates:
         pass
 
     def ascending_order_template(self) -> str:
-        """Jinja template for ascending ORDER BY direction.
+        """Return a Jinja template string for ascending ORDER BY direction.
 
         Jinja variables:
             field (str): Column or expression to order by.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field }} ASC"
+            Snowflake: "{{ field }} ASC"
+            PostgreSQL: "{{ field }} ASC"
+            BigQuery: "{{ field }} ASC"
 
         Tier: core
         Enables: query result ordering
@@ -359,13 +405,15 @@ class QueryLanguageTemplates:
         pass
 
     def descending_order_template(self) -> str:
-        """Jinja template for descending ORDER BY direction.
+        """Return a Jinja template string for descending ORDER BY direction.
 
         Jinja variables:
             field (str): Column or expression to order by.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field }} DESC"
+            Snowflake: "{{ field }} DESC"
+            PostgreSQL: "{{ field }} DESC"
+            BigQuery: "{{ field }} DESC"
 
         Tier: core
         Enables: query result ordering
@@ -373,7 +421,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_case_when_func_template(self) -> str:
-        """Jinja template for a CASE WHEN expression.
+        """Return a Jinja template string for a CASE WHEN expression.
 
         Jinja variables:
             condition (str): Boolean expression for the WHEN clause.
@@ -381,7 +429,9 @@ class QueryLanguageTemplates:
             false_value (str): Value when condition is false.
 
         Examples:
-            Snowflake/PostgreSQL: "CASE WHEN {{ condition }} THEN {{ true_value }} ELSE {{ false_value }} END"
+            Snowflake: "CASE WHEN {{ condition }} THEN {{ true_value }} ELSE {{ false_value }} END"
+            PostgreSQL: "CASE WHEN {{ condition }} THEN {{ true_value }} ELSE {{ false_value }} END"
+            BigQuery: "CASE WHEN {{ condition }} THEN {{ true_value }} ELSE {{ false_value }} END"
 
         Tier: core
         Enables: conditional logic in queries
@@ -389,13 +439,15 @@ class QueryLanguageTemplates:
         pass
 
     def negate_expression_template(self) -> str:
-        """Jinja template for negating a boolean expression.
+        """Return a Jinja template string for negating a boolean expression.
 
         Jinja variables:
             expression (str): The boolean expression to negate.
 
         Examples:
-            Snowflake/PostgreSQL: "NOT({{ expression }})"
+            Snowflake: "NOT({{ expression }})"
+            PostgreSQL: "NOT({{ expression }})"
+            BigQuery: "NOT({{ expression }})"
 
         Tier: core
         Enables: boolean logic in filters
@@ -406,13 +458,15 @@ class QueryLanguageTemplates:
     # QueryLanguage: String and Literal Handling
     ###################################################
     def escape_string_template(self) -> str:
-        """Jinja template for escaping special characters in a string value.
+        """Return a Jinja template string for escaping special characters in a string value.
 
         Jinja variables:
             value (str): The string value to escape.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ value | replace(\"'\", \"''\") }}"
+            Snowflake: "{{ value | replace(\"'\", \"''\") }}"
+            PostgreSQL: "{{ value | replace(\"'\", \"''\") }}"
+            BigQuery: "{{ value | replace(\"'\", \"''\") }}"
 
         Tier: core
         Enables: safe string literal construction
@@ -420,13 +474,15 @@ class QueryLanguageTemplates:
         pass
 
     def string_literal_template(self) -> str:
-        """Jinja template for wrapping a value as a SQL string literal.
+        """Return a Jinja template string for wrapping a value as a SQL string literal.
 
         Jinja variables:
             value (str): The already-escaped string value.
 
         Examples:
-            Snowflake/PostgreSQL: "'{{ value }}'"
+            Snowflake: "'{{ value }}'"
+            PostgreSQL: "'{{ value }}'"
+            BigQuery: "'{{ value }}'"
 
         Tier: core
         Enables: string literal values in queries
@@ -434,13 +490,15 @@ class QueryLanguageTemplates:
         pass
 
     def literal_value_template(self) -> str:
-        """Jinja template for a typed SQL literal value.
+        """Return a Jinja template string for a typed SQL literal value.
 
         Jinja variables:
             value (str): The literal value expression.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ value }}"
+            Snowflake: "{{ value }}"
+            PostgreSQL: "{{ value }}"
+            BigQuery: "{{ value }}"
 
         Tier: core
         Enables: typed literal values in queries
@@ -448,7 +506,7 @@ class QueryLanguageTemplates:
         pass
 
     def literal_datetime_template(self) -> str:
-        """Jinja template for a SQL datetime literal.
+        """Return a Jinja template string for a SQL datetime literal.
 
         Jinja variables:
             value (datetime): Python datetime to render as SQL literal.
@@ -456,6 +514,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "TIMESTAMP '{{ value.strftime('%Y-%m-%d %H:%M:%S') }}'"
             PostgreSQL: "TIMESTAMP '{{ value.strftime('%Y-%m-%d %H:%M:%S') }}'"
+            BigQuery: "TIMESTAMP '{{ value.strftime('%Y-%m-%d %H:%M:%S') }}'"
 
         Tier: core
         Enables: datetime literal values
@@ -463,13 +522,15 @@ class QueryLanguageTemplates:
         pass
 
     def literal_time_of_day_template(self) -> str:
-        """Jinja template for a SQL time-of-day literal.
+        """Return a Jinja template string for a SQL time-of-day literal.
 
         Jinja variables:
             value (str): Time-of-day string (e.g. "14:30:00").
 
         Examples:
-            Snowflake/PostgreSQL: "TIME '{{ value }}'"
+            Snowflake: "TIME '{{ value }}'"
+            PostgreSQL: "TIME '{{ value }}'"
+            BigQuery: "TIME '{{ value }}'"
 
         Tier: standard
         Enables: intraday filter predicates
@@ -477,13 +538,15 @@ class QueryLanguageTemplates:
         pass
 
     def literal_regex_template(self) -> str:
-        """Jinja template for a SQL regex literal.
+        """Return a Jinja template string for a SQL regex literal.
 
         Jinja variables:
             value (str): The regex pattern string.
 
         Examples:
-            Snowflake/PostgreSQL: "'{{ value }}'"
+            Snowflake: "'{{ value }}'"
+            PostgreSQL: "'{{ value }}'"
+            BigQuery: "r'{{ value }}'"
 
         Tier: standard
         Enables: regex pattern literals in filter predicates
@@ -491,13 +554,15 @@ class QueryLanguageTemplates:
         pass
 
     def literal_table_from_value_list_template(self) -> str:
-        """Jinja template for creating an inline table from a list of values.
+        """Return a Jinja template string for creating an inline table from a list of values.
 
         Jinja variables:
             values (list[str]): SQL literal values to form rows.
 
         Examples:
             Snowflake: "SELECT column1 AS value FROM VALUES {{ values | join(', ') }}"
+            PostgreSQL: "SELECT unnest(ARRAY[{{ values | join(', ') }}]) AS value"
+            BigQuery: "SELECT value FROM UNNEST([{{ values | join(', ') }}]) AS value"
 
         Tier: standard
         Enables: IN/NOT IN list predicates
@@ -505,7 +570,7 @@ class QueryLanguageTemplates:
         pass
 
     def date_literal_template(self) -> str:
-        """Jinja template for a SQL DATE literal.
+        """Return a Jinja template string for a SQL DATE literal.
 
         Jinja variables:
             value (date): Python date to render as SQL literal.
@@ -513,6 +578,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATE '{{ value.strftime('%Y-%m-%d') }}'"
             PostgreSQL: "DATE '{{ value.strftime('%Y-%m-%d') }}'"
+            BigQuery: "DATE '{{ value.strftime('%Y-%m-%d') }}'"
 
         Tier: standard
         Enables: date literal values
@@ -520,7 +586,7 @@ class QueryLanguageTemplates:
         pass
 
     def utc_literal_template(self) -> str:
-        """Jinja template for a UTC timestamp literal.
+        """Return a Jinja template string for a UTC timestamp literal.
 
         Jinja variables:
             value (datetime): Python datetime to render as UTC SQL literal.
@@ -528,6 +594,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "TIMESTAMP '{{ value.strftime('%Y-%m-%d %H:%M:%S') }}' ::TIMESTAMP_TZ"
             PostgreSQL: "TIMESTAMP WITH TIME ZONE '{{ value.strftime('%Y-%m-%d %H:%M:%S') }}+00'"
+            BigQuery: "TIMESTAMP '{{ value.strftime('%Y-%m-%d %H:%M:%S') }} UTC'"
 
         Tier: standard
         Enables: UTC timestamp literal values
@@ -538,7 +605,7 @@ class QueryLanguageTemplates:
     # QueryLanguage: Type Casting
     ###################################################
     def get_casting_to_numeric_expression_template(self) -> str:
-        """Jinja template for casting a field to a numeric type.
+        """Return a Jinja template string for casting a field to a numeric type.
 
         Jinja variables:
             field (str): Column name or expression to cast.
@@ -554,7 +621,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_to_string_func_template(self) -> str:
-        """Jinja template for casting a field to string/varchar.
+        """Return a Jinja template string for casting a field to string/varchar.
 
         Jinja variables:
             field (str): Column name or expression to cast.
@@ -570,7 +637,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_casting_to_decimal_expression_template(self) -> str:
-        """Jinja template for casting a field to decimal with precision.
+        """Return a Jinja template string for casting a field to decimal with precision.
 
         Jinja variables:
             field (str): Column name or expression to cast.
@@ -578,6 +645,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "CAST({{ field }} AS DECIMAL(38, 10))"
             PostgreSQL: "CAST({{ field }} AS DECIMAL(38, 10))"
+            BigQuery: "CAST({{ field }} AS BIGNUMERIC)"
 
         Tier: standard
         Enables: sum metric
@@ -585,7 +653,7 @@ class QueryLanguageTemplates:
         pass
 
     def default_cast_to_timestamp_func_template(self) -> str:
-        """Jinja template for casting a value to timestamp (default/fallback).
+        """Return a Jinja template string for casting a value to timestamp (default/fallback).
 
         Jinja variables:
             field (str): Value or column to cast.
@@ -593,6 +661,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "CAST({{ field }} AS TIMESTAMP)"
             PostgreSQL: "CAST({{ field }} AS TIMESTAMP)"
+            BigQuery: "CAST({{ field }} AS TIMESTAMP)"
 
         Tier: core
         Enables: time range filters when field type is unknown
@@ -600,7 +669,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_string_to_timestamp_template(self) -> str:
-        """Jinja template for casting a string value to timestamp.
+        """Return a Jinja template string for casting a string value to timestamp.
 
         Jinja variables:
             field (str): String expression to cast.
@@ -608,6 +677,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "TRY_CAST({{ field }} AS TIMESTAMP)"
             PostgreSQL: "{{ field }}::TIMESTAMP"
+            BigQuery: "SAFE_CAST({{ field }} AS TIMESTAMP)"
 
         Tier: standard
         Enables: timestamp casting for string-typed time fields
@@ -615,7 +685,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_numeric_to_timestamp_template(self) -> str:
-        """Jinja template for casting a numeric (epoch) value to timestamp.
+        """Return a Jinja template string for casting a numeric (epoch) value to timestamp.
 
         Jinja variables:
             field (str): Numeric expression to cast.
@@ -623,6 +693,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "TO_TIMESTAMP({{ field }})"
             PostgreSQL: "TO_TIMESTAMP({{ field }})"
+            BigQuery: "TIMESTAMP_SECONDS(CAST({{ field }} AS INT64))"
 
         Tier: standard
         Enables: timestamp casting for epoch-typed time fields
@@ -630,7 +701,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_date_to_timestamp_template(self) -> str:
-        """Jinja template for casting a date value to timestamp.
+        """Return a Jinja template string for casting a date value to timestamp.
 
         Jinja variables:
             field (str): Date expression to cast.
@@ -638,6 +709,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "CAST({{ field }} AS TIMESTAMP)"
             PostgreSQL: "{{ field }}::TIMESTAMP"
+            BigQuery: "CAST({{ field }} AS TIMESTAMP)"
 
         Tier: standard
         Enables: timestamp casting for date-typed time fields
@@ -645,7 +717,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_default_to_timestamp_template(self) -> str:
-        """Jinja template for default timestamp casting when type is unknown.
+        """Return a Jinja template string for default timestamp casting when type is unknown.
 
         Jinja variables:
             field (str): Expression to cast.
@@ -653,6 +725,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "TRY_CAST({{ field }} AS TIMESTAMP)"
             PostgreSQL: "CAST({{ field }} AS TIMESTAMP)"
+            BigQuery: "SAFE_CAST({{ field }} AS TIMESTAMP)"
 
         Tier: standard
         Enables: fallback timestamp casting
@@ -660,7 +733,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_timestamp_to_date_template(self) -> str:
-        """Jinja template for casting a timestamp to date type.
+        """Return a Jinja template string for casting a timestamp to date type.
 
         Jinja variables:
             field (str): Timestamp expression to cast.
@@ -668,6 +741,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "CAST({{ field }} AS DATE)"
             PostgreSQL: "{{ field }}::DATE"
+            BigQuery: "CAST({{ field }} AS DATE)"
 
         Tier: standard
         Enables: timestamp-to-date conversion for filter predicates
@@ -675,7 +749,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_timestamp_to_timestamp_ntz_template(self) -> str:
-        """Jinja template for casting a timestamp to timestamp without timezone.
+        """Return a Jinja template string for casting a timestamp to timestamp without timezone.
 
         Jinja variables:
             field (str): Timestamp expression to cast.
@@ -683,6 +757,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "CAST({{ field }} AS TIMESTAMP_NTZ)"
             PostgreSQL: "{{ field }}::TIMESTAMP WITHOUT TIME ZONE"
+            BigQuery: "{{ field }}"
 
         Tier: standard
         Enables: timezone-naive timestamp comparisons
@@ -690,7 +765,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_timestamp_to_timestamp_tz_template(self) -> str:
-        """Jinja template for casting a timestamp to timestamp with timezone.
+        """Return a Jinja template string for casting a timestamp to timestamp with timezone.
 
         Jinja variables:
             field (str): Timestamp expression to cast.
@@ -698,6 +773,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "CAST({{ field }} AS TIMESTAMP_TZ)"
             PostgreSQL: "{{ field }}::TIMESTAMP WITH TIME ZONE"
+            BigQuery: "{{ field }}"
 
         Tier: standard
         Enables: timezone-aware timestamp comparisons
@@ -705,7 +781,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_to_timestamp_with_tz_template(self) -> str:
-        """Jinja template rendering the timestamp-with-timezone type name.
+        """Return a Jinja template string rendering the timestamp-with-timezone type name.
 
         Jinja variables:
             None
@@ -721,7 +797,7 @@ class QueryLanguageTemplates:
         pass
 
     def cast_to_timestamp_without_tz_template(self) -> str:
-        """Jinja template rendering the timestamp-without-timezone type name.
+        """Return a Jinja template string rendering the timestamp-without-timezone type name.
 
         Jinja variables:
             None
@@ -729,6 +805,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "TIMESTAMP_NTZ"
             PostgreSQL: "TIMESTAMP WITHOUT TIME ZONE"
+            BigQuery: "TIMESTAMP"
 
         Tier: standard
         Enables: timezone-naive timestamp casting
@@ -739,7 +816,7 @@ class QueryLanguageTemplates:
     # QueryLanguage: Date/Time Functions
     ###################################################
     def convert_to_utc_template(self) -> str:
-        """Jinja template for converting a timezone-aware field to UTC.
+        """Return a Jinja template string for converting a timezone-aware field to UTC.
 
         Jinja variables:
             field (str): Timestamp expression with timezone.
@@ -747,6 +824,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "CONVERT_TIMEZONE('UTC', {{ field }})"
             PostgreSQL: "{{ field }} AT TIME ZONE 'UTC'"
+            BigQuery: "TIMESTAMP({{ field }}, 'UTC')"
 
         Tier: standard
         Enables: UTC normalization for time range filters
@@ -754,13 +832,14 @@ class QueryLanguageTemplates:
         pass
 
     def current_date_func_template(self) -> str:
-        """Jinja template for the current date expression.
+        """Return a Jinja template string for the current date expression.
 
         Jinja variables:
             None
 
         Examples:
-            Snowflake/PostgreSQL: "CURRENT_DATE"
+            Snowflake: "CURRENT_DATE"
+            PostgreSQL: "CURRENT_DATE"
             BigQuery: "CURRENT_DATE()"
 
         Tier: core
@@ -769,7 +848,7 @@ class QueryLanguageTemplates:
         pass
 
     def current_timestamp_func_template(self) -> str:
-        """Jinja template for the current timestamp expression.
+        """Return a Jinja template string for the current timestamp expression.
 
         Jinja variables:
             None
@@ -785,7 +864,7 @@ class QueryLanguageTemplates:
         pass
 
     def add_days_func_template(self) -> str:
-        """Jinja template for adding/subtracting days from a date.
+        """Return a Jinja template string for adding/subtracting days from a date.
 
         Jinja variables:
             field (str): Date expression.
@@ -794,6 +873,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATEADD(day, {{ days }}, {{ field }})"
             PostgreSQL: "{{ field }} + INTERVAL '{{ days }} days'"
+            BigQuery: "DATE_ADD({{ field }}, INTERVAL {{ days }} DAY)"
 
         Tier: standard
         Enables: date arithmetic in time range filters
@@ -801,7 +881,7 @@ class QueryLanguageTemplates:
         pass
 
     def add_days_timestamp_func_template(self) -> str:
-        """Jinja template for adding/subtracting days from a timestamp.
+        """Return a Jinja template string for adding/subtracting days from a timestamp.
 
         Jinja variables:
             field (str): Timestamp expression.
@@ -810,6 +890,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATEADD(day, {{ days }}, {{ field }})"
             PostgreSQL: "{{ field }} + INTERVAL '{{ days }} days'"
+            BigQuery: "TIMESTAMP_ADD({{ field }}, INTERVAL {{ days }} DAY)"
 
         Tier: standard
         Enables: timestamp arithmetic in time range filters
@@ -817,7 +898,7 @@ class QueryLanguageTemplates:
         pass
 
     def add_hours_timestamp_func_template(self) -> str:
-        """Jinja template for adding/subtracting hours from a timestamp.
+        """Return a Jinja template string for adding/subtracting hours from a timestamp.
 
         Jinja variables:
             field (str): Timestamp expression.
@@ -826,6 +907,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATEADD(hour, {{ hours }}, {{ field }})"
             PostgreSQL: "{{ field }} + INTERVAL '{{ hours }} hours'"
+            BigQuery: "TIMESTAMP_ADD({{ field }}, INTERVAL {{ hours }} HOUR)"
 
         Tier: standard
         Enables: hourly timestamp arithmetic
@@ -833,7 +915,7 @@ class QueryLanguageTemplates:
         pass
 
     def time_truncate_func_template(self) -> str:
-        """Jinja template for truncating a timestamp to a given interval.
+        """Return a Jinja template string for truncating a timestamp to a given interval.
 
         Jinja variables:
             field (str): Timestamp expression to truncate.
@@ -850,7 +932,7 @@ class QueryLanguageTemplates:
         pass
 
     def truncate_to_day_template(self) -> str:
-        """Jinja template for truncating a timestamp to day.
+        """Return a Jinja template string for truncating a timestamp to day.
 
         Jinja variables:
             field (str): Timestamp expression.
@@ -858,6 +940,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATE_TRUNC('DAY', {{ field }})"
             PostgreSQL: "DATE_TRUNC('day', {{ field }})"
+            BigQuery: "TIMESTAMP_TRUNC({{ field }}, DAY)"
 
         Tier: standard
         Enables: daily time bucketing
@@ -865,7 +948,7 @@ class QueryLanguageTemplates:
         pass
 
     def truncate_to_hour_template(self) -> str:
-        """Jinja template for truncating a timestamp to hour.
+        """Return a Jinja template string for truncating a timestamp to hour.
 
         Jinja variables:
             field (str): Timestamp expression.
@@ -873,6 +956,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATE_TRUNC('HOUR', {{ field }})"
             PostgreSQL: "DATE_TRUNC('hour', {{ field }})"
+            BigQuery: "TIMESTAMP_TRUNC({{ field }}, HOUR)"
 
         Tier: standard
         Enables: hourly time bucketing
@@ -880,7 +964,7 @@ class QueryLanguageTemplates:
         pass
 
     def truncate_to_week_template(self) -> str:
-        """Jinja template for truncating a timestamp to week.
+        """Return a Jinja template string for truncating a timestamp to week.
 
         Jinja variables:
             field (str): Timestamp expression.
@@ -888,6 +972,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATE_TRUNC('WEEK', {{ field }})"
             PostgreSQL: "DATE_TRUNC('week', {{ field }})"
+            BigQuery: "TIMESTAMP_TRUNC({{ field }}, WEEK)"
 
         Tier: standard
         Enables: weekly time bucketing
@@ -895,7 +980,7 @@ class QueryLanguageTemplates:
         pass
 
     def truncate_to_month_template(self) -> str:
-        """Jinja template for truncating a timestamp to month.
+        """Return a Jinja template string for truncating a timestamp to month.
 
         Jinja variables:
             field (str): Timestamp expression.
@@ -903,6 +988,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATE_TRUNC('MONTH', {{ field }})"
             PostgreSQL: "DATE_TRUNC('month', {{ field }})"
+            BigQuery: "TIMESTAMP_TRUNC({{ field }}, MONTH)"
 
         Tier: standard
         Enables: monthly time bucketing
@@ -910,7 +996,7 @@ class QueryLanguageTemplates:
         pass
 
     def truncate_to_year_template(self) -> str:
-        """Jinja template for truncating a timestamp to year.
+        """Return a Jinja template string for truncating a timestamp to year.
 
         Jinja variables:
             field (str): Timestamp expression.
@@ -918,6 +1004,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATE_TRUNC('YEAR', {{ field }})"
             PostgreSQL: "DATE_TRUNC('year', {{ field }})"
+            BigQuery: "TIMESTAMP_TRUNC({{ field }}, YEAR)"
 
         Tier: standard
         Enables: yearly time bucketing
@@ -925,7 +1012,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_is_yesterday_expression_template(self) -> str:
-        """Jinja template for checking if a timestamp falls on yesterday.
+        """Return a Jinja template string for checking if a timestamp falls on yesterday.
 
         Jinja variables:
             field (str): Timestamp expression to check.
@@ -933,6 +1020,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "CAST({{ field }} AS DATE) = DATEADD(day, -1, CURRENT_DATE)"
             PostgreSQL: "{{ field }}::DATE = CURRENT_DATE - INTERVAL '1 day'"
+            BigQuery: "CAST({{ field }} AS DATE) = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)"
 
         Tier: standard
         Enables: yesterday filter in time range expressions
@@ -940,7 +1028,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_in_past_days_expression_template(self) -> str:
-        """Jinja template for checking if a timestamp is within the past N days.
+        """Return a Jinja template string for checking if a timestamp is within the past N days.
 
         Jinja variables:
             field (str): Timestamp expression to check.
@@ -949,6 +1037,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "{{ field }} >= DATEADD(day, -{{ days }}, CURRENT_TIMESTAMP())"
             PostgreSQL: "{{ field }} >= NOW() - INTERVAL '{{ days }} days'"
+            BigQuery: "{{ field }} >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {{ days }} DAY)"
 
         Tier: standard
         Enables: past-N-days time range filter
@@ -956,7 +1045,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_in_past_hours_expression_template(self) -> str:
-        """Jinja template for checking if a timestamp is within the past N hours.
+        """Return a Jinja template string for checking if a timestamp is within the past N hours.
 
         Jinja variables:
             field (str): Timestamp expression to check.
@@ -965,6 +1054,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "{{ field }} >= DATEADD(hour, -{{ hours }}, CURRENT_TIMESTAMP())"
             PostgreSQL: "{{ field }} >= NOW() - INTERVAL '{{ hours }} hours'"
+            BigQuery: "{{ field }} >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {{ hours }} HOUR)"
 
         Tier: standard
         Enables: past-N-hours time range filter
@@ -972,7 +1062,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_in_past_calendar_week_expression_template(self) -> str:
-        """Jinja template for checking if a timestamp falls in the current calendar week.
+        """Return a Jinja template string for checking if a timestamp falls in the current calendar week.
 
         Jinja variables:
             field (str): Timestamp expression to check.
@@ -980,6 +1070,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATE_TRUNC('WEEK', {{ field }}) = DATE_TRUNC('WEEK', CURRENT_DATE)"
             PostgreSQL: "DATE_TRUNC('week', {{ field }}) = DATE_TRUNC('week', CURRENT_DATE)"
+            BigQuery: "TIMESTAMP_TRUNC({{ field }}, WEEK) = TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), WEEK)"
 
         Tier: standard
         Enables: calendar week filter
@@ -987,7 +1078,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_in_past_calendar_month_expression_template(self) -> str:
-        """Jinja template for checking if a timestamp falls in the current calendar month.
+        """Return a Jinja template string for checking if a timestamp falls in the current calendar month.
 
         Jinja variables:
             field (str): Timestamp expression to check.
@@ -995,6 +1086,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATE_TRUNC('MONTH', {{ field }}) = DATE_TRUNC('MONTH', CURRENT_DATE)"
             PostgreSQL: "DATE_TRUNC('month', {{ field }}) = DATE_TRUNC('month', CURRENT_DATE)"
+            BigQuery: "TIMESTAMP_TRUNC({{ field }}, MONTH) = TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)"
 
         Tier: standard
         Enables: calendar month filter
@@ -1002,7 +1094,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_date_diff_func_template(self) -> str:
-        """Jinja template for computing the difference between two dates/timestamps.
+        """Return a Jinja template string for computing the difference between two dates/timestamps.
 
         Jinja variables:
             field1 (str): Start date/timestamp.
@@ -1012,6 +1104,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DATEDIFF({{ unit }}, {{ field1 }}, {{ field2 }})"
             PostgreSQL: "EXTRACT(EPOCH FROM ({{ field2 }} - {{ field1 }})) / 86400"
+            BigQuery: "DATE_DIFF({{ field2 }}, {{ field1 }}, DAY)"
 
         Tier: standard
         Enables: date/timestamp difference in comparison monitors
@@ -1019,7 +1112,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_days_of_week_expression_template(self) -> str:
-        """Jinja template for extracting the day of week from a timestamp.
+        """Return a Jinja template string for extracting the day of week from a timestamp.
 
         Jinja variables:
             field (str): Timestamp expression.
@@ -1027,6 +1120,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "DAYOFWEEK({{ field }})"
             PostgreSQL: "EXTRACT(DOW FROM {{ field }})"
+            BigQuery: "EXTRACT(DAYOFWEEK FROM {{ field }})"
 
         Tier: standard
         Enables: day-of-week filtering
@@ -1034,7 +1128,7 @@ class QueryLanguageTemplates:
         pass
 
     def convert_to_unix_timestamp_func_template(self) -> str:
-        """Jinja template for converting a field to Unix epoch seconds.
+        """Return a Jinja template string for converting a field to Unix epoch seconds.
 
         Jinja variables:
             field (str): Timestamp expression to convert.
@@ -1042,6 +1136,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "EXTRACT(EPOCH FROM {{ field }})"
             PostgreSQL: "EXTRACT(EPOCH FROM {{ field }})"
+            BigQuery: "UNIX_SECONDS({{ field }})"
 
         Tier: standard
         Enables: Unix timestamp conversion for comparison monitors
@@ -1052,7 +1147,7 @@ class QueryLanguageTemplates:
     # QueryLanguage: Dialect Capability Flags
     ###################################################
     def supports_literal_select_template(self) -> str:
-        """Jinja template rendering "true" or "false" for literal SELECT support.
+        """Return a Jinja template string rendering "true" or "false" for literal SELECT support.
 
         A database supports literal SELECT if `SELECT 1` works without a FROM clause.
 
@@ -1060,8 +1155,9 @@ class QueryLanguageTemplates:
             None
 
         Examples:
-            Snowflake/PostgreSQL: "true"
-            Oracle: "false"
+            Snowflake: "true"
+            PostgreSQL: "true"
+            BigQuery: "true"
 
         Tier: core
         Enables: dialect flag for bare SELECT support
@@ -1069,13 +1165,15 @@ class QueryLanguageTemplates:
         pass
 
     def supports_literal_group_by_template(self) -> str:
-        """Jinja template rendering "true" or "false" for literal GROUP BY support.
+        """Return a Jinja template string rendering "true" or "false" for literal GROUP BY support.
 
         Jinja variables:
             None
 
         Examples:
-            Snowflake/PostgreSQL: "true"
+            Snowflake: "true"
+            PostgreSQL: "true"
+            BigQuery: "true"
 
         Tier: core
         Enables: dialect flag for GROUP BY with literals
@@ -1083,13 +1181,15 @@ class QueryLanguageTemplates:
         pass
 
     def supports_group_by_on_subquery_template(self) -> str:
-        """Jinja template rendering "true" or "false" for GROUP BY on subquery support.
+        """Return a Jinja template string rendering "true" or "false" for GROUP BY on subquery support.
 
         Jinja variables:
             None
 
         Examples:
-            Snowflake/PostgreSQL: "true"
+            Snowflake: "true"
+            PostgreSQL: "true"
+            BigQuery: "true"
 
         Tier: core
         Enables: dialect flag for ORDER BY inside subqueries
@@ -1097,7 +1197,7 @@ class QueryLanguageTemplates:
         pass
 
     def parses_timestamp_with_trailing_text_template(self) -> str:
-        """Jinja template rendering "true" or "false" for trailing text timestamp parsing.
+        """Return a Jinja template string rendering "true" or "false" for trailing text timestamp parsing.
 
         Some databases can parse "2024-01-01 extra text" as a timestamp.
 
@@ -1107,6 +1207,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "true"
             PostgreSQL: "false"
+            BigQuery: "false"
 
         Tier: standard
         Enables: dialect flag for lenient timestamp parsing
@@ -1117,13 +1218,15 @@ class QueryLanguageTemplates:
     # QueryLanguage: Null and NaN Handling
     ###################################################
     def is_null_template(self) -> str:
-        """Jinja template for IS NULL check.
+        """Return a Jinja template string for an IS NULL check.
 
         Jinja variables:
             field (str): Expression to check.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field }} IS NULL"
+            Snowflake: "{{ field }} IS NULL"
+            PostgreSQL: "{{ field }} IS NULL"
+            BigQuery: "{{ field }} IS NULL"
 
         Tier: core
         Enables: null-check filter predicates
@@ -1131,13 +1234,15 @@ class QueryLanguageTemplates:
         pass
 
     def is_not_null_template(self) -> str:
-        """Jinja template for IS NOT NULL check.
+        """Return a Jinja template string for an IS NOT NULL check.
 
         Jinja variables:
             field (str): Expression to check.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field }} IS NOT NULL"
+            Snowflake: "{{ field }} IS NOT NULL"
+            PostgreSQL: "{{ field }} IS NOT NULL"
+            BigQuery: "{{ field }} IS NOT NULL"
 
         Tier: core
         Enables: not-null filter predicates
@@ -1145,7 +1250,7 @@ class QueryLanguageTemplates:
         pass
 
     def nan_expr_template(self) -> str:
-        """Jinja template for a NaN literal expression.
+        """Return a Jinja template string for a NaN literal expression.
 
         Jinja variables:
             None
@@ -1161,7 +1266,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_isnan_expression_template(self) -> str:
-        """Jinja template for detecting NaN values.
+        """Return a Jinja template string for detecting NaN values.
 
         Jinja variables:
             field (str): Expression to check for NaN.
@@ -1169,6 +1274,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "{{ field }} != {{ field }}"
             PostgreSQL: "{{ field }} = 'NaN'::NUMERIC"
+            BigQuery: "IS_NAN({{ field }})"
 
         Tier: standard
         Enables: nan_count metric, nan_rate metric
@@ -1179,14 +1285,16 @@ class QueryLanguageTemplates:
     # QueryLanguage: Comparison Operators
     ###################################################
     def get_is_eq_expression_template(self) -> str:
-        """Jinja template for equality comparison.
+        """Return a Jinja template string for equality comparison.
 
         Jinja variables:
             field1 (str): Left operand.
             field2 (str): Right operand.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field1 }} = {{ field2 }}"
+            Snowflake: "{{ field1 }} = {{ field2 }}"
+            PostgreSQL: "{{ field1 }} = {{ field2 }}"
+            BigQuery: "{{ field1 }} = {{ field2 }}"
 
         Tier: standard
         Enables: threshold and custom rule evaluation in comparison monitors
@@ -1194,14 +1302,16 @@ class QueryLanguageTemplates:
         pass
 
     def get_is_gt_expression_template(self) -> str:
-        """Jinja template for greater-than comparison.
+        """Return a Jinja template string for greater-than comparison.
 
         Jinja variables:
             field1 (str): Left operand.
             field2 (str): Right operand.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field1 }} > {{ field2 }}"
+            Snowflake: "{{ field1 }} > {{ field2 }}"
+            PostgreSQL: "{{ field1 }} > {{ field2 }}"
+            BigQuery: "{{ field1 }} > {{ field2 }}"
 
         Tier: standard
         Enables: threshold comparisons in comparison monitors
@@ -1209,14 +1319,16 @@ class QueryLanguageTemplates:
         pass
 
     def get_is_gte_expression_template(self) -> str:
-        """Jinja template for greater-than-or-equal comparison.
+        """Return a Jinja template string for greater-than-or-equal comparison.
 
         Jinja variables:
             field1 (str): Left operand.
             field2 (str): Right operand.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field1 }} >= {{ field2 }}"
+            Snowflake: "{{ field1 }} >= {{ field2 }}"
+            PostgreSQL: "{{ field1 }} >= {{ field2 }}"
+            BigQuery: "{{ field1 }} >= {{ field2 }}"
 
         Tier: standard
         Enables: threshold comparisons in comparison monitors
@@ -1224,14 +1336,16 @@ class QueryLanguageTemplates:
         pass
 
     def get_is_lt_expression_template(self) -> str:
-        """Jinja template for less-than comparison.
+        """Return a Jinja template string for less-than comparison.
 
         Jinja variables:
             field1 (str): Left operand.
             field2 (str): Right operand.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field1 }} < {{ field2 }}"
+            Snowflake: "{{ field1 }} < {{ field2 }}"
+            PostgreSQL: "{{ field1 }} < {{ field2 }}"
+            BigQuery: "{{ field1 }} < {{ field2 }}"
 
         Tier: standard
         Enables: range checks in comparison monitors
@@ -1239,14 +1353,16 @@ class QueryLanguageTemplates:
         pass
 
     def get_is_lte_expression_template(self) -> str:
-        """Jinja template for less-than-or-equal comparison.
+        """Return a Jinja template string for less-than-or-equal comparison.
 
         Jinja variables:
             field1 (str): Left operand.
             field2 (str): Right operand.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field1 }} <= {{ field2 }}"
+            Snowflake: "{{ field1 }} <= {{ field2 }}"
+            PostgreSQL: "{{ field1 }} <= {{ field2 }}"
+            BigQuery: "{{ field1 }} <= {{ field2 }}"
 
         Tier: standard
         Enables: range checks in comparison monitors
@@ -1254,7 +1370,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_is_inside_range_expression_template(self) -> str:
-        """Jinja template for checking if a value is inside a range (inclusive).
+        """Return a Jinja template string for checking if a value is inside a range (inclusive).
 
         Jinja variables:
             field (str): Expression to check.
@@ -1262,7 +1378,8 @@ class QueryLanguageTemplates:
             upper (str): Upper bound.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field }} >= {{ lower }} AND {{ field }} <= {{ upper }}"
+            Snowflake: "{{ field }} >= {{ lower }} AND {{ field }} <= {{ upper }}"
+            PostgreSQL: "{{ field }} >= {{ lower }} AND {{ field }} <= {{ upper }}"
             BigQuery: "{{ field }} BETWEEN {{ lower }} AND {{ upper }}"
 
         Tier: standard
@@ -1271,7 +1388,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_is_outside_range_expression_template(self) -> str:
-        """Jinja template for checking if a value is outside a range.
+        """Return a Jinja template string for checking if a value is outside a range.
 
         Jinja variables:
             field (str): Expression to check.
@@ -1279,7 +1396,8 @@ class QueryLanguageTemplates:
             upper (str): Upper bound.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field }} < {{ lower }} OR {{ field }} > {{ upper }}"
+            Snowflake: "{{ field }} < {{ lower }} OR {{ field }} > {{ upper }}"
+            PostgreSQL: "{{ field }} < {{ lower }} OR {{ field }} > {{ upper }}"
             BigQuery: "NOT ({{ field }} BETWEEN {{ lower }} AND {{ upper }})"
 
         Tier: standard
@@ -1291,13 +1409,15 @@ class QueryLanguageTemplates:
     # QueryLanguage: Aggregation Functions
     ###################################################
     def get_avg_function_template(self) -> str:
-        """Jinja template for the SQL AVG() aggregate function.
+        """Return a Jinja template string for the SQL AVG() aggregate function.
 
         Jinja variables:
             field (str): Column name or expression to average.
 
         Examples:
-            Snowflake/PostgreSQL/BigQuery: "AVG({{ field }})"
+            Snowflake: "AVG({{ field }})"
+            PostgreSQL: "AVG({{ field }})"
+            BigQuery: "AVG({{ field }})"
 
         Tier: standard
         Enables: numeric_mean metric
@@ -1305,7 +1425,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_stddev_function_template(self) -> str:
-        """Jinja template for the SQL standard deviation function.
+        """Return a Jinja template string for the SQL standard deviation function.
 
         Jinja variables:
             field (str): Column name or expression.
@@ -1321,13 +1441,15 @@ class QueryLanguageTemplates:
         pass
 
     def get_distinct_count_func_template(self) -> str:
-        """Jinja template for COUNT(DISTINCT ...).
+        """Return a Jinja template string for COUNT(DISTINCT ...).
 
         Jinja variables:
             field (str): Column name or expression to count distinct values of.
 
         Examples:
-            Snowflake/PostgreSQL: "COUNT(DISTINCT {{ field }})"
+            Snowflake: "COUNT(DISTINCT {{ field }})"
+            PostgreSQL: "COUNT(DISTINCT {{ field }})"
+            BigQuery: "COUNT(DISTINCT {{ field }})"
 
         Tier: standard
         Enables: approx_distinct_count metric, approx_distinctness metric
@@ -1335,13 +1457,15 @@ class QueryLanguageTemplates:
         pass
 
     def get_distinct_func_template(self) -> str:
-        """Jinja template for DISTINCT expression.
+        """Return a Jinja template string for a DISTINCT expression.
 
         Jinja variables:
             field (str): Column name or expression.
 
         Examples:
-            Snowflake/PostgreSQL: "DISTINCT {{ field }}"
+            Snowflake: "DISTINCT {{ field }}"
+            PostgreSQL: "DISTINCT {{ field }}"
+            BigQuery: "DISTINCT {{ field }}"
 
         Tier: standard
         Enables: distinctness queries
@@ -1349,7 +1473,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_safe_divide_template(self) -> str:
-        """Jinja template for zero-safe division.
+        """Return a Jinja template string for zero-safe division.
 
         Jinja variables:
             numerator (str): Numerator expression.
@@ -1366,7 +1490,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_conditional_count_expression_template(self) -> str:
-        """Jinja template for counting rows matching a condition.
+        """Return a Jinja template string for counting rows matching a condition.
 
         Jinja variables:
             condition (str): Boolean expression for counting.
@@ -1374,6 +1498,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "COUNT_IF({{ condition }})"
             PostgreSQL: "COUNT(CASE WHEN {{ condition }} THEN 1 END)"
+            BigQuery: "COUNTIF({{ condition }})"
 
         Tier: standard
         Enables: zero_count, negative_count, nan_count, empty_string_count, true_count, false_count metrics
@@ -1381,7 +1506,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_approx_quantiles_func_template(self) -> str:
-        """Jinja template for approximate quantile buckets.
+        """Return a Jinja template string for approximate quantile buckets.
 
         Jinja variables:
             field (str): Column name or expression.
@@ -1389,6 +1514,7 @@ class QueryLanguageTemplates:
 
         Examples:
             Snowflake: "APPROX_PERCENTILE({{ field }}, 0.5)"
+            PostgreSQL: "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {{ field }})"
             BigQuery: "APPROX_QUANTILES({{ field }}, {{ num_buckets }})"
 
         Tier: standard
@@ -1397,7 +1523,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_approx_percentile_func_template(self) -> str:
-        """Jinja template for approximate percentile calculation.
+        """Return a Jinja template string for approximate percentile calculation.
 
         Jinja variables:
             field (str): Column name or expression.
@@ -1406,6 +1532,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "APPROX_PERCENTILE({{ field }}, {{ percentile }})"
             PostgreSQL: "PERCENTILE_CONT({{ percentile }}) WITHIN GROUP (ORDER BY {{ field }})"
+            BigQuery: "APPROX_QUANTILES({{ field }}, 100)[OFFSET(CAST({{ percentile }} * 100 AS INT64))]"
 
         Tier: standard
         Enables: numeric_median, percentile_20/40/60/80 metrics
@@ -1413,7 +1540,7 @@ class QueryLanguageTemplates:
         pass
 
     def approx_distinct_func_template(self) -> str:
-        """Jinja template for approximate distinct count.
+        """Return a Jinja template string for approximate distinct count.
 
         Jinja variables:
             field (str): Column name or expression.
@@ -1429,7 +1556,7 @@ class QueryLanguageTemplates:
         pass
 
     def any_value_template(self) -> str:
-        """Jinja template for ANY_VALUE() aggregate.
+        """Return a Jinja template string for an ANY_VALUE() aggregate.
 
         Jinja variables:
             field (str): Column name or expression.
@@ -1448,7 +1575,7 @@ class QueryLanguageTemplates:
     # QueryLanguage: String Functions
     ###################################################
     def get_length_template(self) -> str:
-        """Jinja template for string length.
+        """Return a Jinja template string for string length.
 
         Jinja variables:
             field (str): String expression to measure.
@@ -1464,7 +1591,7 @@ class QueryLanguageTemplates:
         pass
 
     def substring_func_template(self) -> str:
-        """Jinja template for substring extraction.
+        """Return a Jinja template string for substring extraction.
 
         Jinja variables:
             field (str): String expression.
@@ -1474,6 +1601,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "SUBSTR({{ field }}, {{ start }}, {{ length }})"
             PostgreSQL: "SUBSTRING({{ field }} FROM {{ start }} FOR {{ length }})"
+            BigQuery: "SUBSTR({{ field }}, {{ start }}, {{ length }})"
 
         Tier: standard
         Enables: substring extraction
@@ -1481,13 +1609,15 @@ class QueryLanguageTemplates:
         pass
 
     def get_is_empty_string_expression_template(self) -> str:
-        """Jinja template for checking if a field is an empty string.
+        """Return a Jinja template string for checking if a field is an empty string.
 
         Jinja variables:
             field (str): String expression to check.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field }} = ''"
+            Snowflake: "{{ field }} = ''"
+            PostgreSQL: "{{ field }} = ''"
+            BigQuery: "{{ field }} = ''"
 
         Tier: standard
         Enables: empty_string_count metric, empty_string_rate metric
@@ -1495,7 +1625,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_regexp_expression_template(self) -> str:
-        """Jinja template for regex matching expression.
+        """Return a Jinja template string for regex matching expression.
 
         Jinja variables:
             field (str): String expression to match.
@@ -1512,7 +1642,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_regexp_count_expression_template(self) -> str:
-        """Jinja template for counting regex matches within a string.
+        """Return a Jinja template string for counting regex matches within a string.
 
         Jinja variables:
             field (str): String expression to search.
@@ -1521,6 +1651,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "REGEXP_COUNT({{ field }}, {{ pattern }})"
             PostgreSQL: "(SELECT COUNT(*) FROM REGEXP_MATCHES({{ field }}, {{ pattern }}, 'g'))"
+            BigQuery: "ARRAY_LENGTH(REGEXP_EXTRACT_ALL({{ field }}, {{ pattern }}))"
 
         Tier: standard
         Enables: text_int_count, text_number_count, text_uuid_count, text_email_address_count metrics
@@ -1531,7 +1662,7 @@ class QueryLanguageTemplates:
     # QueryLanguage: Array and Timestamp Validation
     ###################################################
     def array_expr_template(self) -> str:
-        """Jinja template for constructing an array literal.
+        """Return a Jinja template string for constructing an array literal.
 
         Jinja variables:
             values (list): Values for the array.
@@ -1547,7 +1678,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_array_length_func_template(self) -> str:
-        """Jinja template for getting the length of an array.
+        """Return a Jinja template string for getting the length of an array.
 
         Jinja variables:
             field (str): Array expression.
@@ -1563,7 +1694,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_is_timestamp_expression_template(self) -> str:
-        """Jinja template for checking if a string is a valid timestamp.
+        """Return a Jinja template string for checking if a string is a valid timestamp.
 
         Jinja variables:
             field (str): String expression to validate.
@@ -1571,6 +1702,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "TRY_CAST({{ field }} AS TIMESTAMP) IS NOT NULL"
             PostgreSQL: "{{ field }}::TIMESTAMP IS NOT NULL"
+            BigQuery: "SAFE_CAST({{ field }} AS TIMESTAMP) IS NOT NULL"
 
         Tier: advanced
         Enables: text_timestamp_count metric, text_timestamp_rate metric
@@ -1578,7 +1710,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_not_is_timestamp_expression_template(self) -> str:
-        """Jinja template for checking if a string is NOT a valid timestamp.
+        """Return a Jinja template string for checking if a string is NOT a valid timestamp.
 
         Jinja variables:
             field (str): String expression to validate.
@@ -1586,6 +1718,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "TRY_CAST({{ field }} AS TIMESTAMP) IS NULL"
             PostgreSQL: "{{ field }}::TIMESTAMP IS NULL"
+            BigQuery: "SAFE_CAST({{ field }} AS TIMESTAMP) IS NULL"
 
         Tier: advanced
         Enables: text_not_timestamp_count metric
@@ -1593,7 +1726,7 @@ class QueryLanguageTemplates:
         pass
 
     def get_epoch_seconds_expression_template(self) -> str:
-        """Jinja template for extracting epoch seconds from a timestamp.
+        """Return a Jinja template string for extracting epoch seconds from a timestamp.
 
         Jinja variables:
             field (str): Timestamp expression.
@@ -1601,6 +1734,7 @@ class QueryLanguageTemplates:
         Examples:
             Snowflake: "EXTRACT(EPOCH FROM {{ field }})"
             PostgreSQL: "EXTRACT(EPOCH FROM {{ field }})"
+            BigQuery: "UNIX_SECONDS({{ field }})"
 
         Tier: advanced
         Enables: past_timestamp_count, future_timestamp_count, unix_zero_count metrics
@@ -1608,13 +1742,15 @@ class QueryLanguageTemplates:
         pass
 
     def get_epoch_seconds_parameter_template(self) -> str:
-        """Jinja template for epoch seconds parameter.
+        """Return a Jinja template string for epoch seconds parameter.
 
         Jinja variables:
             field (str): Timestamp expression.
 
         Examples:
-            Snowflake/PostgreSQL: "EXTRACT(EPOCH FROM {{ field }})"
+            Snowflake: "EXTRACT(EPOCH FROM {{ field }})"
+            PostgreSQL: "EXTRACT(EPOCH FROM {{ field }})"
+            BigQuery: "UNIX_SECONDS({{ field }})"
 
         Tier: advanced
         Enables: epoch seconds parameter extraction
@@ -1625,13 +1761,15 @@ class QueryLanguageTemplates:
     # QueryLanguage: Math Functions
     ###################################################
     def get_absolute_value_function_template(self) -> str:
-        """Jinja template for absolute value.
+        """Return a Jinja template string for absolute value.
 
         Jinja variables:
             field (str): Numeric expression.
 
         Examples:
-            Snowflake/PostgreSQL/BigQuery: "ABS({{ field }})"
+            Snowflake: "ABS({{ field }})"
+            PostgreSQL: "ABS({{ field }})"
+            BigQuery: "ABS({{ field }})"
 
         Tier: standard
         Enables: metric sample summary calculations in RCA
@@ -1639,7 +1777,7 @@ class QueryLanguageTemplates:
         pass
 
     def rand_func_template(self) -> str:
-        """Jinja template for generating a random number.
+        """Return a Jinja template string for generating a random number.
 
         Jinja variables:
             None
@@ -1658,13 +1796,15 @@ class QueryLanguageTemplates:
     # QueryLanguage: RCA and Advanced Functions
     ###################################################
     def max_time_func_template(self) -> str:
-        """Jinja template for MAX() over a temporal field.
+        """Return a Jinja template string for MAX() over a temporal field.
 
         Jinja variables:
             field (str): Timestamp or date expression.
 
         Examples:
-            Snowflake/PostgreSQL: "MAX({{ field }})"
+            Snowflake: "MAX({{ field }})"
+            PostgreSQL: "MAX({{ field }})"
+            BigQuery: "MAX({{ field }})"
 
         Tier: advanced
         Enables: freshness/time-based RCA queries
@@ -1672,7 +1812,7 @@ class QueryLanguageTemplates:
         pass
 
     def unpivot_template(self) -> str:
-        """Jinja template for unpivoting columns to rows.
+        """Return a Jinja template string for unpivoting columns to rows.
 
         Jinja variables:
             query (str): Source query or table.
@@ -1682,6 +1822,8 @@ class QueryLanguageTemplates:
 
         Examples:
             Snowflake: "SELECT * FROM ({{ query }}) UNPIVOT ({{ value_column }} FOR {{ name_column }} IN ({{ columns | join(', ') }}))"
+            PostgreSQL: "SELECT {{ name_column }}, {{ value_column }} FROM ({{ query }}) src CROSS JOIN LATERAL (VALUES ...) AS unpivoted({{ name_column }}, {{ value_column }})"
+            BigQuery: "SELECT * FROM ({{ query }}) UNPIVOT ({{ value_column }} FOR {{ name_column }} IN ({{ columns | join(', ') }}))"
 
         Tier: advanced
         Enables: comparison monitor value transformations
@@ -1692,13 +1834,15 @@ class QueryLanguageTemplates:
     # QueryLanguage: Field Operations
     ###################################################
     def get_field_or_alias_template(self) -> str:
-        """Jinja template for referencing a field or its alias.
+        """Return a Jinja template string for referencing a field or its alias.
 
         Jinja variables:
             field (str): Field name or alias.
 
         Examples:
-            Snowflake/PostgreSQL: "{{ field }}"
+            Snowflake: "{{ field }}"
+            PostgreSQL: "{{ field }}"
+            BigQuery: "{{ field }}"
 
         Tier: core
         Enables: field referencing in queries

@@ -3,6 +3,7 @@ from datetime import datetime, date
 from typing import Callable, List, Any, Optional
 
 import pytest
+from dotenv import load_dotenv
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 from integration.integration import BaseIntegration, MetadataQueryTemplates, QueryLogCollectionTemplates, \
@@ -18,11 +19,7 @@ class TestIntegration(BaseIntegration):
         self.cursor = self.create_cursor()
 
     def _load_credentials_from_env(self) -> dict[str, str]:
-        try:
-            from dotenv import load_dotenv
-            load_dotenv()
-        except ImportError:
-            pass
+        load_dotenv()
         creds = {}
         for key, env_var in self.credential_env_vars().items():
             val = os.environ.get(env_var)
