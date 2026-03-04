@@ -1,0 +1,12 @@
+# Custom Integration Public Repository License
+**Copyright 2026 Monte Carlo Data, Inc.**
+
+All rights in the Software contained herein (the "Software") are retained by Monte Carlo Data, Inc. ("Licensor"). Use of the Software is permitted only by customers with an active commercial agreement with Licensor ("Licensee"), subject to the terms below and that agreement (the "Agreement").
+
+**License Grant.** Licensor grants Licensee a limited, non-exclusive, non-transferable, revocable license to: (i) access and modify the Software solely to develop Licensee's own integration code ("Licensee Contributions"); and (ii) deploy the combined Software and Licensee Contributions within Licensee's own environment solely in connection with the Agreement.
+
+**Licensee Contributions.** Licensee retains ownership of its original Licensee Contributions. Licensee grants Licensor a non-exclusive, royalty-free, irrevocable license to use Licensee Contributions solely to provide services to Licensee under the Agreement. Licensor will not use Licensee Contributions for the benefit of any other party without Licensee's written consent.
+
+**Restrictions.** Licensee may not: (i) distribute or sublicense the Software or any Licensor-authored derivatives to any third party; (ii) commercialize the Software or any Licensor-authored derivatives in any form; (iii) use the Software in any manner that competes with Licensor's business; or (iv) seek intellectual property rights over the Software or any Licensor-authored derivatives.
+
+**No Other Rights.** No rights are granted except as expressly stated above.
