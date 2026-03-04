@@ -2,6 +2,7 @@
 markers = [
     "capability",
     "template",
+    "connection: database connection tests",
     "metadata: metadata collection tests",
     "query_language: query language tests",
     "custom_monitors: custom SQL monitor tests",

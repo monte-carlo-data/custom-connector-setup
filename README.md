@@ -4,15 +4,7 @@ A validation toolkit for building custom database integrations. You implement a 
 
 ## Quick Start
 
-### 1. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-You'll also need to add your database driver to `requirements.txt` (e.g. `psycopg2-binary`, `snowflake-connector-python`, `google-cloud-bigquery`) and re-run the install.
-
-### 2. Implement the integration classes
+### 1. Implement the integration classes
 
 Edit `integration/integration.py` and fill in the five base classes:
 
@@ -33,9 +25,25 @@ def get_avg_function_template(self) -> str:
 
 Each method has a docstring documenting its Jinja variables, example implementations for common databases, and which metrics it enables.
 
+### 2. Add your database driver
+
+Add your database driver to `requirements.txt`:
+
+```
+psycopg2-binary==2.9.9          # PostgreSQL
+snowflake-connector-python==3.12.3  # Snowflake
+google-cloud-bigquery==3.25.0   # BigQuery
+```
+
+Then rebuild the Docker image:
+
+```bash
+docker compose build
+```
+
 ### 3. Configure credentials
 
-If your database requires credentials, override `credential_env_vars()` in `BaseIntegration` to map credential keys to environment variable names:
+Override `credential_env_vars()` in `BaseIntegration` to map credential keys to environment variable names:
 
 ```python
 def credential_env_vars(self) -> dict[str, str]:
@@ -62,38 +70,74 @@ def create_connection(self):
     )
 ```
 
-Set the environment variables directly or copy `.env.example` to `.env` and fill in your values (requires `python-dotenv`):
+Copy `.env.example` to `.env` and fill in your values:
 
 ```bash
 cp .env.example .env
 # edit .env with your database credentials
 ```
 
-### 4. Run the tests
+### 4. Build the Docker image
 
 ```bash
-# Run everything
-pytest
-
-# Run by section
-pytest -m metadata
-pytest -m query_language
-pytest -m custom_monitors
-
-# Export passing templates to .j2 files (default dir: templates/)
-pytest --export-templates
-
-# Export to a custom directory
-pytest --export-templates=my_templates
+docker compose build
 ```
 
-### 5. Review capabilities
+Some database drivers include native libraries built for a specific architecture. If you hit errors loading `.so` files, rebuild with the correct platform:
+
+```bash
+docker compose build --build-arg TARGETPLATFORM=linux/amd64
+```
+
+Rebuild whenever you change `requirements.txt` (e.g. adding a database driver).
+
+### 5. Verify the connection
+
+```bash
+docker compose run test -m connection
+```
+
+This runs three quick checks: connection creation, cursor creation, and a `SELECT 1` round-trip. Fix any credential or networking issues before moving on.
+
+### 6. Run the tests
+
+```bash
+# Run all tests
+docker compose run test
+
+# Run by section
+docker compose run test -m metadata
+docker compose run test -m query_language
+docker compose run test -m custom_monitors
+
+# Export passing templates to .j2 files (default dir: templates/)
+docker compose run test --export-templates
+
+# Export to a custom directory
+docker compose run test --export-templates=my_templates
+```
+
+### 7. Review capabilities
 
 After a test run, a `capabilities.json` file is generated in the project root. It contains:
 
 - **templates** — pass/fail status for each template method
 - **capabilities** — boolean flags for optional features (volume rows, freshness, schema, query logs, etc.)
 - **metrics** — which metrics your integration supports, derived from template results and the metrics mapping
+
+### 8. Clean up
+
+When you're done, remove the Docker image and any stopped containers:
+
+```bash
+docker compose down --rmi local
+```
+
+Nothing is installed on your machine — everything runs inside the container.
+
+## Requirements
+
+- [Docker](https://docs.docker.com/get-docker/)
 
 ## Project Structure
 
@@ -115,9 +159,10 @@ custom-integration-setup/
     test_ql_null_nan.py           # NULL and NaN handling
     test_ql_math.py               # Math functions (ABS, RAND)
     test_ql_advanced.py           # Advanced features (UNPIVOT, arrays, epoch seconds)
-  qlbase_method_metrics_mapping.csv  # Maps template methods to integration metrics
-  pytest.toml                        # Pytest configuration and markers
-  requirements.txt                   # Python dependencies
+  pytest.toml                     # Pytest configuration and markers
+  requirements.txt                # Python dependencies
+  Dockerfile                      # Test runner image
+  docker-compose.yml              # Docker Compose configuration
 ```
 
 ## How Templates Work
@@ -158,11 +203,3 @@ def test_avg(ql):
 ```
 
 The helper builds CTEs from Python dicts, renders templates, executes queries against your real database, and validates results.
-
-## Requirements
-
-- Python 3.10+
-- pytest 9.0.2
-- Jinja2 3.1.6
-- dataclasses-json 0.6.7
-- A reachable database instance for your integration
