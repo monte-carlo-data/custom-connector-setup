@@ -10,7 +10,31 @@ class BaseIntegration:
     # Connection Related Methods
     ########################################
     def credential_env_vars(self) -> dict[str, str]:
-        """Override to map credential keys to environment variable names."""
+        """Map credential keys to environment variable names.
+
+        Return a dict where each key is a logical credential name you'll use
+        in create_connection() via self.credentials[key], and each value is the
+        environment variable name defined in your .env file.
+
+        Examples:
+            PostgreSQL (.env has PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD):
+                return {
+                    "host": "PGHOST",
+                    "port": "PGPORT",
+                    "database": "PGDATABASE",
+                    "user": "PGUSER",
+                    "password": "PGPASSWORD",
+                }
+
+            Snowflake (.env has SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, ...):
+                return {
+                    "account": "SNOWFLAKE_ACCOUNT",
+                    "user": "SNOWFLAKE_USER",
+                    "password": "SNOWFLAKE_PASSWORD",
+                    "warehouse": "SNOWFLAKE_WAREHOUSE",
+                    "database": "SNOWFLAKE_DATABASE",
+                }
+        """
         return {}
 
     def create_connection(self) -> Any:

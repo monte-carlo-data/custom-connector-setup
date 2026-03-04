@@ -1,6 +1,6 @@
-# pandora-setup
+# custom-integration-setup
 
-Pandora Setup is a validation toolkit for building database integrations with Pandora. You implement a set of base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your integration supports.
+A validation toolkit for building custom database integrations. You implement a set of base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your integration supports.
 
 ## Quick Start
 
@@ -9,6 +9,8 @@ Pandora Setup is a validation toolkit for building database integrations with Pa
 ```bash
 pip install -r requirements.txt
 ```
+
+You'll also need to add your database driver to `requirements.txt` (e.g. `psycopg2-binary`, `snowflake-connector-python`, `google-cloud-bigquery`) and re-run the install.
 
 ### 2. Implement the integration classes
 
@@ -91,12 +93,12 @@ After a test run, a `capabilities.json` file is generated in the project root. I
 
 - **templates** — pass/fail status for each template method
 - **capabilities** — boolean flags for optional features (volume rows, freshness, schema, query logs, etc.)
-- **metrics** — which Pandora metrics your integration supports, derived from template results and the metrics mapping
+- **metrics** — which metrics your integration supports, derived from template results and the metrics mapping
 
 ## Project Structure
 
 ```
-pandora-setup/
+custom-integration-setup/
   integration/
     integration.py          # Base classes to implement
   tests/
@@ -113,7 +115,7 @@ pandora-setup/
     test_ql_null_nan.py           # NULL and NaN handling
     test_ql_math.py               # Math functions (ABS, RAND)
     test_ql_advanced.py           # Advanced features (UNPIVOT, arrays, epoch seconds)
-  qlbase_method_metrics_mapping.csv  # Maps template methods to Pandora metrics
+  qlbase_method_metrics_mapping.csv  # Maps template methods to integration metrics
   pytest.toml                        # Pytest configuration and markers
   requirements.txt                   # Python dependencies
 ```
