@@ -4,7 +4,13 @@ Implement 5 Jinja template methods that let the platform discover databases, sch
 
 ## Prerequisites
 
-Phase 1 (connection) tests pass: `INTEGRATION=<name> pytest -m connection`
+- Phase 1 (connection) gate passes. Verify before starting:
+  ```bash
+  INTEGRATION=$ARGUMENTS pytest -m connection
+  ```
+- **Never read `.env` files or files containing credentials.**
+
+`$ARGUMENTS` is the integration name (auto-detected if only one integration exists in `integrations/`).
 
 ## Methods
 
@@ -81,3 +87,10 @@ Capability tests that may xfail:
 ## Next Step
 
 Proceed to [Phase 3: Custom Monitors](implement-monitors.md). If tests fail, consult [test-and-fix.md](test-and-fix.md).
+
+## Rules
+
+- **Only edit `integrations/$ARGUMENTS/integration.py`.** Do not modify tests, `conftest.py`, or the plugin.
+- Every template method must return a **Jinja template string**, not raw SQL or Python logic.
+- Do not edit `capabilities.json` — it is auto-generated.
+- Read each method's docstring in `integrations/_base/integration.py` before implementing.

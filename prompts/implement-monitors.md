@@ -4,7 +4,14 @@ Implement 3 Jinja template methods that enable custom SQL monitor functionality.
 
 ## Prerequisites
 
-Phase 2 (metadata) core tests pass: `INTEGRATION=<name> pytest -m metadata`
+- Phase 1 (connection) gate passes.
+- Phase 2 (metadata) core tests pass:
+  ```bash
+  INTEGRATION=$ARGUMENTS pytest -m metadata
+  ```
+- **Never read `.env` files or files containing credentials.**
+
+`$ARGUMENTS` is the integration name (auto-detected if only one integration exists in `integrations/`).
 
 ## Methods
 
@@ -53,3 +60,10 @@ Note: these tests use `make_data_source()` which depends on core query building 
 ## Next Step
 
 Proceed to [Phase 4: Query Language](implement-ql.md). If tests fail, consult [test-and-fix.md](test-and-fix.md).
+
+## Rules
+
+- **Only edit `integrations/$ARGUMENTS/integration.py`.** Do not modify tests, `conftest.py`, or the plugin.
+- Every template method must return a **Jinja template string**, not raw SQL or Python logic.
+- Do not edit `capabilities.json` — it is auto-generated.
+- Read each method's docstring in `integrations/_base/integration.py` before implementing.

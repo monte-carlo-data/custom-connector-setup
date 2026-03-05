@@ -4,7 +4,14 @@ Implement ~94 Jinja template methods in `QueryLanguageTemplates`. This is the bu
 
 ## Prerequisites
 
-Phases 1–3 tests pass. In particular, `get_count_all_expression_template` must work since most QL tests depend on it.
+- Phase 1 (connection) gate passes.
+- Phases 2–3 gate tests pass. In particular, `get_count_all_expression_template` must work since most QL tests depend on it.
+  ```bash
+  INTEGRATION=$ARGUMENTS pytest -m metadata -m custom_monitors
+  ```
+- **Never read `.env` files or files containing credentials.**
+
+`$ARGUMENTS` is the integration name (auto-detected if only one integration exists in `integrations/`).
 
 ## Table of Contents
 
@@ -329,3 +336,10 @@ Check `output/<name>/capabilities.json` for the full pass/fail report.
 ## Next Step
 
 If tests fail, consult [test-and-fix.md](test-and-fix.md).
+
+## Rules
+
+- **Only edit `integrations/$ARGUMENTS/integration.py`.** Do not modify tests, `conftest.py`, or the plugin.
+- Every template method must return a **Jinja template string**, not raw SQL or Python logic.
+- Do not edit `capabilities.json` — it is auto-generated.
+- Read each method's docstring in `integrations/_base/integration.py` before implementing.

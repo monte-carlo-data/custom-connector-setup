@@ -1,3 +1,7 @@
+> **CREDENTIAL SECURITY:** `credential_env_vars` and `create_connection` are **human-implemented only**.
+> These methods reference `.env` credentials — agents must NOT implement them or read `.env` files.
+> Agents implement the remaining 4 methods (`create_cursor`, `execute_query`, `fetch_all_results`, `close_connection`).
+
 # Phase 1: Implement Connection (BaseIntegration)
 
 Implement the 6 methods in `BaseIntegration` that establish and manage the database connection. These must work before any template tests can run.

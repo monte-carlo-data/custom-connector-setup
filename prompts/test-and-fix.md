@@ -1,6 +1,10 @@
 # Test and Fix Guide
 
-Cross-cutting reference for running tests, interpreting failures, and fixing common issues. Each phase prompt references this file — consult it whenever a test fails.
+Diagnose and fix failing tests for a database integration. Cross-cutting reference for running tests, interpreting failures, and fixing common issues. Each phase prompt references this file — consult it whenever a test fails.
+
+`$ARGUMENTS` is the integration name (auto-detected if only one integration exists in `integrations/`).
+
+**Never read `.env` files or files containing credentials.**
 
 ## Running Tests
 
