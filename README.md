@@ -238,15 +238,3 @@ def test_avg(ql):
 ```
 
 The helper builds CTEs from Python dicts, renders templates, executes queries against your real database, and validates results.
-
-## Migration from Single-Integration Layout
-
-If you previously had `integration/integration.py` in the root:
-
-1. Create a new integration: `python scripts/create_integration.py <name>`
-2. Copy your implementation from the old `integration/integration.py` to `integrations/<name>/integration.py`
-3. Move your `.env` to `integrations/<name>/.env`
-4. Move any database driver from the root `requirements.txt` to `integrations/<name>/requirements.txt`
-5. Delete the old `integration/` directory
-6. Rebuild: `docker compose build`
-7. Test: `INTEGRATION=<name> docker compose run test -m connection`
