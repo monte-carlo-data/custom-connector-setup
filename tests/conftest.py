@@ -1,3 +1,4 @@
+import importlib
 import os
 from datetime import datetime, date
 from typing import Callable, List, Any, Optional
@@ -6,34 +7,107 @@ import pytest
 from dotenv import load_dotenv
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
-from integration.integration import BaseIntegration, MetadataQueryTemplates, QueryLogCollectionTemplates, \
-    CustomSQLMonitorTemplates, QueryLanguageTemplates
-
 pytest_plugins = ["tests.capabilities_plugin"]
 
 
-class TestIntegration(BaseIntegration):
-    def __init__(self):
-        self.credentials = self._load_credentials_from_env()
-        self.connection = self.create_connection()
-        self.cursor = self.create_cursor()
+def pytest_addoption(parser):
+    parser.addoption(
+        "--integration",
+        default=None,
+        help="Integration name to test (e.g. postgres, teradata)",
+    )
+
+
+def _resolve_integration_name(config):
+    """Resolve integration name: --integration flag > INTEGRATION env var > auto-detect."""
+    name = config.getoption("--integration", default=None)
+    if name:
+        return name
+
+    name = os.environ.get("INTEGRATION")
+    if name:
+        return name
+
+    integrations_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "integrations")
+    if not os.path.isdir(integrations_dir):
+        raise RuntimeError("No integrations/ directory found")
+
+    dirs = [
+        d for d in os.listdir(integrations_dir)
+        if not d.startswith("_") and not d.startswith(".")
+        and os.path.isdir(os.path.join(integrations_dir, d))
+    ]
+    if len(dirs) == 1:
+        return dirs[0]
+    if len(dirs) == 0:
+        raise RuntimeError(
+            "No integrations found. Run: python scripts/create_integration.py <name>"
+        )
+    raise RuntimeError(
+        f"Multiple integrations found ({', '.join(sorted(dirs))}). "
+        "Specify one with --integration=<name> or INTEGRATION=<name> env var."
+    )
+
+
+_integration_cache = {}
+
+
+def _get_integration(config):
+    """Load and cache the integration module."""
+    if "module" not in _integration_cache:
+        name = _resolve_integration_name(config)
+        config._integration_name = name
+
+        integrations_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "integrations")
+        env_path = os.path.join(integrations_dir, name, ".env")
+        if os.path.exists(env_path):
+            load_dotenv(env_path, override=True)
+
+        module = importlib.import_module(f"integrations.{name}.integration")
+        _integration_cache["name"] = name
+        _integration_cache["module"] = module
+
+    return _integration_cache["name"], _integration_cache["module"]
+
+
+class TestIntegration:
+    """Wraps a loaded integration module's BaseIntegration via delegation."""
+
+    def __init__(self, module):
+        self._delegate = module.BaseIntegration()
+        self._delegate.credentials = self._load_credentials_from_env()
+        self._delegate.connection = self._delegate.create_connection()
+        self._delegate.cursor = self._delegate.create_cursor()
 
     def _load_credentials_from_env(self) -> dict[str, str]:
-        load_dotenv()
         creds = {}
-        for key, env_var in self.credential_env_vars().items():
+        for key, env_var in self._delegate.credential_env_vars().items():
             val = os.environ.get(env_var)
             if val is not None:
                 creds[key] = val
         return creds
 
     def execute_and_fetch_all(self, query: str) -> List[Any]:
-        self.execute_query(query)
-        return self.fetch_all_results()
+        self._delegate.execute_query(query)
+        return self._delegate.fetch_all_results()
+
+    def close_connection(self):
+        self._delegate.close_connection()
+
+    def __getattr__(self, name):
+        return getattr(self._delegate, name)
 
 
-class Templates(MetadataQueryTemplates, QueryLogCollectionTemplates, CustomSQLMonitorTemplates, QueryLanguageTemplates):
-    def __init__(self):
+def _make_templates_class(module):
+    """Dynamically create a Templates class from the integration module's template classes."""
+    bases = (
+        module.MetadataQueryTemplates,
+        module.QueryLogCollectionTemplates,
+        module.CustomSQLMonitorTemplates,
+        module.QueryLanguageTemplates,
+    )
+
+    def templates_init(self):
         self.env = ImmutableSandboxedEnvironment(
             trim_blocks=True,
             lstrip_blocks=True,
@@ -46,9 +120,14 @@ class Templates(MetadataQueryTemplates, QueryLogCollectionTemplates, CustomSQLMo
         template = self.env.from_string(query_template)
         return template.render(kwargs)
 
+    return type("Templates", bases, {
+        "__init__": templates_init,
+        "render_template": render_template,
+    })
+
 
 class QueryTestHelper:
-    def __init__(self, integration: TestIntegration, templates: Templates):
+    def __init__(self, integration: TestIntegration, templates):
         self.integration = integration
         self.templates = templates
 
@@ -128,15 +207,18 @@ class QueryTestHelper:
 
 
 @pytest.fixture(scope="session")
-def integration():
-    integration = TestIntegration()
-    yield integration
-    integration.close_connection()
+def integration(request):
+    _, module = _get_integration(request.config)
+    ti = TestIntegration(module)
+    yield ti
+    ti.close_connection()
 
 
 @pytest.fixture(scope="session")
 def templates(request):
-    t = Templates()
+    _, module = _get_integration(request.config)
+    TemplatesClass = _make_templates_class(module)
+    t = TemplatesClass()
     request.config._templates_instance = t
     return t
 

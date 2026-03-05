@@ -1,6 +1,8 @@
 .env
+integrations/*/.env
 .git
 .idea
 __pycache__
 *.pyc
 .pytest_cache
+output/

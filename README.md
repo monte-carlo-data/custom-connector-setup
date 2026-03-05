@@ -2,11 +2,25 @@
 
 A validation toolkit for building custom database integrations. You implement a set of base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your integration supports.
 
+Supports multiple integrations side by side (e.g., postgres + snowflake + teradata) so you can build and test several at once.
+
 ## Quick Start
 
-### 1. Implement the integration classes
+### 1. Create an integration
 
-Edit `integration/integration.py` and fill in the five base classes:
+```bash
+python scripts/create_integration.py postgres
+```
+
+This creates `integrations/postgres/` with:
+- `integration.py` — base classes to implement (copy of the canonical template)
+- `manifest.json` — unique `connection_type` identifier
+- `.env` — credentials file (gitignored)
+- `requirements.txt` — database driver dependencies
+
+### 2. Implement the integration classes
+
+Edit `integrations/postgres/integration.py` and fill in the five base classes:
 
 | Class | Purpose |
 |-------|---------|
@@ -25,14 +39,12 @@ def get_avg_function_template(self) -> str:
 
 Each method has a docstring documenting its Jinja variables, example implementations for common databases, and which metrics it enables.
 
-### 2. Add your database driver
+### 3. Add your database driver
 
-Add your database driver to `requirements.txt`:
+Add your driver to `integrations/postgres/requirements.txt`:
 
 ```
-psycopg2-binary==2.9.9          # PostgreSQL
-snowflake-connector-python==3.12.3  # Snowflake
-google-cloud-bigquery==3.25.0   # BigQuery
+psycopg2-binary==2.9.9
 ```
 
 Then rebuild the Docker image:
@@ -41,7 +53,7 @@ Then rebuild the Docker image:
 docker compose build
 ```
 
-### 3. Configure credentials
+### 4. Configure credentials
 
 Override `credential_env_vars()` in `BaseIntegration` to map credential keys to environment variable names:
 
@@ -70,14 +82,17 @@ def create_connection(self):
     )
 ```
 
-Copy `.env.example` to `.env` and fill in your values:
+Add your credentials to `integrations/postgres/.env`:
 
-```bash
-cp .env.example .env
-# edit .env with your database credentials
+```
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=mydb
+PGUSER=myuser
+PGPASSWORD=mypassword
 ```
 
-### 4. Build the Docker image
+### 5. Build the Docker image
 
 ```bash
 docker compose build
@@ -89,43 +104,49 @@ Some database drivers include native libraries built for a specific architecture
 docker compose build --build-arg TARGETPLATFORM=linux/amd64
 ```
 
-Rebuild whenever you change `requirements.txt` (e.g. adding a database driver).
+Rebuild whenever you change `requirements.txt` (either root or per-integration).
 
-### 5. Verify the connection
+### 6. Verify the connection
+
+```bash
+INTEGRATION=postgres docker compose run test -m connection
+```
+
+This runs three quick checks: connection creation, cursor creation, and a `SELECT 1` round-trip. Fix any credential or networking issues before moving on.
+
+If only one integration exists, you can omit `INTEGRATION=`:
 
 ```bash
 docker compose run test -m connection
 ```
 
-This runs three quick checks: connection creation, cursor creation, and a `SELECT 1` round-trip. Fix any credential or networking issues before moving on.
-
-### 6. Run the tests
+### 7. Run the tests
 
 ```bash
 # Run all tests
-docker compose run test
+INTEGRATION=postgres docker compose run test
 
 # Run by section
-docker compose run test -m metadata
-docker compose run test -m query_language
-docker compose run test -m custom_monitors
+INTEGRATION=postgres docker compose run test -m metadata
+INTEGRATION=postgres docker compose run test -m query_language
+INTEGRATION=postgres docker compose run test -m custom_monitors
 
-# Export passing templates to .j2 files (default dir: templates/)
-docker compose run test --export-templates
-
-# Export to a custom directory
-docker compose run test --export-templates=my_templates
+# Export passing templates to .j2 files
+INTEGRATION=postgres docker compose run test --export-templates
 ```
 
-### 7. Review capabilities
+### 8. Review capabilities
 
-After a test run, a `capabilities.json` file is generated in the project root. It contains:
+After a test run, `output/postgres/capabilities.json` is generated with:
 
+- **connection_type** — unique identifier for this integration (from `manifest.json`)
 - **templates** — pass/fail status for each template method
 - **capabilities** — boolean flags for optional features (volume rows, freshness, schema, query logs, etc.)
 - **metrics** — which metrics your integration supports, derived from template results and the metrics mapping
 
-### 8. Clean up
+Passing templates are exported to `output/postgres/templates/` when using `--export-templates`.
+
+### 9. Clean up
 
 When you're done, remove the Docker image and any stopped containers:
 
@@ -143,11 +164,25 @@ Nothing is installed on your machine — everything runs inside the container.
 
 ```
 custom-integration-setup/
-  integration/
-    integration.py          # Base classes to implement
+  integrations/
+    _base/
+      integration.py              # Read-only canonical template (do not edit)
+      __init__.py                 # Exports the 5 base classes
+    teradata/                     # One directory per integration
+      integration.py              # Your implementation (fill in stubs)
+      .env                        # Database credentials (gitignored)
+      manifest.json               # {"connection_type": "custom-integration-xxx", "name": "teradata"}
+      requirements.txt            # Database driver deps
+  output/                         # Generated per-integration output (gitignored)
+    teradata/
+      capabilities.json           # Auto-generated test results
+      templates/                  # Exported .j2 files
+  scripts/
+    create_integration.py         # Scaffolding helper (stdlib only)
   tests/
-    conftest.py             # Test fixtures (TestIntegration, Templates, QueryTestHelper)
-    capabilities_plugin.py  # Pytest plugin — generates capabilities.json
+    conftest.py                   # Test fixtures (TestIntegration, Templates, QueryTestHelper)
+    capabilities_plugin.py        # Pytest plugin — generates capabilities.json
+    test_connection.py            # Connection tests
     test_metadata_collection.py   # Metadata discovery tests
     test_custom_monitors.py       # Custom SQL monitor tests
     test_ql_query_building.py     # Core query building (CTE, SELECT, ORDER, CASE, etc.)
@@ -160,7 +195,7 @@ custom-integration-setup/
     test_ql_math.py               # Math functions (ABS, RAND)
     test_ql_advanced.py           # Advanced features (UNPIVOT, arrays, epoch seconds)
   pytest.toml                     # Pytest configuration and markers
-  requirements.txt                # Python dependencies
+  requirements.txt                # Shared Python dependencies
   Dockerfile                      # Test runner image
   docker-compose.yml              # Docker Compose configuration
 ```
@@ -203,3 +238,15 @@ def test_avg(ql):
 ```
 
 The helper builds CTEs from Python dicts, renders templates, executes queries against your real database, and validates results.
+
+## Migration from Single-Integration Layout
+
+If you previously had `integration/integration.py` in the root:
+
+1. Create a new integration: `python scripts/create_integration.py <name>`
+2. Copy your implementation from the old `integration/integration.py` to `integrations/<name>/integration.py`
+3. Move your `.env` to `integrations/<name>/.env`
+4. Move any database driver from the root `requirements.txt` to `integrations/<name>/requirements.txt`
+5. Delete the old `integration/` directory
+6. Rebuild: `docker compose build`
+7. Test: `INTEGRATION=<name> docker compose run test -m connection`
