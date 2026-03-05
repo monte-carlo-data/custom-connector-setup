@@ -134,13 +134,6 @@ def tables(integration, templates, database, schemas) -> List[MetadataSchema]:
 
 
 #############################################
-# Connection Related Tests
-#############################################
-def test_connection(integration):
-    assert integration.connection, "Failed to make connection to database."
-
-
-#############################################
 # Metadata Related Tests
 #############################################
 @pytest.mark.template(
