@@ -146,7 +146,41 @@ After a test run, `output/postgres/capabilities.json` is generated with:
 
 Passing templates are exported to `output/postgres/templates/` when using `--export-templates`.
 
-### 9. Clean up
+### 9. Build a deployable agent image
+
+Once your integration passes tests and templates are exported, package everything into a custom agent image:
+
+```bash
+python scripts/generate_agent_image.py --agent-type aws-generic
+```
+
+This takes the public `montecarlodata/agent` image as a base and layers on your integration artifacts (templates, capabilities, integration code, and dependencies).
+
+**Options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--agent-type` (required) | — | One of: `aws-generic`, `aws-proxied`, `azure`, `cloudrun`, `lambda` |
+| `--version` | `latest` | Agent base image version (e.g. `1.4.12`) |
+| `--integration` | all with output/ | Which integrations to include (repeatable) |
+| `--docker-platform` | `linux/amd64` | Docker platform for the image |
+| `--tag` | `custom-agent:{version}-{agent-type}` | Output image tag |
+
+Include specific integrations:
+
+```bash
+python scripts/generate_agent_image.py --agent-type aws-generic --integration postgres --integration teradata
+```
+
+Verify the image:
+
+```bash
+docker run --rm --entrypoint ls custom-agent:latest-aws-generic /opt/custom-integrations/
+```
+
+Then push to your container registry and deploy.
+
+### 10. Clean up
 
 When you're done, remove the Docker image and any stopped containers:
 
@@ -179,6 +213,7 @@ custom-integration-setup/
       templates/                  # Exported .j2 files
   scripts/
     create_integration.py         # Scaffolding helper (stdlib only)
+    generate_agent_image.py       # Builds deployable custom agent Docker image
   tests/
     conftest.py                   # Test fixtures (TestIntegration, Templates, QueryTestHelper)
     capabilities_plugin.py        # Pytest plugin — generates capabilities.json
