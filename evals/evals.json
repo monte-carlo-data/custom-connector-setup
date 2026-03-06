@@ -1,0 +1,94 @@
+{
+  "skill_name": "integration-skills",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm working on a MySQL integration in the custom-integration-setup repo at /tmp/custom-integration-setup. The human has already set up the .env file and implemented credential_env_vars (it returns {'host': 'MYSQL_HOST', 'port': 'MYSQL_PORT', 'database': 'MYSQL_DATABASE', 'user': 'MYSQL_USER', 'password': 'MYSQL_PASSWORD'}) and create_connection (using mysql.connector). I need you to implement the remaining 4 connection methods: create_cursor, execute_query, fetch_all_results, and close_connection. Write the actual Python implementations for these methods. Then tell me what pytest command to run to validate them.",
+      "expected_output": "Agent implements 4 correct Python methods (not Jinja templates) for create_cursor, execute_query, fetch_all_results, and close_connection using self.connection and self.cursor. Agent does NOT try to implement credential_env_vars or create_connection. Agent provides the correct pytest command: INTEGRATION=mysql pytest -m connection",
+      "files": [
+        "/tmp/custom-integration-setup/integrations/_base/integration.py",
+        "/tmp/custom-integration-setup/prompts/implement-connection.md"
+      ],
+      "assertions": [
+        {
+          "text": "Response includes Python implementations for all 4 agent-safe methods: create_cursor, execute_query, fetch_all_results, and close_connection",
+          "type": "manual"
+        },
+        {
+          "text": "Response does NOT attempt to implement credential_env_vars or create_connection (correctly respects the human/agent boundary)",
+          "type": "manual"
+        },
+        {
+          "text": "Response includes the correct validation command with -m connection flag (e.g. 'INTEGRATION=mysql pytest -m connection' or equivalent)",
+          "type": "manual"
+        },
+        {
+          "text": "The create_cursor implementation uses self.connection.cursor()",
+          "type": "manual"
+        },
+        {
+          "text": "The fetch_all_results implementation uses self.cursor.fetchall() or similar row-fetching pattern",
+          "type": "manual"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I'm implementing an integration in the custom-integration-setup repo at /tmp/custom-integration-setup. My Phase 3 custom monitor tests are failing with this error:\n\nINTEGRATION=mydb pytest -m custom_monitors\n...\nFAILED tests/test_monitors.py::test_transform_into_count_query\njinja2.exceptions.UndefinedError: 'build_cte_template' is undefined\n\nI haven't started Phase 4 yet. What should I do to fix this?",
+      "expected_output": "Agent correctly diagnoses that this is a Phase 4 dependency issue (not a Phase 3 bug). Agent explains that make_data_source() depends on build_cte_template from Phase 4 Core Query Building. Agent tells the user to implement the 4 core Phase 4 methods (build_cte_template, add_select_clause_template, add_from_clause_template, union_queries_template) first, then re-run the Phase 3 tests.",
+      "files": [
+        "/tmp/custom-integration-setup/prompts/implement-monitors.md",
+        "/tmp/custom-integration-setup/prompts/test-and-fix.md"
+      ],
+      "assertions": [
+        {
+          "text": "Response correctly identifies this as a Phase 4 dependency issue (not a bug in the Phase 3 code itself)",
+          "type": "manual"
+        },
+        {
+          "text": "Response mentions build_cte_template as the specific missing method that needs to be implemented",
+          "type": "manual"
+        },
+        {
+          "text": "Response recommends implementing Core Query Building (Phase 4) methods before re-running Phase 3 tests",
+          "type": "manual"
+        },
+        {
+          "text": "Response names at least 2 of the 4 specific methods needed: build_cte_template, add_select_clause_template, add_from_clause_template, union_queries_template",
+          "type": "manual"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I'm starting to implement a PostgreSQL integration in the custom-integration-setup repo at /tmp/custom-integration-setup. A colleague has already:\n1. Created integrations/postgres/.env with credentials\n2. Added psycopg2-binary to integrations/postgres/requirements.txt and installed it\n3. Implemented credential_env_vars() returning PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD\n4. Implemented create_connection() using psycopg2.connect()\n\nI need you to plan the full implementation path. What are the phases, what order should I implement them, and what are the gate checks between each? Also, what should I implement first in Phase 4 and why?",
+      "expected_output": "Agent outlines all 4 phases in correct order (Connection → Metadata → Custom Monitors → Query Language) with pytest gate checks between each. Specifically names that Phase 4 must start with Core Query Building (build_cte_template etc) because make_data_source() depends on these methods and nearly all tests use it.",
+      "files": [
+        "/tmp/custom-integration-setup/prompts/implement-all.md",
+        "/tmp/custom-integration-setup/prompts/implement-ql.md"
+      ],
+      "assertions": [
+        {
+          "text": "Response presents phases in correct order: Phase 1 (Connection) → Phase 2 (Metadata) → Phase 3 (Custom Monitors) → Phase 4 (Query Language)",
+          "type": "manual"
+        },
+        {
+          "text": "Response mentions pytest gate checks between phases (e.g. 'pytest -m connection', 'pytest -m metadata')",
+          "type": "manual"
+        },
+        {
+          "text": "Response correctly identifies the remaining Phase 1 work: implement create_cursor, execute_query, fetch_all_results, close_connection (not credential_env_vars or create_connection)",
+          "type": "manual"
+        },
+        {
+          "text": "Response says to start Phase 4 with Core Query Building and names build_cte_template (or make_data_source) as the critical dependency",
+          "type": "manual"
+        },
+        {
+          "text": "Response explains WHY Core Query Building must come first (most/all tests depend on make_data_source() which uses those templates)",
+          "type": "manual"
+        }
+      ]
+    }
+  ]
+}

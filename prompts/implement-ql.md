@@ -1,3 +1,11 @@
+---
+name: implement-ql
+description: >
+  Guide for implementing Phase 4 query language templates (~94 methods) in the custom-integration-setup repo.
+  Use when implementing QueryLanguageTemplates methods, working through any of the 13 subsections, or
+  when running query language tests. Requires Phases 1-3 to already pass. Start with Core Query Building (#1).
+---
+
 # Phase 4: Implement Query Language (QueryLanguageTemplates)
 
 Implement ~94 Jinja template methods in `QueryLanguageTemplates`. This is the bulk of the work. Each method returns a Jinja template string. Read the docstring in `integrations/_base/integration.py` for each method before implementing — it contains dialect-specific examples.
@@ -7,11 +15,26 @@ Implement ~94 Jinja template methods in `QueryLanguageTemplates`. This is the bu
 - Phase 1 (connection) gate passes.
 - Phases 2–3 gate tests pass. In particular, `get_count_all_expression_template` must work since most QL tests depend on it.
   ```bash
-  INTEGRATION=$ARGUMENTS pytest -m metadata -m custom_monitors
+  INTEGRATION=$ARGUMENTS pytest -m metadata && INTEGRATION=$ARGUMENTS pytest -m custom_monitors
   ```
 - **Never read `.env` files or files containing credentials.**
 
 `$ARGUMENTS` is the integration name (auto-detected if only one integration exists in `integrations/`).
+
+---
+
+## Implementation Order (Start Here)
+
+> **CRITICAL: Implement Core Query Building (#1) first.** Nearly every test uses `make_data_source()`, which depends on `build_cte_template`, `add_select_clause_template`, `add_from_clause_template`, `union_queries_template`, and `alias_field_template`. If these are wrong, all other QL tests will fail.
+>
+> After Core Query Building, prioritize in this order for maximum test coverage:
+> 1. Core Query Building (#1) — unlocks all other tests
+> 2. String and Literal Handling (#2) — `escape_field_name_template` and `literal_datetime_template` are used across many tests
+> 3. Aggregation Functions (#8) — `get_count_all_expression_template` is critical; implement this section early
+> 4. Comparison Operators (#6) — straightforward and unblock many other tests
+> 5. Remaining sections in any order
+
+---
 
 ## Table of Contents
 
@@ -30,8 +53,6 @@ Implement ~94 Jinja template methods in `QueryLanguageTemplates`. This is the bu
 | 11 | [Array and Timestamp Validation](#11-array-and-timestamp-validation) | 6 | `test_ql_advanced.py` | `pytest tests/test_ql_advanced.py` |
 | 12 | [RCA and Advanced Functions](#12-rca-and-advanced-functions) | 2 | `test_ql_advanced.py` | (same file) |
 | 13 | [Field Operations](#13-field-operations) | 1 | `test_ql_query_building.py` | (same file) |
-
-> **CRITICAL: Implement Core Query Building (#1) first.** Nearly every test uses `make_data_source()`, which depends on `build_cte_template`, `add_select_clause_template`, `add_from_clause_template`, `union_queries_template`, and `alias_field_template`. If these are wrong, all other QL tests will fail.
 
 ---
 
@@ -139,15 +160,14 @@ Implement ~94 Jinja template methods in `QueryLanguageTemplates`. This is the bu
 | `get_days_of_week_expression_template` | `field` | `test_days_of_week` |
 | `convert_to_unix_timestamp_func_template` | `field` | `test_current_timestamp` |
 
+Also tested in this file: `utc_literal_template` (no variables, returns UTC timezone literal string).
+
 **Key test expectations:**
 - `test_current_timestamp`: epoch seconds within 120s of Python's `datetime.now(UTC)`
 - `test_is_yesterday`: CTE with yesterday_noon + today_noon, COUNT WHERE is_yesterday → 1
 - `test_in_past_days`: CTE with 2_days_ago + 30_days_ago, past 7 days → 1
 - `test_date_diff`: diff between Jan 1 and Jan 11 → abs(result) == 10
 - Truncation tests: verify time portion is removed from result string
-- `test_utc_literal`: just verify non-empty result
-
-Also tested in this file: `utc_literal_template` (no variables, returns UTC timezone literal string).
 
 ---
 
@@ -162,7 +182,11 @@ These return `"true"` or `"false"` (as strings). No Jinja variables.
 | `supports_group_by_on_subquery_template` | `test_ql_query_building.py` | `test_supports_group_by_on_subquery` |
 | `parses_timestamp_with_trailing_text_template` | `test_ql_advanced.py` | `test_parses_timestamp_with_trailing_text` |
 
-Most databases return `"true"` for the first three. `parses_timestamp_with_trailing_text_template` is database-specific (Snowflake: `"true"`, PostgreSQL: `"false"`).
+Most databases return `"true"` for the first three. `parses_timestamp_with_trailing_text_template` is database-specific:
+- Snowflake: `"true"` (ignores trailing text in timestamp strings)
+- PostgreSQL: `"false"` (strict parsing)
+- BigQuery: `"false"`
+- SQLite: `"true"`
 
 ---
 
@@ -203,6 +227,12 @@ Most databases return `"true"` for the first three. `parses_timestamp_with_trail
 - `test_null_checks`: CTE [1,NULL,3], IS NULL → 1, IS NOT NULL → 2
 - `test_isnan`: NaN literal via `nan_expr_template`, check with `get_isnan_expression_template` → CASE returns 1
 
+**NaN handling is highly dialect-specific:**
+- PostgreSQL: `'NaN'::float` / `CASE WHEN {{ field }} != {{ field }} THEN 1 END` (NaN != NaN in IEEE 754)
+- Snowflake: `'NaN'::FLOAT` / `IS_NAN({{ field }})`
+- BigQuery: `CAST('NaN' AS FLOAT64)` / `IS_NAN({{ field }})`
+- SQLite: no native NaN support — may need a workaround
+
 ---
 
 ## 8. Aggregation Functions
@@ -230,6 +260,10 @@ Most databases return `"true"` for the first three. `parses_timestamp_with_trail
 - `test_approx_percentile`: [1..100], median → 45–55
 - `test_any_value`: [42,42,42] → 42
 
+**Dialect-specific:**
+- `get_conditional_count_expression_template`: PostgreSQL uses `COUNT(CASE WHEN {{ condition }} THEN 1 END)`, Snowflake uses `COUNT_IF({{ condition }})`, BigQuery uses `COUNTIF({{ condition }})`
+- `get_safe_divide_template`: PostgreSQL uses `CASE WHEN {{ denominator }} = 0 THEN NULL ELSE {{ numerator }} / {{ denominator }} END`, Snowflake has `DIV0({{ numerator }}, {{ denominator }})`, BigQuery has `SAFE_DIVIDE({{ numerator }}, {{ denominator }})`
+
 ---
 
 ## 9. String Functions
@@ -250,6 +284,12 @@ Most databases return `"true"` for the first three. `parses_timestamp_with_trail
 - `test_is_empty_string`: ['hello','','world'], COUNT WHERE empty → 1
 - `test_regexp_match`: email pattern matches 2 of 3 values
 - `test_regexp_count`: ^[0-9]+$ matches 2 of 3 values
+
+**Dialect-specific regex:**
+- PostgreSQL: `{{ field }} ~ {{ pattern }}`
+- Snowflake: `REGEXP_LIKE({{ field }}, {{ pattern }})`
+- BigQuery: `REGEXP_CONTAINS({{ field }}, {{ pattern }})`
+- MySQL: `{{ field }} REGEXP {{ pattern }}`
 
 ---
 
@@ -302,6 +342,14 @@ Most databases return `"true"` for the first three. `parses_timestamp_with_trail
 - `test_max_time`: MAX of two timestamps → result contains "2024" and "06"
 - `test_unpivot`: 1 row with 3 columns unpivoted → 3 rows
 
+**`unpivot_template` is the most complex method.** Many databases support UNPIVOT natively (Snowflake, SQL Server). Others require a UNION ALL approach:
+```sql
+{% for col in columns %}
+SELECT {{ name_column }} AS col_name, {{ col }} AS col_value FROM ({{ query }})
+{% if not loop.last %} UNION ALL {% endif %}
+{% endfor %}
+```
+
 ---
 
 ## 13. Field Operations
@@ -320,13 +368,11 @@ Most databases return `"true"` for the first three. `parses_timestamp_with_trail
 ## Validation
 
 Run all query language tests:
-
 ```bash
 INTEGRATION=<name> pytest -m query_language
 ```
 
 Or run all tests:
-
 ```bash
 INTEGRATION=<name> pytest
 ```

@@ -1,108 +1,74 @@
-> **CREDENTIAL SECURITY:** `credential_env_vars` and `create_connection` are **human-implemented only**.
-> These methods reference `.env` credentials — agents must NOT implement them or read `.env` files.
-> Agents implement the remaining 4 methods (`create_cursor`, `execute_query`, `fetch_all_results`, `close_connection`).
+---
+name: implement-connection
+description: >
+  Guide for implementing Phase 1 database connection methods in the custom-integration-setup repo.
+  Use when a user needs to set up database connectivity, implement create_cursor/execute_query/fetch_all_results/close_connection,
+  or validate that the connection gate passes. Do NOT use to implement credential_env_vars or create_connection — those are human-only.
+---
+
+> **CREDENTIAL SECURITY — READ THIS FIRST**
+>
+> Agents implement only 4 of the 6 connection methods. The two credential-sensitive methods are **human-only**:
+>
+> | Method | Who implements | Why |
+> |---|---|---|
+> | `credential_env_vars` | Human | References `.env` variable names |
+> | `create_connection` | Human | Uses credentials to connect |
+> | `create_cursor` | Agent | Works on an already-open connection |
+> | `execute_query` | Agent | Uses the cursor |
+> | `fetch_all_results` | Agent | Uses the cursor |
+> | `close_connection` | Agent | Teardown only |
+>
+> **Never read `.env` files or files containing credentials.**
 
 # Phase 1: Implement Connection (BaseIntegration)
 
-Implement the 6 methods in `BaseIntegration` that establish and manage the database connection. These must work before any template tests can run.
+Implement the 4 agent-safe methods in `BaseIntegration`. These build on the connection a human has already opened — no credential access needed.
 
 ## Prerequisites
 
-1. A `.env` file exists at `integrations/<name>/.env` with database credentials (provided by a human).
-2. Your database driver is listed in `integrations/<name>/requirements.txt` and installed.
+1. A `.env` file exists at `integrations/<name>/.env` (provided by a human — do not read it).
+2. The database driver is in `integrations/<name>/requirements.txt` and installed.
+3. `credential_env_vars` and `create_connection` are already implemented by a human.
 
-## Methods
+**Verify:** open `integrations/<name>/integration.py` and confirm both methods have real implementations (not `pass` or `return {}`). If they don't, stop and tell the user.
 
-### 1. `credential_env_vars()` → `dict[str, str]`
+---
 
-Map logical credential keys to the environment variable names in your `.env` file. The keys you choose here become the keys you use in `self.credentials` throughout the other methods.
+## Methods to Implement
 
-**PostgreSQL example:**
-```python
-def credential_env_vars(self) -> dict[str, str]:
-    return {
-        "host": "PGHOST",
-        "port": "PGPORT",
-        "database": "PGDATABASE",
-        "user": "PGUSER",
-        "password": "PGPASSWORD",
-    }
-```
+### `create_cursor()` → `Any`
 
-**Snowflake example:**
-```python
-def credential_env_vars(self) -> dict[str, str]:
-    return {
-        "account": "SNOWFLAKE_ACCOUNT",
-        "user": "SNOWFLAKE_USER",
-        "password": "SNOWFLAKE_PASSWORD",
-        "warehouse": "SNOWFLAKE_WAREHOUSE",
-        "database": "SNOWFLAKE_DATABASE",
-    }
-```
-
-### 2. `create_connection()` → `Any`
-
-Create and return a database connection using `self.credentials`.
-
-**PostgreSQL example:**
-```python
-import psycopg2
-
-def create_connection(self):
-    return psycopg2.connect(
-        host=self.credentials["host"],
-        port=int(self.credentials["port"]),
-        dbname=self.credentials["database"],
-        user=self.credentials["user"],
-        password=self.credentials["password"],
-    )
-```
-
-**Snowflake example:**
-```python
-import snowflake.connector
-
-def create_connection(self):
-    return snowflake.connector.connect(
-        account=self.credentials["account"],
-        user=self.credentials["user"],
-        password=self.credentials["password"],
-        warehouse=self.credentials["warehouse"],
-        database=self.credentials["database"],
-    )
-```
-
-### 3. `create_cursor()` → `Any`
-
-Create and return a cursor from the active connection. Called immediately after `create_connection()`.
+Return a cursor from `self.connection`. Called immediately after `create_connection()`.
 
 ```python
 def create_cursor(self):
     return self.connection.cursor()
 ```
 
-### 4. `execute_query(query: str)` → `None`
+Most drivers use this pattern. BigQuery and some others don't use cursors — if your driver lacks `.cursor()`, return `self.connection` directly and adjust `execute_query` and `fetch_all_results` accordingly.
 
-Execute a SQL query string using the active cursor.
+### `execute_query(query: str)` → `None`
+
+Execute a SQL string using `self.cursor`.
 
 ```python
 def execute_query(self, query: str):
     self.cursor.execute(query)
 ```
 
-### 5. `fetch_all_results()` → `List[Any]`
+### `fetch_all_results()` → `List[Any]`
 
-Fetch and return all rows from the last executed query as a list of tuples.
+Return all rows from the last executed query as a list of tuples.
 
 ```python
 def fetch_all_results(self):
     return self.cursor.fetchall()
 ```
 
-### 6. `close_connection()` → `None`
+### `close_connection()` → `None`
 
-Clean up the cursor and connection.
+Clean up cursor and connection on teardown.
 
 ```python
 def close_connection(self):
@@ -110,9 +76,27 @@ def close_connection(self):
     self.connection.close()
 ```
 
-## Validation
+If your driver doesn't have a `cursor.close()` (e.g., BigQuery), just close what exists without error.
 
-Run the gate tests:
+---
+
+## Finding the Right Driver
+
+If the driver isn't installed yet:
+
+1. Check `integrations/<name>/requirements.txt` — the driver may already be listed.
+2. Install it: `pip install -r integrations/<name>/requirements.txt`
+3. If the file is empty or missing the driver, add it. Common drivers:
+   - PostgreSQL: `psycopg2-binary`
+   - MySQL: `mysql-connector-python` or `PyMySQL`
+   - Snowflake: `snowflake-connector-python`
+   - BigQuery: `google-cloud-bigquery`
+   - SQLite: built into Python (no install needed)
+   - DuckDB: `duckdb`
+
+---
+
+## Validation
 
 ```bash
 INTEGRATION=<name> pytest -m connection
@@ -131,10 +115,11 @@ The tests verify:
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `ModuleNotFoundError` | Driver not installed | Add driver to `requirements.txt` and run `pip install -r integrations/<name>/requirements.txt` |
+| `ModuleNotFoundError` | Driver not installed | Add to `requirements.txt`, run `pip install -r integrations/<name>/requirements.txt` |
 | `connection refused` | Wrong host/port or DB not running | Check `.env` values, verify DB is accessible |
-| `authentication failed` | Wrong user/password | Check `.env` credentials |
-| `credential_env_vars returned empty dict` | Method not implemented | Return the dict mapping logical keys to env var names |
+| `authentication failed` | Wrong credentials | Human must fix the `.env` file |
+| `cursor.fetchall() returns list of dicts` | Driver uses dict rows | Wrap: `[tuple(row.values()) for row in self.cursor.fetchall()]` |
+| `'NoneType' has no attribute 'cursor'` | `create_connection` not implemented | Human must implement `create_connection` first |
 
 ## Next Step
 
