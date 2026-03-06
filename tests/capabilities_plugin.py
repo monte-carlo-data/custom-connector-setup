@@ -1,4 +1,3 @@
-import csv
 import json
 import os
 
@@ -14,10 +13,21 @@ def pytest_addoption(parser):
     )
 
 
+ALL_CAPABILITIES = [
+    "supports_volume_rows",
+    "supports_volume_bytes",
+    "supports_freshness",
+    "supports_schema",
+    "supports_query_logs",
+    "supports_lineage",
+    "supports_field_lineage",
+]
+
+
 def pytest_configure(config):
     config._capabilities_results = {
         "templates": {},
-        "capabilities": {},
+        "capabilities": {cap: False for cap in ALL_CAPABILITIES},
     }
 
 
@@ -49,21 +59,143 @@ def pytest_runtest_makereport(item, call):
                 results["capabilities"][cap_name] = False
 
 
-def _load_metrics_mapping():
-    """Load the qlbase_method_metrics_mapping.csv and build method -> metrics map."""
-    csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "qlbase_method_metrics_mapping.csv")
-    if not os.path.exists(csv_path):
-        return {}
-
-    method_to_metrics = {}
-    with open(csv_path, newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            method = row.get("qlbase_method", "").strip()
-            metric_type = row.get("metric_type", "").strip()
-            if method and metric_type:
-                method_to_metrics.setdefault(method, set()).add(metric_type)
-    return method_to_metrics
+# Mapping from template method name (without _template suffix) to the set of
+# metric types that method enables.
+METHOD_TO_METRICS = {
+    "get_avg_function": {
+        "numeric_mean",
+    },
+    "get_stddev_function": {
+        "numeric_stddev",
+        "text_std_length",
+    },
+    "get_approx_percentile_func": {
+        "numeric_median",
+        "percentile_20",
+        "percentile_40",
+        "percentile_60",
+        "percentile_80",
+        "approx_quantiles0",
+        "approx_quantiles1",
+        "approx_quantiles2",
+        "approx_quantiles3",
+        "approx_quantiles4",
+        "approx_quantiles5",
+    },
+    "get_approx_quantiles_func": {
+        "approx_quantiles",
+    },
+    "get_distinct_count_func": {
+        "approx_distinct_count",
+        "approx_distinctness",
+    },
+    "get_distinctness_func": {
+        "approx_distinctness",
+    },
+    "get_casting_to_decimal_expression": {
+        "sum",
+    },
+    "get_length": {
+        "text_mean_length",
+        "text_min_length",
+        "text_max_length",
+        "text_std_length",
+    },
+    "get_conditional_count_expression": {
+        "zero_count",
+        "zero_rate",
+        "negative_count",
+        "negative_rate",
+        "nan_count",
+        "nan_rate",
+        "empty_string_count",
+        "empty_string_rate",
+        "true_count",
+        "true_rate",
+        "false_count",
+        "false_rate",
+        "text_timestamp_count",
+        "text_timestamp_rate",
+        "text_not_timestamp_count",
+        "past_timestamp_count",
+        "past_timestamp_rate",
+        "future_timestamp_count",
+        "future_timestamp_rate",
+        "unix_zero_count",
+        "unix_zero_rate",
+        "text_null_keyword_count",
+        "text_null_keyword_rate",
+        "array_null_rate",
+    },
+    "get_isnan_expression": {
+        "nan_count",
+        "nan_rate",
+    },
+    "get_is_empty_string_expression": {
+        "empty_string_count",
+        "empty_string_rate",
+    },
+    "get_boolean_match_expression": {
+        "true_count",
+        "true_rate",
+        "false_count",
+        "false_rate",
+    },
+    "get_is_timestamp_expression": {
+        "text_timestamp_count",
+        "text_timestamp_rate",
+    },
+    "get_not_is_timestamp_expression": {
+        "text_not_timestamp_count",
+    },
+    "get_epoch_seconds_expression": {
+        "past_timestamp_count",
+        "past_timestamp_rate",
+        "future_timestamp_count",
+        "future_timestamp_rate",
+        "unix_zero_count",
+        "unix_zero_rate",
+    },
+    "get_regexp_count_expression": {
+        "text_int_count",
+        "text_not_int_count",
+        "text_int_rate",
+        "text_number_count",
+        "text_not_number_count",
+        "text_number_rate",
+        "text_uuid_count",
+        "text_not_uuid_count",
+        "text_uuid_rate",
+        "text_email_address_count",
+        "text_not_email_address_count",
+        "text_email_address_rate",
+        "text_us_state_code_count",
+        "text_not_us_state_code_count",
+        "text_us_state_code_rate",
+        "text_us_zip_code_count",
+        "text_not_us_zip_code_count",
+        "text_us_zip_code_rate",
+        "text_us_phone_count",
+        "text_not_us_phone_count",
+        "text_us_phone_rate",
+        "text_ssn_count",
+        "text_not_ssn_count",
+        "text_ssn_rate",
+        "text_all_spaces_count",
+        "text_all_spaces_rate",
+    },
+    "get_array_length_func": {
+        "array_null_rate",
+    },
+    "convert_field_to_uppercase": {
+        "text_null_keyword_count",
+        "text_null_keyword_rate",
+    },
+    "in_values": {
+        "text_null_keyword_count",
+        "text_null_keyword_rate",
+    },
+}
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -83,22 +215,20 @@ def pytest_sessionfinish(session, exitstatus):
                 connection_type = manifest.get("connection_type")
 
     # Map template results to metrics
-    method_to_metrics = _load_metrics_mapping()
     metrics = {}
     for template_name, status in results["templates"].items():
         method_name = template_name
         if method_name.endswith("_template"):
             method_name = method_name[: -len("_template")]
 
-        if method_name in method_to_metrics:
-            for metric_type in method_to_metrics[method_name]:
+        if method_name in METHOD_TO_METRICS:
+            for metric_type in METHOD_TO_METRICS[method_name]:
                 if status == "passed":
                     metrics.setdefault(metric_type, True)
                 else:
                     metrics[metric_type] = False
 
     output = {
-        "templates": results["templates"],
         "capabilities": results["capabilities"],
         "metrics": metrics,
     }
