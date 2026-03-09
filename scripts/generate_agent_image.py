@@ -7,6 +7,7 @@ Usage:
     python scripts/generate_agent_image.py --agent-type azure --integration postgres --integration teradata
 """
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -37,9 +38,16 @@ def validate_integration(name):
     """Validate that an integration has all required artifacts. Returns list of errors."""
     errors = []
 
-    capabilities = os.path.join(OUTPUT_DIR, name, "capabilities.json")
-    if not os.path.isfile(capabilities):
+    capabilities_path = os.path.join(OUTPUT_DIR, name, "capabilities.json")
+    if not os.path.isfile(capabilities_path):
         errors.append(f"  - Missing output/{name}/capabilities.json")
+    else:
+        with open(capabilities_path) as f:
+            caps = json.load(f)
+        if not caps.get("capabilities", {}).get("supports_metadata"):
+            errors.append(
+                f"  - Metadata collection has not been implemented — this is a requirement."
+            )
 
     templates_dir = os.path.join(OUTPUT_DIR, name, "templates")
     if not os.path.isdir(templates_dir) or not os.listdir(templates_dir):
@@ -51,6 +59,31 @@ def validate_integration(name):
             errors.append(f"  - Missing integrations/{name}/{filename}")
 
     return errors
+
+
+def check_metric_warnings(name):
+    """Return a warning string if metric monitors are unsupported but some metrics pass, else None."""
+    capabilities_path = os.path.join(OUTPUT_DIR, name, "capabilities.json")
+    if not os.path.isfile(capabilities_path):
+        return None
+
+    with open(capabilities_path) as f:
+        caps = json.load(f)
+
+    supports_metrics = caps.get("capabilities", {}).get("supports_metric_monitors", False)
+    metrics = caps.get("metrics", {})
+    passing_metrics = sorted(m for m, v in metrics.items() if v is True)
+
+    if not supports_metrics and passing_metrics:
+        lines = [
+            f"  {name}:",
+            f"    supports_metric_monitors = false (not all prerequisite templates are passing)",
+            f"    {len(passing_metrics)} metric(s) have passing templates:",
+        ]
+        for metric in passing_metrics:
+            lines.append(f"      - {metric}")
+        return "\n".join(lines)
+    return None
 
 
 def generate_dockerfile(integrations, version, agent_type):
@@ -157,6 +190,34 @@ def main():
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # Warn when metric templates exist but prerequisite support is missing
+    warnings = []
+    for name in integrations:
+        warning = check_metric_warnings(name)
+        if warning:
+            warnings.append(warning)
+
+    if warnings:
+        print(file=sys.stderr)
+        print("WARNING", file=sys.stderr)
+        print("-------", file=sys.stderr)
+        print(
+            "Some integrations have passing metric templates but metric monitors\n"
+            "will NOT be supported because prerequisite templates are incomplete.\n",
+            file=sys.stderr,
+        )
+        for warning in warnings:
+            print(warning, file=sys.stderr)
+        print(file=sys.stderr)
+        try:
+            response = input("Continue anyway? [y/N] ")
+        except EOFError:
+            response = ""
+        if response.lower() not in ("y", "yes"):
+            print("Aborted.", file=sys.stderr)
+            sys.exit(1)
+        print()
 
     tag = args.tag or f"custom-agent:{args.version}-{args.agent_type}"
 
