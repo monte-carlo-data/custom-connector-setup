@@ -5,6 +5,9 @@ Usage:
     python scripts/generate_agent_image.py --agent-type aws-generic
     python scripts/generate_agent_image.py --agent-type lambda --version 1.4.12
     python scripts/generate_agent_image.py --agent-type azure --integration postgres --integration teradata
+
+Hybrid mode (metadata pushed externally — only metric monitor support required):
+    python scripts/generate_agent_image.py --agent-type aws-generic --mode hybrid
 """
 import argparse
 import json
@@ -34,7 +37,7 @@ def discover_integrations():
     )
 
 
-def validate_integration(name):
+def validate_integration(name, mode="full"):
     """Validate that an integration has all required artifacts. Returns list of errors."""
     errors = []
 
@@ -44,10 +47,21 @@ def validate_integration(name):
     else:
         with open(capabilities_path) as f:
             caps = json.load(f)
-        if not caps.get("capabilities", {}).get("supports_metadata"):
-            errors.append(
-                f"  - Metadata collection has not been implemented — this is a requirement."
-            )
+        if mode == "hybrid":
+            if not caps.get("capabilities", {}).get("supports_custom_sql_monitor"):
+                errors.append(
+                    f"  - Custom SQL monitor support has not been implemented — this is a requirement for hybrid mode."
+                )
+            if caps.get("capabilities", {}).get("supports_metadata"):
+                errors.append(
+                    f"  - Metadata is implemented but hybrid mode requires metadata to be pushed externally."
+                    f" Use --mode full instead, or remove MetadataQueryTemplates."
+                )
+        else:
+            if not caps.get("capabilities", {}).get("supports_metadata"):
+                errors.append(
+                    f"  - Metadata collection has not been implemented — this is a requirement."
+                )
 
     templates_dir = os.path.join(OUTPUT_DIR, name, "templates")
     if not os.path.isdir(templates_dir) or not os.listdir(templates_dir):
@@ -154,6 +168,12 @@ def main():
         default=None,
         help="Output image tag (default: custom-agent:{version}-{agent-type})",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["full", "hybrid"],
+        default="full",
+        help="Build mode: full (default) requires metadata support; hybrid requires custom SQL monitor support only (metadata pushed externally)",
+    )
     args = parser.parse_args()
 
     # Determine integrations to include
@@ -176,7 +196,7 @@ def main():
     # Validate all integrations
     all_errors = {}
     for name in integrations:
-        errors = validate_integration(name)
+        errors = validate_integration(name, mode=args.mode)
         if errors:
             all_errors[name] = errors
 
@@ -186,11 +206,18 @@ def main():
             print(f"  {name}:", file=sys.stderr)
             for err in errors:
                 print(err, file=sys.stderr)
-        print(
-            "\nRun tests and export first:\n"
-            "  INTEGRATION=<name> docker compose run test\n",
-            file=sys.stderr,
-        )
+        if args.mode == "hybrid":
+            print(
+                "\nRun custom monitor tests and export first:\n"
+                "  INTEGRATION=<name> docker compose run test -m custom_monitors --export-templates\n",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "\nRun tests and export first:\n"
+                "  INTEGRATION=<name> docker compose run test\n",
+                file=sys.stderr,
+            )
         sys.exit(1)
 
     # Warn when metric templates exist but prerequisite support is missing
@@ -238,6 +265,8 @@ def main():
         print(f"Building image '{tag}' with integrations: {', '.join(integrations)}")
         print(f"Base image: montecarlodata/agent:{args.version}-{args.agent_type}")
         print(f"Docker platform: {args.docker_platform}")
+        if args.mode == "hybrid":
+            print(f"Mode: hybrid (metadata pushed externally)")
         print()
 
         # Run docker build
@@ -253,12 +282,16 @@ def main():
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     print(f"\nSuccess! Image built: {tag}")
+    if args.mode == "hybrid":
+        print("Mode: hybrid (metadata pushed externally)")
     print()
     print("Next steps:")
     print(f"  1. Verify: docker run --rm --entrypoint ls {tag} /opt/custom-integrations/")
     print(f"  2. Push to your container registry:")
     print(f"     docker tag {tag} <your-registry>/{tag}")
     print(f"     docker push <your-registry>/{tag}")
+    if args.mode == "hybrid":
+        print(f"  3. Configure your external metadata pipeline to push metadata for the integrated data source")
 
 
 if __name__ == "__main__":

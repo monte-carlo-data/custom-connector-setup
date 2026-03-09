@@ -167,11 +167,33 @@ This takes the public `montecarlodata/agent` image as a base and layers on your 
 | `--integration` | all with output/ | Which integrations to include (repeatable) |
 | `--docker-platform` | `linux/amd64` | Docker platform for the image |
 | `--tag` | `custom-agent:{version}-{agent-type}` | Output image tag |
+| `--mode` | `full` | `full` or `hybrid` — see Modes below |
 
 Include specific integrations:
 
 ```bash
 python scripts/generate_agent_image.py --agent-type aws-generic --integration postgres --integration teradata
+```
+
+**Modes:**
+
+| | Full (default) | Hybrid |
+|---|---|---|
+| Metadata | Collected by the agent | Pushed externally |
+| Requires | `supports_metadata == true` | `supports_custom_sql_monitor == true` |
+| Metric monitors | Optional (warning if prereqs incomplete) | Optional (warning if prereqs incomplete) |
+| Classes to implement | All 5 | BaseIntegration + CustomSQLMonitorTemplates (+ QueryLanguageTemplates for metric monitors) |
+
+Full mode (default) — the agent handles metadata collection and metric monitors:
+
+```bash
+python scripts/generate_agent_image.py --agent-type aws-generic
+```
+
+Hybrid mode — metadata is pushed externally, the agent only needs metric monitor support:
+
+```bash
+python scripts/generate_agent_image.py --agent-type aws-generic --mode hybrid
 ```
 
 Verify the image:
