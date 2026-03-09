@@ -15,6 +15,8 @@ def pytest_addoption(parser):
 
 ALL_CAPABILITIES = [
     "supports_custom_sql_monitor",
+    "supports_metric_monitors",
+    "supports_metadata",
     "supports_volume_rows",
     "supports_volume_bytes",
     "supports_freshness",

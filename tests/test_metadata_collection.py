@@ -159,6 +159,7 @@ def test_fetch_schemas(database, schemas):
     fixture="integration",
     func="get_tables_query_template"
 )
+@pytest.mark.capability("supports_metadata")
 def test_fetch_tables_and_views(integration, database, schemas, tables):
     assert tables, f"Failed to fetch tables for database {database} and schemas {', '.join(schemas)}"
 
