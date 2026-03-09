@@ -77,11 +77,13 @@ def check_metric_warnings(name):
     if not supports_metrics and passing_metrics:
         lines = [
             f"  {name}:",
-            f"    supports_metric_monitors = false (not all prerequisite templates are passing)",
+            f"    supports_metric_monitors = false",
             f"    {len(passing_metrics)} metric(s) have passing templates:",
         ]
         for metric in passing_metrics:
             lines.append(f"      - {metric}")
+        lines.append(f"    Re-run tests to see which prerequisite templates are failing:")
+        lines.append(f"      INTEGRATION={name} docker compose run test -m ql_prerequisites")
         return "\n".join(lines)
     return None
 
