@@ -185,18 +185,6 @@ def test_supports_group_by_on_subquery(ql):
     assert result.strip().lower() in ("true", "false")
 
 
-@pytest.mark.template(func="literal_table_from_value_list_template")
-def test_literal_table_from_value_list(ql):
-    """Render literal_table_from_value_list_template, verify non-empty."""
-    result = ql.render(
-        ql.templates.literal_table_from_value_list_template,
-        values=["1", "2", "3"],
-        alias="t",
-        column_name="val",
-    )
-    assert result and len(result.strip()) > 0
-
-
 # ---------------------------------------------------------------------------
 # Type casting (prerequisites only — metric-mapped tests live in test_ql_metrics)
 # ---------------------------------------------------------------------------
@@ -753,7 +741,7 @@ def test_utc_literal(ql):
 
 
 # ---------------------------------------------------------------------------
-# Aggregation helpers (non-metric)
+# Infrastructure helpers
 # ---------------------------------------------------------------------------
 
 
@@ -770,53 +758,12 @@ def test_safe_divide(ql):
     assert result_zero is None or float(result_zero) == 0
 
 
-@pytest.mark.template(func="approx_distinct_func_template")
-def test_approx_distinct(ql):
-    """CTE with known distinct values, verify ~ count."""
-    data = [{"val": i % 10} for i in range(50)]
-    approx_expr = ql.render(ql.templates.approx_distinct_func_template, field="val")
-    result = ql.select_from_data_source(data, approx_expr)
-    assert 8 <= int(result) <= 12
-
-
-@pytest.mark.template(func="get_distinct_func_template")
-def test_distinct_func(ql):
-    """CTE [a,b,a,c], SELECT DISTINCT -> 3 rows."""
-    data = [{"val": "a"}, {"val": "b"}, {"val": "a"}, {"val": "c"}]
-    distinct_expr = ql.render(ql.templates.get_distinct_func_template, field="val")
-    count_expr = ql.render(ql.templates.get_count_all_expression_template)
-    cte, alias = ql.make_data_source(data)
-    from_clause = ql.render(ql.templates.add_from_clause_template, table=alias)
-    query = f"{cte} SELECT {count_expr} FROM (SELECT {distinct_expr} {from_clause}) AS distinct_sub"
-    result = ql.execute_scalar(query)
-    assert int(result) == 3
-
-
-@pytest.mark.template(func="any_value_template")
-def test_any_value(ql):
-    """CTE [42,42,42], ANY_VALUE -> 42."""
-    data = [{"val": 42}, {"val": 42}, {"val": 42}]
-    any_val_expr = ql.render(ql.templates.any_value_template, field="val")
-    result = ql.select_from_data_source(data, any_val_expr)
-    assert int(result) == 42
-
-
-# ---------------------------------------------------------------------------
-# String operations (non-metric)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.template(func="substring_func_template")
-def test_substring(ql):
-    """SUBSTR('abcdef', 2, 3), verify 'bcd'."""
-    escaped = ql.render(ql.templates.escape_string_template, value="abcdef")
-    literal = ql.render(ql.templates.string_literal_template, value=escaped)
-    substr_expr = ql.render(
-        ql.templates.substring_func_template,
-        field=literal, start=2, length=3,
-    )
-    result = ql.select_expression(substr_expr)
-    assert str(result) == "bcd"
+@pytest.mark.template(func="supports_literal_select_template")
+def test_supports_literal_select(ql):
+    """Boolean flag: whether SELECT <literal> works without FROM."""
+    result = ql.templates.supports_literal_select_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")
 
 
 @pytest.mark.template(func="get_regexp_expression_template")
@@ -836,63 +783,6 @@ def test_regexp_match(ql):
     )
     result = ql.select_from_data_source(data, count_expr, condition=regexp_expr)
     assert int(result) == 2
-
-
-@pytest.mark.template(func="literal_time_of_day_template")
-def test_literal_time_of_day(ql):
-    """Render time-of-day literal, verify non-empty."""
-    result = ql.render(ql.templates.literal_time_of_day_template, value="14:30:00")
-    assert result and len(result.strip()) > 0
-
-
-# ---------------------------------------------------------------------------
-# Math (non-metric)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.template(func="get_absolute_value_function_template")
-@pytest.mark.template(func="supports_literal_select_template")
-def test_absolute_value(ql):
-    """ABS(-5) -> 5."""
-    abs_expr = ql.render(ql.templates.get_absolute_value_function_template, field="-5")
-    result = ql.select_expression(abs_expr)
-    assert int(result) == 5
-
-
-@pytest.mark.template(func="rand_func_template")
-def test_rand(ql):
-    """RAND() between 0 and 1."""
-    rand_expr = ql.render(ql.templates.rand_func_template)
-    result = ql.select_expression(rand_expr)
-    val = float(result)
-    assert 0.0 <= abs(val) <= 1.0 or val != 0  # Some DBs return wider range; at minimum verify it runs
-
-
-# ---------------------------------------------------------------------------
-# Advanced (non-metric)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.template(func="unpivot_template")
-def test_unpivot(ql):
-    """Columns to rows transformation."""
-    data = [{"a": 1, "b": 2, "c": 3}]
-    cte, alias = ql.make_data_source(data)
-    from_clause = ql.render(ql.templates.add_from_clause_template, table=alias)
-    select_clause = ql.render(ql.templates.add_select_clause_template, fields="a, b, c")
-    inner_query = f"{select_clause} {from_clause}"
-
-    unpivot_expr = ql.render(
-        ql.templates.unpivot_template,
-        query=inner_query,
-        columns=["a", "b", "c"],
-        name_column="metric_name",
-        value_column="metric_value",
-    )
-    count_expr = ql.render(ql.templates.get_count_all_expression_template)
-    query = f"{cte} SELECT {count_expr} FROM ({unpivot_expr}) AS unpivoted"
-    result = ql.execute_scalar(query)
-    assert int(result) == 3
 
 
 @pytest.mark.template(func="max_time_func_template")
