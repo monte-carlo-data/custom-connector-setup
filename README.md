@@ -112,7 +112,7 @@ Rebuild whenever you change `requirements.txt` (either root or per-integration).
 INTEGRATION=postgres docker compose run test -m connection
 ```
 
-This runs three quick checks: connection creation, cursor creation, and a `SELECT 1` round-trip. Fix any credential or networking issues before moving on.
+This runs two quick checks: connection creation and cursor creation. Fix any credential or networking issues before moving on.
 
 If only one integration exists, you can omit `INTEGRATION=`:
 

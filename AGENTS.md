@@ -16,7 +16,7 @@ Once `credential_env_vars()` and the other `BaseIntegration` connection methods 
 INTEGRATION=<name> pytest -m connection
 ```
 
-This runs three targeted tests that verify credentials are loaded, the connection is established, and a simple query executes. **Do not move on to templates until all connection tests pass.**
+This runs two targeted tests that verify credentials are loaded and the connection is established. **Do not move on to templates until all connection tests pass.**
 
 ## Rules
 
