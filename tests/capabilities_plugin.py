@@ -14,6 +14,9 @@ def pytest_addoption(parser):
 
 
 ALL_CAPABILITIES = [
+    "supports_custom_sql_monitor",
+    "supports_metric_monitors",
+    "supports_metadata",
     "supports_volume_rows",
     "supports_volume_bytes",
     "supports_freshness",
@@ -27,7 +30,7 @@ ALL_CAPABILITIES = [
 def pytest_configure(config):
     config._capabilities_results = {
         "templates": {},
-        "capabilities": {cap: False for cap in ALL_CAPABILITIES},
+        "capabilities": {},
     }
 
 
@@ -213,6 +216,10 @@ def pytest_sessionfinish(session, exitstatus):
             with open(manifest_path) as f:
                 manifest = json.load(f)
                 connection_type = manifest.get("connection_type")
+
+    # Fill in defaults for capabilities not set by markers
+    for cap in ALL_CAPABILITIES:
+        results["capabilities"].setdefault(cap, False)
 
     # Map template results to metrics
     metrics = {}

@@ -16,7 +16,7 @@ Once `credential_env_vars()` and the other `BaseIntegration` connection methods 
 INTEGRATION=<name> pytest -m connection
 ```
 
-This runs three targeted tests that verify credentials are loaded, the connection is established, and a simple query executes. **Do not move on to templates until all connection tests pass.**
+This runs two targeted tests that verify credentials are loaded and the connection is established. **Do not move on to templates until all connection tests pass.**
 
 ## Rules
 
@@ -39,7 +39,7 @@ This runs three targeted tests that verify credentials are loaded, the connectio
 5. **Implement templates in sections.** Work through one test file at a time, running tests after each batch:
    - `INTEGRATION=<name> pytest -m metadata` — `MetadataQueryTemplates`
    - `INTEGRATION=<name> pytest -m custom_monitors` — `CustomSQLMonitorTemplates`
-   - `INTEGRATION=<name> pytest -m query_language` — `QueryLanguageTemplates` (the bulk of the work)
+   - `INTEGRATION=<name> pytest -m query_language` — `QueryLanguageTemplates` (the bulk of the work, split into `test_ql_prerequisites.py` for prerequisite templates and `test_ql_metrics.py` for metric-specific templates)
 
 6. **Run tests to verify.** Use pytest to check your work:
    ```bash

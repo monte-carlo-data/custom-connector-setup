@@ -112,7 +112,7 @@ Rebuild whenever you change `requirements.txt` (either root or per-integration).
 INTEGRATION=postgres docker compose run test -m connection
 ```
 
-This runs three quick checks: connection creation, cursor creation, and a `SELECT 1` round-trip. Fix any credential or networking issues before moving on.
+This runs two quick checks: connection creation and cursor creation. Fix any credential or networking issues before moving on.
 
 If only one integration exists, you can omit `INTEGRATION=`:
 
@@ -129,6 +129,8 @@ INTEGRATION=postgres docker compose run test
 # Run by section
 INTEGRATION=postgres docker compose run test -m metadata
 INTEGRATION=postgres docker compose run test -m query_language
+INTEGRATION=postgres docker compose run test -m ql_prerequisites
+INTEGRATION=postgres docker compose run test -m ql_metrics
 INTEGRATION=postgres docker compose run test -m custom_monitors
 
 # Export passing templates to .j2 files
@@ -220,15 +222,8 @@ custom-integration-setup/
     test_connection.py            # Connection tests
     test_metadata_collection.py   # Metadata discovery tests
     test_custom_monitors.py       # Custom SQL monitor tests
-    test_ql_query_building.py     # Core query building (CTE, SELECT, ORDER, CASE, etc.)
-    test_ql_type_casting.py       # Core type casting (numeric, string, decimal, timestamp)
-    test_ql_comparison.py         # Comparison operators and range checks
-    test_ql_datetime.py           # Date/time functions and filters
-    test_ql_aggregation.py        # Aggregate functions (AVG, STDDEV, COUNT DISTINCT, etc.)
-    test_ql_string_ops.py         # String operations (LENGTH, SUBSTR, regex)
-    test_ql_null_nan.py           # NULL and NaN handling
-    test_ql_math.py               # Math functions (ABS, RAND)
-    test_ql_advanced.py           # Advanced features (UNPIVOT, arrays, epoch seconds)
+    test_ql_prerequisites.py      # Prerequisite templates for metric monitors (query building, casting, comparisons, datetime, etc.)
+    test_ql_metrics.py            # Metric-specific templates (AVG, STDDEV, LENGTH, regexp, etc.)
   pytest.toml                     # Pytest configuration and markers
   requirements.txt                # Shared Python dependencies
   Dockerfile                      # Test runner image

@@ -5,5 +5,7 @@ markers = [
     "connection: database connection tests",
     "metadata: metadata collection tests",
     "query_language: query language tests",
+    "ql_prerequisites: prerequisite template tests for metric monitors",
+    "ql_metrics: metric-specific template tests",
     "custom_monitors: custom SQL monitor tests",
 ]
