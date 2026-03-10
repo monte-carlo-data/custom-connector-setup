@@ -56,3 +56,36 @@ This runs two targeted tests that verify credentials are loaded and the connecti
 7. **Read failures carefully.** Test failures tell you exactly what went wrong — a template rendering error means your Jinja string has the wrong variables, a SQL error means the rendered query is invalid for your database, and an assertion error means the query ran but returned the wrong result.
 
 8. **Review `capabilities.json`.** After each test run, this file is generated at `output/<name>/capabilities.json`. It shows pass/fail status for every template and which metrics your integration supports.
+
+## Hybrid Mode
+
+Hybrid mode is for integrations where metadata is pushed externally — the agent only needs custom SQL monitor support. **Do NOT implement `MetadataQueryTemplates`** in hybrid mode. Focus on `BaseIntegration` (connection) and `CustomSQLMonitorTemplates`. Optionally implement `QueryLanguageTemplates` to enable metric monitors (same as full mode — prerequisite templates are required for metrics to work).
+
+### Hybrid Workflow
+
+1. **Set up credentials.** Fill in `integrations/<name>/.env` and implement `credential_env_vars()` in `BaseIntegration`.
+
+2. **Install your database driver.** Add your driver to `integrations/<name>/requirements.txt` and install it.
+
+3. **Implement `BaseIntegration`.** Connection methods only (`credential_env_vars`, `create_connection`, `create_cursor`, `execute_query`, `fetch_all_results`, `close_connection`).
+
+4. **Validate the connection:**
+   ```bash
+   INTEGRATION=<name> pytest -m connection
+   ```
+
+5. **Implement `CustomSQLMonitorTemplates`.** These are the templates needed for custom SQL monitor operations.
+
+6. **Run custom monitor tests and export:**
+   ```bash
+   INTEGRATION=<name> pytest -m custom_monitors --export-templates
+   ```
+
+7. **(Optional) Implement `QueryLanguageTemplates`** to enable metric monitors. Run `pytest -m ql_prerequisites` and `pytest -m ql_metrics` the same as full mode.
+
+8. **Build the agent image in hybrid mode:**
+   ```bash
+   python scripts/generate_agent_image.py --agent-type <type> --mode hybrid
+   ```
+
+9. **Configure your external metadata pipeline** to push metadata for the integrated data source.
