@@ -1,15 +1,15 @@
 import json
 import os
 
+import pytest
+
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--export-templates",
-        action="store",
-        default=None,
-        const="templates",
-        nargs="?",
-        help="Export passing templates to .j2 files",
+        "--export",
+        action="store_true",
+        default=False,
+        help="Export capabilities.json and passing templates (requires full test suite — cannot be used with -m)",
     )
 
 
@@ -28,6 +28,11 @@ ALL_CAPABILITIES = [
 
 
 def pytest_configure(config):
+    if config.getoption("--export", default=False) and config.getoption("-m", default=""):
+        raise pytest.UsageError(
+            "--export requires the full test suite. Remove the -m filter and re-run."
+        )
+
     config._capabilities_results = {
         "templates": {},
         "capabilities": {},
@@ -202,6 +207,10 @@ METHOD_TO_METRICS = {
 
 
 def pytest_sessionfinish(session, exitstatus):
+    export = session.config.getoption("--export", default=False)
+    if not export:
+        return
+
     results = session.config._capabilities_results
     root = os.path.dirname(os.path.dirname(__file__))
 
@@ -242,7 +251,7 @@ def pytest_sessionfinish(session, exitstatus):
     if connection_type:
         output["connection_type"] = connection_type
 
-    # Write to output/<name>/capabilities.json
+    # Write capabilities.json
     if integration_name:
         output_dir = os.path.join(root, "output", integration_name)
     else:
@@ -253,28 +262,26 @@ def pytest_sessionfinish(session, exitstatus):
         json.dump(output, f, indent=4, sort_keys=True)
 
     # Export passing templates to .j2 files
-    export_opt = session.config.getoption("--export-templates", default=None)
-    if export_opt is not None:
-        templates_instance = getattr(session.config, "_templates_instance", None)
-        if templates_instance is None:
-            return
-        if integration_name:
-            export_path = os.path.join(root, "output", integration_name, "templates")
-        else:
-            export_path = os.path.join(root, export_opt)
-        os.makedirs(export_path, exist_ok=True)
-        for template_name, status in results["templates"].items():
-            if status != "passed":
-                continue
-            method = getattr(templates_instance, template_name, None)
-            if method is None:
-                continue
-            try:
-                template_string = method()
-            except Exception:
-                continue
-            if not template_string:
-                continue
-            filepath = os.path.join(export_path, f"{template_name}.j2")
-            with open(filepath, "w") as f:
-                f.write(template_string)
+    templates_instance = getattr(session.config, "_templates_instance", None)
+    if templates_instance is None:
+        return
+    if integration_name:
+        export_path = os.path.join(root, "output", integration_name, "templates")
+    else:
+        export_path = os.path.join(root, "templates")
+    os.makedirs(export_path, exist_ok=True)
+    for template_name, status in results["templates"].items():
+        if status != "passed":
+            continue
+        method = getattr(templates_instance, template_name, None)
+        if method is None:
+            continue
+        try:
+            template_string = method()
+        except Exception:
+            continue
+        if not template_string:
+            continue
+        filepath = os.path.join(export_path, f"{template_name}.j2")
+        with open(filepath, "w") as f:
+            f.write(template_string)

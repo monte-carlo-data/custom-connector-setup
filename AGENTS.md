@@ -76,14 +76,19 @@ Hybrid mode is for integrations where metadata is pushed externally — the agen
 
 5. **Implement `CustomSQLMonitorTemplates`.** These are the templates needed for custom SQL monitor operations.
 
-6. **Run custom monitor tests and export:**
+6. **Run custom monitor tests:**
    ```bash
-   INTEGRATION=<name> pytest -m custom_monitors --export-templates
+   INTEGRATION=<name> pytest -m custom_monitors
    ```
 
 7. **(Optional) Implement `QueryLanguageTemplates`** to enable metric monitors. Run `pytest -m ql_prerequisites` and `pytest -m ql_metrics` the same as full mode.
 
-8. **Build the agent image in hybrid mode:**
+8. **Run the full suite and export:**
+   ```bash
+   INTEGRATION=<name> pytest --export
+   ```
+
+9. **Build the agent image in hybrid mode:**
    ```bash
    python scripts/generate_agent_image.py --agent-type <type> --mode hybrid
    ```
