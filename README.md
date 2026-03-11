@@ -109,7 +109,7 @@ Rebuild whenever you change `requirements.txt` (either root or per-integration).
 ### 6. Verify the connection
 
 ```bash
-INTEGRATION=postgres docker compose run test -m connection
+INTEGRATION=postgres docker compose run --rm test -m connection
 ```
 
 This runs two quick checks: connection creation and cursor creation. Fix any credential or networking issues before moving on.
@@ -117,36 +117,38 @@ This runs two quick checks: connection creation and cursor creation. Fix any cre
 If only one integration exists, you can omit `INTEGRATION=`:
 
 ```bash
-docker compose run test -m connection
+docker compose run --rm test -m connection
 ```
 
 ### 7. Run the tests
 
 ```bash
 # Run all tests
-INTEGRATION=postgres docker compose run test
+INTEGRATION=postgres docker compose run --rm test
 
 # Run by section
-INTEGRATION=postgres docker compose run test -m metadata
-INTEGRATION=postgres docker compose run test -m query_language
-INTEGRATION=postgres docker compose run test -m ql_prerequisites
-INTEGRATION=postgres docker compose run test -m ql_metrics
-INTEGRATION=postgres docker compose run test -m custom_monitors
+INTEGRATION=postgres docker compose run --rm test -m metadata
+INTEGRATION=postgres docker compose run --rm test -m query_language
+INTEGRATION=postgres docker compose run --rm test -m ql_prerequisites
+INTEGRATION=postgres docker compose run --rm test -m ql_metrics
+INTEGRATION=postgres docker compose run --rm test -m custom_monitors
 
-# Export passing templates to .j2 files
-INTEGRATION=postgres docker compose run test --export-templates
+# Export capabilities.json and passing templates
+INTEGRATION=postgres docker compose run --rm test --export
 ```
+
+Note: `--export` requires the full test suite (no `-m` filter). Use `-m` to iterate on specific test categories, then run the full suite with `--export` when ready.
 
 ### 8. Review capabilities
 
-After a test run, `output/postgres/capabilities.json` is generated with:
+After a full test run with `--export`, `output/postgres/capabilities.json` is generated with:
 
 - **connection_type** — unique identifier for this integration (from `manifest.json`)
 - **templates** — pass/fail status for each template method
 - **capabilities** — boolean flags for optional features (volume rows, freshness, schema, query logs, etc.)
 - **metrics** — which metrics your integration supports, derived from template results and the metrics mapping
 
-Passing templates are exported to `output/postgres/templates/` when using `--export-templates`.
+Passing templates are exported to `output/postgres/templates/`.
 
 ### 9. Build a deployable agent image
 

@@ -30,7 +30,7 @@ def _resolve_integration_name(config):
 
     integrations_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "integrations")
     if not os.path.isdir(integrations_dir):
-        raise RuntimeError("No integrations/ directory found")
+        return None
 
     dirs = [
         d for d in os.listdir(integrations_dir)
@@ -39,11 +39,29 @@ def _resolve_integration_name(config):
     ]
     if len(dirs) == 1:
         return dirs[0]
+    return None
+
+
+def pytest_configure(config):
+    """Validate integration selection early so we fail once, not per-test."""
+    name = _resolve_integration_name(config)
+    if name:
+        return
+
+    integrations_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "integrations")
+    if not os.path.isdir(integrations_dir):
+        raise pytest.UsageError("No integrations/ directory found")
+
+    dirs = [
+        d for d in os.listdir(integrations_dir)
+        if not d.startswith("_") and not d.startswith(".")
+        and os.path.isdir(os.path.join(integrations_dir, d))
+    ]
     if len(dirs) == 0:
-        raise RuntimeError(
+        raise pytest.UsageError(
             "No integrations found. Run: python scripts/create_integration.py <name>"
         )
-    raise RuntimeError(
+    raise pytest.UsageError(
         f"Multiple integrations found ({', '.join(sorted(dirs))}). "
         "Specify one with --integration=<name> or INTEGRATION=<name> env var."
     )
@@ -56,6 +74,8 @@ def _get_integration(config):
     """Load and cache the integration module."""
     if "module" not in _integration_cache:
         name = _resolve_integration_name(config)
+        if not name:
+            raise RuntimeError("No integration specified")
         config._integration_name = name
 
         integrations_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "integrations")

@@ -114,7 +114,7 @@ class MetadataQueryTemplates:
 
         Examples:
             Snowflake: "SHOW DATABASES"
-            PostgreSQL: "SELECT datname FROM pg_database WHERE datistemplate = false"
+            PostgreSQL: "SELECT current_database()"
             BigQuery: "SELECT catalog_name FROM INFORMATION_SCHEMA.SCHEMATA GROUP BY 1"
 
         Enables: database discovery
@@ -184,14 +184,32 @@ class QueryLogCollectionTemplates:
     def get_query_logs_query_template(self) -> str:
         """Return a Jinja template string that produces query logs within a time range.
 
+        Results are paginated using limit and offset to handle large volumes of logs.
+
         Jinja variables:
-            start_time (datetime): Start of the time range.
-            end_time (datetime): End of the time range.
+            start_time (datetime): Start of the time range (inclusive).
+            end_time (datetime): End of the time range (exclusive).
+            limit (int): Maximum number of rows to return per page.
+            offset (int): Number of rows to skip for pagination.
 
         Examples:
-            Snowflake: "SELECT ... FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY WHERE START_TIME >= '{{ start_time }}' AND START_TIME < '{{ end_time }}'"
-            PostgreSQL: "SELECT ... FROM pg_stat_activity WHERE query_start >= '{{ start_time }}' AND query_start < '{{ end_time }}'"
-            BigQuery: "SELECT ... FROM `region-us`.INFORMATION_SCHEMA.JOBS WHERE creation_time >= '{{ start_time }}' AND creation_time < '{{ end_time }}'"
+            Snowflake:
+                "SELECT ... FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+                 WHERE START_TIME >= '{{ start_time }}' AND START_TIME < '{{ end_time }}'
+                 ORDER BY START_TIME
+                 LIMIT {{ limit }} OFFSET {{ offset }}"
+
+            PostgreSQL:
+                "SELECT ... FROM pg_stat_activity
+                 WHERE query_start >= '{{ start_time }}' AND query_start < '{{ end_time }}'
+                 ORDER BY query_start
+                 LIMIT {{ limit }} OFFSET {{ offset }}"
+
+            BigQuery:
+                "SELECT ... FROM `region-us`.INFORMATION_SCHEMA.JOBS
+                 WHERE creation_time >= '{{ start_time }}' AND creation_time < '{{ end_time }}'
+                 ORDER BY creation_time
+                 LIMIT {{ limit }} OFFSET {{ offset }}"
 
         Enables: query log collection, lineage, field lineage
         """

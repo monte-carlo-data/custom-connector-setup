@@ -237,7 +237,9 @@ def test_get_query_logs(integration, templates):
     query = templates.render_template(
         templates.get_query_logs_query_template,
         start_time=start_time,
-        end_time=end_time
+        end_time=end_time,
+        limit=100,
+        offset=0
     )
     results = integration.execute_and_fetch_all(query)
     assert len(results) > 0, f"No query logs retrieved from {start_time} to {end_time}"
