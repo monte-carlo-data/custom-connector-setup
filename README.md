@@ -2,17 +2,45 @@
 
 A validation toolkit for building custom database integrations. You implement a set of base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your integration supports.
 
-Supports multiple integrations side by side (e.g., postgres + snowflake + teradata) so you can build and test several at once.
+Supports multiple integrations side by side so you can build and test several at once.
+
+## Using an AI Coding Agent
+
+An AI coding agent can implement all the template methods after you set up the database connection. This splits the work: you handle credentials and connectivity, the agent handles the ~100 template methods.
+
+### What you do first
+
+Complete steps 1–6 of Quick Start below:
+
+1. Create the integration scaffold
+2. Add your database driver to `requirements.txt`
+3. Configure credentials in `.env`
+4. Implement `credential_env_vars`, `create_connection`, and `create_cursor` in `integration.py`
+5. Build the Docker image
+6. Verify connection tests pass (`-m connection`)
+
+### Hand off to the agent
+
+Provide `AGENTS.md` as context to your LLM along with the integration name. The agent will:
+
+- Implement the remaining `BaseIntegration` methods (`execute_query`, `fetch_all_results`, `close_connection`)
+- Implement all four template classes (or a subset for hybrid mode)
+- Run tests iteratively and fix failures
+- Export `capabilities.json` when all tests pass
+
+### Resume at step 9
+
+Once the agent finishes, pick back up at step 9 (Build a deployable agent image) to package and deploy your integration.
 
 ## Quick Start
 
 ### 1. Create an integration
 
 ```bash
-python scripts/create_integration.py postgres
+python scripts/create_integration.py <name>
 ```
 
-This creates `integrations/postgres/` with:
+This creates `integrations/<name>/` with:
 - `integration.py` — base classes to implement (copy of the canonical template)
 - `manifest.json` — unique `connection_type` identifier
 - `.env` — credentials file (gitignored)
@@ -20,7 +48,7 @@ This creates `integrations/postgres/` with:
 
 ### 2. Implement the integration classes
 
-Edit `integrations/postgres/integration.py` and fill in the five base classes:
+Edit `integrations/<name>/integration.py` and fill in the five base classes:
 
 | Class | Purpose |
 |-------|---------|
@@ -41,7 +69,7 @@ Each method has a docstring documenting its Jinja variables, example implementat
 
 ### 3. Add your database driver
 
-Add your driver to `integrations/postgres/requirements.txt`:
+Add your driver to `integrations/<name>/requirements.txt`:
 
 ```
 psycopg2-binary==2.9.9
@@ -82,7 +110,7 @@ def create_connection(self):
     )
 ```
 
-Add your credentials to `integrations/postgres/.env`:
+Add your credentials to `integrations/<name>/.env`:
 
 ```
 PGHOST=localhost
@@ -109,7 +137,7 @@ Rebuild whenever you change `requirements.txt` (either root or per-integration).
 ### 6. Verify the connection
 
 ```bash
-INTEGRATION=postgres docker compose run --rm test -m connection
+INTEGRATION=<name> docker compose run --rm test -m connection
 ```
 
 This runs two quick checks: connection creation and cursor creation. Fix any credential or networking issues before moving on.
@@ -124,31 +152,30 @@ docker compose run --rm test -m connection
 
 ```bash
 # Run all tests
-INTEGRATION=postgres docker compose run --rm test
+INTEGRATION=<name> docker compose run --rm test
 
 # Run by section
-INTEGRATION=postgres docker compose run --rm test -m metadata
-INTEGRATION=postgres docker compose run --rm test -m query_language
-INTEGRATION=postgres docker compose run --rm test -m ql_prerequisites
-INTEGRATION=postgres docker compose run --rm test -m ql_metrics
-INTEGRATION=postgres docker compose run --rm test -m custom_monitors
+INTEGRATION=<name> docker compose run --rm test -m metadata
+INTEGRATION=<name> docker compose run --rm test -m query_language
+INTEGRATION=<name> docker compose run --rm test -m ql_prerequisites
+INTEGRATION=<name> docker compose run --rm test -m ql_metrics
+INTEGRATION=<name> docker compose run --rm test -m custom_monitors
 
 # Export capabilities.json and passing templates
-INTEGRATION=postgres docker compose run --rm test --export
+INTEGRATION=<name> docker compose run --rm test --export
 ```
 
 Note: `--export` requires the full test suite (no `-m` filter). Use `-m` to iterate on specific test categories, then run the full suite with `--export` when ready.
 
 ### 8. Review capabilities
 
-After a full test run with `--export`, `output/postgres/capabilities.json` is generated with:
+After a full test run with `--export`, `output/<name>/capabilities.json` is generated with:
 
 - **connection_type** — unique identifier for this integration (from `manifest.json`)
-- **templates** — pass/fail status for each template method
-- **capabilities** — boolean flags for optional features (volume rows, freshness, schema, query logs, etc.)
+- **capabilities** — which features your integration supports (metadata collection, query logs, custom SQL monitors, metric monitors, etc.)
 - **metrics** — which metrics your integration supports, derived from template results and the metrics mapping
 
-Passing templates are exported to `output/postgres/templates/`.
+Passing templates are exported to `output/<name>/templates/`.
 
 ### 9. Build a deployable agent image
 
@@ -174,14 +201,14 @@ This takes the public `montecarlodata/agent` image as a base and layers on your 
 Include specific integrations:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic --integration postgres --integration teradata
+python scripts/generate_agent_image.py --agent-type aws-generic --integration postgres --integration mysql
 ```
 
 **Modes:**
 
 | | Full (default) | Hybrid |
 |---|---|---|
-| Metadata | Collected by the agent | Pushed externally |
+| Metadata & query logs | Collected by the agent | Pushed externally |
 | Requires | `supports_metadata == true` | `supports_custom_sql_monitor == true` |
 | Metric monitors | Optional (warning if prereqs incomplete) | Optional (warning if prereqs incomplete) |
 | Classes to implement | All 5 | BaseIntegration + CustomSQLMonitorTemplates (+ QueryLanguageTemplates for metric monitors) |
@@ -225,33 +252,34 @@ Nothing is installed on your machine — everything runs inside the container.
 ```
 custom-integration-setup/
   integrations/
-    _base/
-      integration.py              # Read-only canonical template (do not edit)
-      __init__.py                 # Exports the 5 base classes
-    teradata/                     # One directory per integration
-      integration.py              # Your implementation (fill in stubs)
-      .env                        # Database credentials (gitignored)
-      manifest.json               # {"connection_type": "custom-integration-xxx", "name": "teradata"}
-      requirements.txt            # Database driver deps
-  output/                         # Generated per-integration output (gitignored)
-    teradata/
-      capabilities.json           # Auto-generated test results
-      templates/                  # Exported .j2 files
-  scripts/
-    create_integration.py         # Scaffolding helper (stdlib only)
-    generate_agent_image.py       # Builds deployable custom agent Docker image
-  tests/
-    conftest.py                   # Test fixtures (TestIntegration, Templates, QueryTestHelper)
-    capabilities_plugin.py        # Pytest plugin — generates capabilities.json
-    test_connection.py            # Connection tests
-    test_metadata_collection.py   # Metadata discovery tests
-    test_custom_monitors.py       # Custom SQL monitor tests
-    test_ql_prerequisites.py      # Prerequisite templates for metric monitors (query building, casting, comparisons, datetime, etc.)
-    test_ql_metrics.py            # Metric-specific templates (AVG, STDDEV, LENGTH, regexp, etc.)
-  pytest.toml                     # Pytest configuration and markers
-  requirements.txt                # Shared Python dependencies
-  Dockerfile                      # Test runner image
-  docker-compose.yml              # Docker Compose configuration
+    _base/                                # Provided — do not edit
+      integration.py                      # Canonical template with all base classes
+      __init__.py                         # Exports the 5 base classes
+    <your-database>/                      # Created by you (one directory per integration)
+      integration.py                      # Your implementation (fill in stubs)
+      .env                                # Database credentials (gitignored)
+      manifest.json                       # {"connection_type": "custom-integration-xxx", "name": "..."}
+      requirements.txt                    # Database driver deps
+  output/                                 # Auto-generated by --export (gitignored)
+    <your-database>/
+      capabilities.json                   # Test results and supported features
+      templates/                          # Passing .j2 templates
+  scripts/                                # Provided
+    create_integration.py                 # Scaffolding helper (stdlib only)
+    generate_agent_image.py               # Builds deployable custom agent Docker image
+  tests/                                  # Provided — do not edit
+    conftest.py                           # Test fixtures (TestIntegration, Templates, QueryTestHelper)
+    capabilities_plugin.py                # Pytest plugin — generates capabilities.json
+    test_connection.py                    # Connection tests
+    test_metadata_collection.py           # Metadata discovery tests
+    test_custom_monitors.py               # Custom SQL monitor tests
+    test_ql_prerequisites.py              # Prerequisite templates for metric monitors
+    test_ql_metrics.py                    # Metric-specific templates (AVG, STDDEV, LENGTH, regexp, etc.)
+  AGENTS.md                               # Instructions for AI coding agents
+  pytest.toml                             # Pytest configuration and markers
+  requirements.txt                        # Shared Python dependencies
+  Dockerfile                              # Test runner image
+  docker-compose.yml                      # Docker Compose configuration
 ```
 
 ## How Templates Work
