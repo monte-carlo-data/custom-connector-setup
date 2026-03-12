@@ -320,3 +320,22 @@ def test_avg(ql):
 ```
 
 The helper builds CTEs from Python dicts, renders templates, executes queries against your real database, and validates results.
+
+## Advanced Usage
+
+### Testing with a local agent build
+
+By default, `generate_agent_image.py` pulls the public `montecarlodata/agent` image from DockerHub as the base. If you need to test against a local or unreleased version of the agent, you can build the [apollo-agent](https://github.com/monte-carlo-data/apollo-agent) image locally and use `--base-image` to point at it:
+
+```bash
+# Clone and build the agent locally
+git clone https://github.com/monte-carlo-data/apollo-agent.git
+cd apollo-agent
+docker build -t local-agent .
+
+# Use the local build as the base for your custom image
+cd /path/to/custom-integration-setup
+python scripts/generate_agent_image.py --agent-type aws-generic --base-image local-agent
+```
+
+This is useful for debugging agent-side behavior or verifying your integration works with in-development agent changes before they're published.
