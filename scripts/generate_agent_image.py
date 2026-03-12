@@ -97,14 +97,15 @@ def check_metric_warnings(name):
         for metric in passing_metrics:
             lines.append(f"      - {metric}")
         lines.append(f"    Re-run tests to see which prerequisite templates are failing:")
-        lines.append(f"      INTEGRATION={name} docker compose run test -m ql_prerequisites")
+        lines.append(f"      INTEGRATION={name} docker compose run --rm test -m ql_prerequisites")
         return "\n".join(lines)
     return None
 
 
-def generate_dockerfile(integrations, version, agent_type):
+def generate_dockerfile(integrations, version, agent_type, base_image=None):
     """Generate Dockerfile contents for the custom agent image."""
-    lines = [f"FROM montecarlodata/agent:{version}-{agent_type}", ""]
+    from_image = base_image or f"montecarlodata/agent:{version}-{agent_type}"
+    lines = [f"FROM {from_image}", "", "ENV MCD_CUSTOM_INTEGRATIONS_ENABLED=true", ""]
 
     for name in integrations:
         lines.append(f"# Integration: {name}")
@@ -169,6 +170,11 @@ def main():
         help="Output image tag (default: custom-agent:{version}-{agent-type})",
     )
     parser.add_argument(
+        "--base-image",
+        default=None,
+        help="Override the base Docker image (e.g. local_agent for local testing)",
+    )
+    parser.add_argument(
         "--mode",
         choices=["full", "hybrid"],
         default="full",
@@ -188,7 +194,7 @@ def main():
             file=sys.stderr,
         )
         print(
-            "\n  INTEGRATION=<name> docker compose run test\n",
+            "\n  INTEGRATION=<name> docker compose run --rm test --export\n",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -206,18 +212,11 @@ def main():
             print(f"  {name}:", file=sys.stderr)
             for err in errors:
                 print(err, file=sys.stderr)
-        if args.mode == "hybrid":
-            print(
-                "\nRun custom monitor tests and export first:\n"
-                "  INTEGRATION=<name> docker compose run test -m custom_monitors --export-templates\n",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                "\nRun tests and export first:\n"
-                "  INTEGRATION=<name> docker compose run test\n",
-                file=sys.stderr,
-            )
+        print(
+            "\nRun the full test suite and export first:\n"
+            "  INTEGRATION=<name> docker compose run --rm test --export\n",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Warn when metric templates exist but prerequisite support is missing
@@ -254,7 +253,9 @@ def main():
     tmp_dir = tempfile.mkdtemp(prefix="agent-build-")
     try:
         # Generate Dockerfile
-        dockerfile_content = generate_dockerfile(integrations, args.version, args.agent_type)
+        dockerfile_content = generate_dockerfile(
+            integrations, args.version, args.agent_type, base_image=args.base_image
+        )
         dockerfile_path = os.path.join(tmp_dir, "Dockerfile")
         with open(dockerfile_path, "w") as f:
             f.write(dockerfile_content)
@@ -262,8 +263,9 @@ def main():
         # Copy artifacts into build context
         build_context(tmp_dir, integrations)
 
+        base_image = args.base_image or f"montecarlodata/agent:{args.version}-{args.agent_type}"
         print(f"Building image '{tag}' with integrations: {', '.join(integrations)}")
-        print(f"Base image: montecarlodata/agent:{args.version}-{args.agent_type}")
+        print(f"Base image: {base_image}")
         print(f"Docker platform: {args.docker_platform}")
         if args.mode == "hybrid":
             print(f"Mode: hybrid (metadata pushed externally)")
