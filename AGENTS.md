@@ -13,7 +13,7 @@ Implement all template methods and remaining `BaseIntegration` methods in `integ
 | `QueryLogCollectionTemplates` | Jinja template for fetching query logs |
 | `CustomSQLMonitorTemplates` | Jinja templates for custom SQL monitor operations |
 | `QueryLanguageTemplates` | ~90 Jinja templates covering type casting, date/time, aggregations, comparisons, string operations, etc. |
-| `FunctionalTestOperations` | *(Optional)* Jinja templates for functional validation — table identity, create/drop, insert, add column, lineage query |
+| `FunctionalTestOperations` | *(Optional)* Jinja templates for functional validation — table identity, create/drop, insert, add/drop column, lineage query |
 
 ## Rules
 
@@ -79,7 +79,7 @@ After implementing `MetadataQueryTemplates`, you can add `FunctionalTestOperatio
 
 ### What to implement
 
-`FunctionalTestOperations` has one config method and five Jinja templates:
+`FunctionalTestOperations` has one config method and six Jinja templates:
 
 | Method | Returns |
 |--------|---------|
@@ -87,6 +87,7 @@ After implementing `MetadataQueryTemplates`, you can add `FunctionalTestOperatio
 | `create_test_table_template()` | Jinja template to CREATE the test table |
 | `insert_rows_template()` | Jinja template to INSERT rows (receives `{{ num_rows }}`) |
 | `add_column_template()` | Jinja template to ALTER TABLE ADD COLUMN (receives `{{ column_name }}`, `{{ column_type }}`) |
+| `drop_column_template()` | Jinja template to ALTER TABLE DROP COLUMN (receives `{{ column_name }}`) |
 | `drop_test_table_template()` | Jinja template to DROP TABLE IF EXISTS |
 | `create_lineage_query_template()` | Jinja template for a SELECT that should appear in query logs |
 
@@ -107,6 +108,9 @@ class FunctionalTestOperations:
 
     def add_column_template(self) -> str:
         return "ALTER TABLE {{ schema }}.{{ table }} ADD COLUMN {{ column_name }} {{ column_type }}"
+
+    def drop_column_template(self) -> str:
+        return "ALTER TABLE {{ schema }}.{{ table }} DROP COLUMN {{ column_name }}"
 
     def drop_test_table_template(self) -> str:
         return "DROP TABLE IF EXISTS {{ schema }}.{{ table }}"

@@ -1870,6 +1870,24 @@ class FunctionalTestOperations:
         """
         raise NotImplementedError
 
+    def drop_column_template(self) -> str:
+        """Return a Jinja template string that drops a column from the test table.
+
+        Jinja variables:
+            database (str): Database name from get_test_table_identifier().
+            schema (str): Schema name from get_test_table_identifier().
+            table (str): Table name from get_test_table_identifier().
+            column_name (str): Name of the column to drop.
+
+        Examples:
+            Snowflake: "ALTER TABLE {{ database }}.{{ schema }}.{{ table }} DROP COLUMN {{ column_name }}"
+            PostgreSQL: "ALTER TABLE {{ schema }}.{{ table }} DROP COLUMN {{ column_name }}"
+            BigQuery: "ALTER TABLE `{{ database }}.{{ schema }}.{{ table }}` DROP COLUMN {{ column_name }}"
+
+        Enables: functional validation tests (schema change)
+        """
+        raise NotImplementedError
+
     def drop_test_table_template(self) -> str:
         """Return a Jinja template string that drops the test table.
 

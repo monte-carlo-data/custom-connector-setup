@@ -326,6 +326,46 @@ class TestSchemaChange:
         finally:
             integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
+    def test_schema_change_after_drop_column(self, integration, templates, functional_ops):
+        """Dropped column disappears from column metadata."""
+        _skip_if_no_ops(functional_ops)
+
+        if not templates.get_columns_query_template():
+            pytest.skip("get_columns_query_template not implemented.")
+
+        if not getattr(templates, 'drop_column_template', None) or not templates.drop_column_template():
+            pytest.skip("drop_column_template not implemented.")
+
+        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        try:
+            col_name = "pandora_drop_col"
+            integration.execute_only(render_functional(
+                templates, templates.add_column_template, functional_ops,
+                column_name=col_name, column_type="TEXT",
+            ))
+
+            mid_cols = collect_test_table_columns(integration, templates, functional_ops)
+            mid_names = {c.name.lower() for c in mid_cols}
+            assert col_name.lower() in mid_names, (
+                f"Column '{col_name}' was not found after ADD COLUMN — cannot test drop."
+            )
+
+            integration.execute_only(render_functional(
+                templates, templates.drop_column_template, functional_ops,
+                column_name=col_name,
+            ))
+
+            after_cols = collect_test_table_columns(integration, templates, functional_ops)
+            after_names = {c.name.lower() for c in after_cols}
+
+            assert col_name.lower() not in after_names, (
+                f"Column '{col_name}' still appears in column metadata after DROP COLUMN. "
+                f"Columns after: {sorted(after_names)}. "
+                f"Your get_columns_query_template() may be reading from a stale catalog."
+            )
+        finally:
+            integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
 class TestQueryLogCapture:
     def test_query_log_capture(self, integration, templates, functional_ops):

@@ -57,7 +57,7 @@ Edit `integrations/<name>/integration.py` and fill in the five base classes:
 | `QueryLogCollectionTemplates` | Jinja template for fetching query logs |
 | `CustomSQLMonitorTemplates` | Jinja templates for custom SQL monitor operations (count wrapping, row limits) |
 | `QueryLanguageTemplates` | ~90 Jinja templates covering type casting, date/time functions, aggregations, comparisons, string operations, and more |
-| `FunctionalTestOperations` | *(Optional)* Jinja templates for functional validation — creating/dropping a test table, inserting rows, adding columns, and a lineage query |
+| `FunctionalTestOperations` | *(Optional)* Jinja templates for functional validation — creating/dropping a test table, inserting rows, adding/dropping columns, and a lineage query |
 
 Every template method returns a Jinja template string. For example:
 
@@ -350,6 +350,9 @@ class FunctionalTestOperations:
     def add_column_template(self) -> str:
         return "ALTER TABLE {{ schema }}.{{ table }} ADD COLUMN {{ column_name }} {{ column_type }}"
 
+    def drop_column_template(self) -> str:
+        return "ALTER TABLE {{ schema }}.{{ table }} DROP COLUMN {{ column_name }}"
+
     def drop_test_table_template(self) -> str:
         return "DROP TABLE IF EXISTS {{ schema }}.{{ table }}"
 
@@ -366,8 +369,10 @@ class FunctionalTestOperations:
 | `test_table_discovery_after_create` | New table appears in metadata |
 | `test_table_discovery_after_drop` | Dropped table disappears from metadata |
 | `test_volume_change_after_insert` | `row_count` increases after insert |
+| `test_byte_count_change_after_insert` | `byte_count` increases after insert |
 | `test_freshness_change_after_insert` | `last_update_time` advances after insert |
 | `test_schema_change_after_add_column` | New column appears in column metadata |
+| `test_schema_change_after_drop_column` | Dropped column disappears from column metadata |
 | `test_query_log_capture` | Executed query appears in query logs |
 
 Tests auto-skip when stubs are not implemented or when the relevant feature (row_count, freshness, columns, query logs) is not supported by your integration.
