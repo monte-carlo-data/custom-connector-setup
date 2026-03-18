@@ -13,6 +13,7 @@ Implement all template methods and remaining `BaseIntegration` methods in `integ
 | `QueryLogCollectionTemplates` | Jinja template for fetching query logs |
 | `CustomSQLMonitorTemplates` | Jinja templates for custom SQL monitor operations |
 | `QueryLanguageTemplates` | ~90 Jinja templates covering type casting, date/time, aggregations, comparisons, string operations, etc. |
+| `FunctionalTestOperations` | *(Optional)* Jinja templates for functional validation — table identity, create/drop, insert, add/drop column, lineage query |
 
 ## Rules
 
@@ -30,6 +31,7 @@ Implement all template methods and remaining `BaseIntegration` methods in `integ
    - `INTEGRATION=<name> docker compose run --rm test -m custom_monitors` — `CustomSQLMonitorTemplates`
    - `INTEGRATION=<name> docker compose run --rm test -m ql_prerequisites` — prerequisite templates in `QueryLanguageTemplates`
    - `INTEGRATION=<name> docker compose run --rm test -m ql_metrics` — metric-specific templates in `QueryLanguageTemplates`
+   - `INTEGRATION=<name> docker compose run --rm test -m functional` — functional validation via `FunctionalTestOperations`
 
 3. **Read failures carefully.** A template rendering error means your Jinja string has the wrong variables. A SQL error means the rendered query is invalid for your database. An assertion error means the query ran but returned the wrong result.
 
@@ -70,3 +72,57 @@ Hybrid mode is for integrations where metadata is pushed externally. Skip `Metad
    ```bash
    INTEGRATION=<name> docker compose run --rm test --export
    ```
+
+## Functional Validation (Optional)
+
+After implementing `MetadataQueryTemplates`, you can add `FunctionalTestOperations` to verify that your metadata queries reflect **real-time** database changes — not stale statistics tables.
+
+### What to implement
+
+`FunctionalTestOperations` has one config method and six Jinja templates:
+
+| Method | Returns |
+|--------|---------|
+| `get_test_table_identifier()` | `(database, schema, table)` tuple — single source of truth for the test table |
+| `create_test_table_template()` | Jinja template to CREATE the test table |
+| `insert_rows_template()` | Jinja template to INSERT rows (receives `{{ num_rows }}`) |
+| `add_column_template()` | Jinja template to ALTER TABLE ADD COLUMN (receives `{{ column_name }}`, `{{ column_type }}`) |
+| `drop_column_template()` | Jinja template to ALTER TABLE DROP COLUMN (receives `{{ column_name }}`) |
+| `drop_test_table_template()` | Jinja template to DROP TABLE IF EXISTS |
+| `create_lineage_query_template()` | Jinja template for a SELECT that should appear in query logs |
+
+Every template automatically receives `{{ database }}`, `{{ schema }}`, and `{{ table }}` from `get_test_table_identifier()`. Use these variables in your templates instead of hardcoding the table name — the framework enforces consistency.
+
+### Example (PostgreSQL)
+
+```python
+class FunctionalTestOperations:
+    def get_test_table_identifier(self) -> tuple:
+        return ("monolith", "public", "pandora_functional_test")
+
+    def create_test_table_template(self) -> str:
+        return "CREATE TABLE {{ schema }}.{{ table }} (id SERIAL PRIMARY KEY, value TEXT)"
+
+    def insert_rows_template(self) -> str:
+        return "INSERT INTO {{ schema }}.{{ table }} (value) SELECT 'row_' || g FROM generate_series(1, {{ num_rows }}) g"
+
+    def add_column_template(self) -> str:
+        return "ALTER TABLE {{ schema }}.{{ table }} ADD COLUMN {{ column_name }} {{ column_type }}"
+
+    def drop_column_template(self) -> str:
+        return "ALTER TABLE {{ schema }}.{{ table }} DROP COLUMN {{ column_name }}"
+
+    def drop_test_table_template(self) -> str:
+        return "DROP TABLE IF EXISTS {{ schema }}.{{ table }}"
+
+    def create_lineage_query_template(self) -> str:
+        return "SELECT * FROM {{ schema }}.{{ table }} WHERE 1=0"
+```
+
+### Running
+
+```bash
+INTEGRATION=<name> docker compose run --rm test -m functional
+```
+
+Tests auto-skip when stubs are not implemented or when the relevant feature is not supported. A failure means your metadata template is likely reading from a stale source.

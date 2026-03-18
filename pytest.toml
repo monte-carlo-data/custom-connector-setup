@@ -8,4 +8,5 @@ markers = [
     "ql_prerequisites: prerequisite template tests for metric monitors",
     "ql_metrics: metric-specific template tests",
     "custom_monitors: custom SQL monitor tests",
+    "functional: functional validation tests that mutate the database",
 ]
