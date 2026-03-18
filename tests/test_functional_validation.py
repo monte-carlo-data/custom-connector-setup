@@ -208,6 +208,48 @@ class TestVolumeAndFreshness:
         finally:
             integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
+    def test_byte_count_change_after_insert(self, integration, templates, functional_ops):
+        """byte_count increases after inserting rows."""
+        _skip_if_no_ops(functional_ops)
+
+        tv = table_vars(functional_ops)
+        schemas = schemas_param(functional_ops)
+
+        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        try:
+            before_metadata = collect_metadata(integration, templates, tv["database"], schemas)
+            before_table = find_test_table(before_metadata, functional_ops)
+            assert before_table is not None, (
+                f"Test table {tv['table']} not found in metadata after creation."
+            )
+
+            if before_table.byte_count is None:
+                pytest.skip(
+                    "byte_count is None — your get_tables_query_template() does not return byte counts. "
+                    "Skipping byte count volume change test."
+                )
+
+            before_bytes = before_table.byte_count
+            num_rows = 10
+            integration.execute_only(render_functional(
+                templates, templates.insert_rows_template, functional_ops, num_rows=num_rows,
+            ))
+
+            after_metadata = collect_metadata(integration, templates, tv["database"], schemas)
+            after_table = find_test_table(after_metadata, functional_ops)
+            assert after_table is not None, "Test table disappeared from metadata after insert."
+            after_bytes = after_table.byte_count
+
+            assert after_bytes is not None and after_bytes > before_bytes, (
+                f"byte_count did not increase after inserting {num_rows} rows. "
+                f"Before: {before_bytes}, After: {after_bytes}. "
+                f"Your get_tables_query_template() may be reading from a statistics table "
+                f"that only updates when stats are collected."
+            )
+        finally:
+            integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+
     def test_freshness_change_after_insert(self, integration, templates, functional_ops):
         """last_update_time advances after inserting rows."""
         _skip_if_no_ops(functional_ops)
