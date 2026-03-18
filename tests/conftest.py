@@ -111,6 +111,12 @@ class TestIntegration:
         self._delegate.execute_query(query)
         return self._delegate.fetch_all_results()
 
+    def execute_only(self, query: str) -> None:
+        self._delegate.execute_query(query)
+        commit = getattr(self._delegate.connection, "commit", None)
+        if callable(commit):
+            commit()
+
     def close_connection(self):
         self._delegate.close_connection()
 
@@ -126,6 +132,9 @@ def _make_templates_class(module):
         module.CustomSQLMonitorTemplates,
         module.QueryLanguageTemplates,
     )
+    functional_cls = getattr(module, "FunctionalTestOperations", None)
+    if functional_cls is not None:
+        bases = bases + (functional_cls,)
 
     def templates_init(self):
         self.env = ImmutableSandboxedEnvironment(
@@ -246,3 +255,18 @@ def templates(request):
 @pytest.fixture(scope="session")
 def ql(integration, templates) -> QueryTestHelper:
     return QueryTestHelper(integration, templates)
+
+
+@pytest.fixture(scope="session")
+def functional_ops(request):
+    """Load the integration's FunctionalTestOperations, or None if not implemented."""
+    _, module = _get_integration(request.config)
+    cls = getattr(module, "FunctionalTestOperations", None)
+    if cls is None:
+        return None
+    ops = cls()
+    try:
+        ops.get_test_table_identifier()
+    except NotImplementedError:
+        return None
+    return ops

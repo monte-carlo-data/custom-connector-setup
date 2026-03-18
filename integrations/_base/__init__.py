@@ -4,6 +4,7 @@ from integrations._base.integration import (
     QueryLogCollectionTemplates,
     CustomSQLMonitorTemplates,
     QueryLanguageTemplates,
+    FunctionalTestOperations,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "QueryLogCollectionTemplates",
     "CustomSQLMonitorTemplates",
     "QueryLanguageTemplates",
+    "FunctionalTestOperations",
 ]

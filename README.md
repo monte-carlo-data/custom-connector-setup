@@ -57,6 +57,7 @@ Edit `integrations/<name>/integration.py` and fill in the five base classes:
 | `QueryLogCollectionTemplates` | Jinja template for fetching query logs |
 | `CustomSQLMonitorTemplates` | Jinja templates for custom SQL monitor operations (count wrapping, row limits) |
 | `QueryLanguageTemplates` | ~90 Jinja templates covering type casting, date/time functions, aggregations, comparisons, string operations, and more |
+| `FunctionalTestOperations` | *(Optional)* Jinja templates for functional validation — creating/dropping a test table, inserting rows, adding columns, and a lineage query |
 
 Every template method returns a Jinja template string. For example:
 
@@ -160,6 +161,7 @@ INTEGRATION=<name> docker compose run --rm test -m query_language
 INTEGRATION=<name> docker compose run --rm test -m ql_prerequisites
 INTEGRATION=<name> docker compose run --rm test -m ql_metrics
 INTEGRATION=<name> docker compose run --rm test -m custom_monitors
+INTEGRATION=<name> docker compose run --rm test -m functional
 
 # Export capabilities.json and passing templates
 INTEGRATION=<name> docker compose run --rm test --export
@@ -254,7 +256,7 @@ custom-integration-setup/
   integrations/
     _base/                                # Provided — do not edit
       integration.py                      # Canonical template with all base classes
-      __init__.py                         # Exports the 5 base classes
+      __init__.py                         # Exports the base classes
     <your-database>/                      # Created by you (one directory per integration)
       integration.py                      # Your implementation (fill in stubs)
       .env                                # Database credentials (gitignored)
@@ -275,6 +277,7 @@ custom-integration-setup/
     test_custom_monitors.py               # Custom SQL monitor tests
     test_ql_prerequisites.py              # Prerequisite templates for metric monitors
     test_ql_metrics.py                    # Metric-specific templates (AVG, STDDEV, LENGTH, regexp, etc.)
+    test_functional_validation.py         # Functional validation tests (real-time metadata accuracy)
   AGENTS.md                               # Instructions for AI coding agents
   pytest.toml                             # Pytest configuration and markers
   requirements.txt                        # Shared Python dependencies
@@ -320,6 +323,60 @@ def test_avg(ql):
 ```
 
 The helper builds CTEs from Python dicts, renders templates, executes queries against your real database, and validates results.
+
+## Functional Validation Tests
+
+The standard tests verify that your metadata templates return correct data types, but they don't verify that the data is **real-time**. Functional validation tests catch stale sources (e.g. statistics tables that only update when stats are collected) by making actual database changes and verifying your metadata queries detect them.
+
+### How it works
+
+The tests create a test table, run metadata collection, mutate the table (insert rows, add columns), run collection again, and assert the changes are detected.
+
+### Implementing `FunctionalTestOperations`
+
+Add a `FunctionalTestOperations` class to your `integration.py`. All you need is a table identifier and Jinja templates for basic DDL/DML operations:
+
+```python
+class FunctionalTestOperations:
+    def get_test_table_identifier(self) -> tuple:
+        return ("my_database", "my_schema", "pandora_functional_test")
+
+    def create_test_table_template(self) -> str:
+        return "CREATE TABLE {{ schema }}.{{ table }} (id SERIAL PRIMARY KEY, value TEXT)"
+
+    def insert_rows_template(self) -> str:
+        return "INSERT INTO {{ schema }}.{{ table }} (value) SELECT 'row_' || g FROM generate_series(1, {{ num_rows }}) g"
+
+    def add_column_template(self) -> str:
+        return "ALTER TABLE {{ schema }}.{{ table }} ADD COLUMN {{ column_name }} {{ column_type }}"
+
+    def drop_test_table_template(self) -> str:
+        return "DROP TABLE IF EXISTS {{ schema }}.{{ table }}"
+
+    def create_lineage_query_template(self) -> str:
+        return "SELECT * FROM {{ schema }}.{{ table }} WHERE 1=0"
+```
+
+`get_test_table_identifier()` returns `(database, schema, table)` — the single source of truth for the test table identity. The framework injects these as `{{ database }}`, `{{ schema }}`, and `{{ table }}` into every template, so the table name in the SQL always matches what the tests look for in metadata results.
+
+### What the tests verify
+
+| Test | What it validates |
+|------|------------------|
+| `test_table_discovery_after_create` | New table appears in metadata |
+| `test_table_discovery_after_drop` | Dropped table disappears from metadata |
+| `test_volume_change_after_insert` | `row_count` increases after insert |
+| `test_freshness_change_after_insert` | `last_update_time` advances after insert |
+| `test_schema_change_after_add_column` | New column appears in column metadata |
+| `test_query_log_capture` | Executed query appears in query logs |
+
+Tests auto-skip when stubs are not implemented or when the relevant feature (row_count, freshness, columns, query logs) is not supported by your integration.
+
+### Running functional tests
+
+```bash
+INTEGRATION=<name> docker compose run --rm test -m functional
+```
 
 ## Advanced Usage
 

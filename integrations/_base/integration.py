@@ -1786,3 +1786,122 @@ class QueryLanguageTemplates:
         Enables: field referencing in queries
         """
         pass
+
+
+class FunctionalTestOperations:
+    """Optional stubs for functional validation tests.
+
+    Implement these methods to enable tests that verify metadata queries
+    reflect real-time database changes (not stale statistics).
+
+    Template methods return Jinja template strings, just like the other
+    template classes. The test framework renders and executes them.
+
+    Every template receives ``database``, ``schema``, and ``table`` as
+    Jinja variables — these are derived from get_test_table_identifier()
+    so the table identity is defined in exactly one place.
+    """
+
+    def get_test_table_identifier(self) -> tuple:
+        """Return (database, schema, table_name) for the test table.
+
+        This is the single source of truth for the test table identity.
+        The returned values are injected as ``{{ database }}``,
+        ``{{ schema }}``, and ``{{ table }}`` into every template.
+
+        Examples:
+            Snowflake: return ("MY_TEST_DB", "PUBLIC", "PANDORA_FUNCTIONAL_TEST")
+            PostgreSQL: return ("monolith", "public", "pandora_functional_test")
+            BigQuery: return ("my-project", "my_dataset", "pandora_functional_test")
+        """
+        raise NotImplementedError
+
+    def create_test_table_template(self) -> str:
+        """Return a Jinja template string that creates the test table.
+
+        Jinja variables:
+            database (str): Database name from get_test_table_identifier().
+            schema (str): Schema name from get_test_table_identifier().
+            table (str): Table name from get_test_table_identifier().
+
+        Examples:
+            Snowflake: "CREATE TABLE {{ database }}.{{ schema }}.{{ table }} (id INT AUTOINCREMENT, value VARCHAR)"
+            PostgreSQL: "CREATE TABLE {{ schema }}.{{ table }} (id SERIAL PRIMARY KEY, value TEXT)"
+            BigQuery: "CREATE TABLE `{{ database }}.{{ schema }}.{{ table }}` (id INT64, value STRING)"
+
+        Enables: functional validation tests
+        """
+        raise NotImplementedError
+
+    def insert_rows_template(self) -> str:
+        """Return a Jinja template string that inserts rows into the test table.
+
+        Jinja variables:
+            database (str): Database name from get_test_table_identifier().
+            schema (str): Schema name from get_test_table_identifier().
+            table (str): Table name from get_test_table_identifier().
+            num_rows (int): Number of rows to insert.
+
+        Examples:
+            Snowflake: "INSERT INTO {{ database }}.{{ schema }}.{{ table }} (value) SELECT 'row_' || SEQ4() FROM TABLE(GENERATOR(ROWCOUNT => {{ num_rows }}))"
+            PostgreSQL: "INSERT INTO {{ schema }}.{{ table }} (value) SELECT 'row_' || g FROM generate_series(1, {{ num_rows }}) g"
+            BigQuery: "INSERT INTO `{{ database }}.{{ schema }}.{{ table }}` (value) SELECT CONCAT('row_', CAST(n AS STRING)) FROM UNNEST(GENERATE_ARRAY(1, {{ num_rows }})) n"
+
+        Enables: functional validation tests (volume, freshness)
+        """
+        raise NotImplementedError
+
+    def add_column_template(self) -> str:
+        """Return a Jinja template string that adds a column to the test table.
+
+        Jinja variables:
+            database (str): Database name from get_test_table_identifier().
+            schema (str): Schema name from get_test_table_identifier().
+            table (str): Table name from get_test_table_identifier().
+            column_name (str): Name of the column to add.
+            column_type (str): SQL data type for the new column.
+
+        Examples:
+            Snowflake: "ALTER TABLE {{ database }}.{{ schema }}.{{ table }} ADD COLUMN {{ column_name }} {{ column_type }}"
+            PostgreSQL: "ALTER TABLE {{ schema }}.{{ table }} ADD COLUMN {{ column_name }} {{ column_type }}"
+            BigQuery: "ALTER TABLE `{{ database }}.{{ schema }}.{{ table }}` ADD COLUMN {{ column_name }} {{ column_type }}"
+
+        Enables: functional validation tests (schema change)
+        """
+        raise NotImplementedError
+
+    def drop_test_table_template(self) -> str:
+        """Return a Jinja template string that drops the test table.
+
+        Use IF EXISTS to avoid errors when the table does not exist.
+
+        Jinja variables:
+            database (str): Database name from get_test_table_identifier().
+            schema (str): Schema name from get_test_table_identifier().
+            table (str): Table name from get_test_table_identifier().
+
+        Examples:
+            Snowflake: "DROP TABLE IF EXISTS {{ database }}.{{ schema }}.{{ table }}"
+            PostgreSQL: "DROP TABLE IF EXISTS {{ schema }}.{{ table }}"
+            BigQuery: "DROP TABLE IF EXISTS `{{ database }}.{{ schema }}.{{ table }}`"
+
+        Enables: functional validation tests (cleanup)
+        """
+        raise NotImplementedError
+
+    def create_lineage_query_template(self) -> str:
+        """Return a Jinja template string for a SELECT query that should appear in query logs.
+
+        Jinja variables:
+            database (str): Database name from get_test_table_identifier().
+            schema (str): Schema name from get_test_table_identifier().
+            table (str): Table name from get_test_table_identifier().
+
+        Examples:
+            Snowflake: "SELECT * FROM {{ database }}.{{ schema }}.{{ table }} WHERE 1=0"
+            PostgreSQL: "SELECT * FROM {{ schema }}.{{ table }} WHERE 1=0"
+            BigQuery: "SELECT * FROM `{{ database }}.{{ schema }}.{{ table }}` WHERE 1=0"
+
+        Enables: functional validation tests (query log capture)
+        """
+        raise NotImplementedError
