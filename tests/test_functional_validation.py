@@ -25,14 +25,24 @@ def render_functional(templates, template_method, functional_ops, **extra) -> st
     return templates.render_template(template_method, **kwargs)
 
 
-def collect_metadata(integration, templates, database, schemas) -> List[MetadataSchema]:
-    """Run the get_tables_query_template and return parsed MetadataSchema rows."""
-    query = templates.render_template(
-        templates.get_tables_query_template,
+def collect_metadata(integration, templates, database, schemas, table_names=None) -> List[MetadataSchema]:
+    """Run the get_tables_query_template and return parsed MetadataSchema rows.
+
+    Args:
+        table_names: Optional comma-separated, quoted table names to filter by.
+            Format: "'table1', 'table2'". When None, all tables in the schemas are returned.
+    """
+    render_kwargs = dict(
         database_name=database,
         schemas=schemas,
         offset=0,
         limit=5000,
+    )
+    if table_names is not None:
+        render_kwargs["table_names"] = table_names
+    query = templates.render_template(
+        templates.get_tables_query_template,
+        **render_kwargs,
     )
     results = integration.execute_and_fetch_all(query)
     return [MetadataSchema(*row) for row in results]
@@ -89,6 +99,11 @@ def schemas_param(functional_ops) -> str:
     return f"'{table_vars(functional_ops)['schema']}'"
 
 
+def table_names_param(functional_ops) -> str:
+    """Build the table_names parameter for filtering to just the test table."""
+    return f"'{table_vars(functional_ops)['table']}'"
+
+
 #############################################
 # Fixtures
 #############################################
@@ -123,7 +138,7 @@ class TestTableDiscovery:
 
         # Ensure table does not exist
         integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        before = collect_metadata(integration, templates, tv["database"], schemas)
+        before = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
         assert find_test_table(before, functional_ops) is None, (
             f"Test table {tv['table']} already appears in metadata "
             f"before creation. Drop it manually or check your drop_test_table_template()."
@@ -132,7 +147,7 @@ class TestTableDiscovery:
         # Create and verify
         integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
-            after = collect_metadata(integration, templates, tv["database"], schemas)
+            after = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             found = find_test_table(after, functional_ops)
             assert found is not None, (
                 f"Table {tv['table']} was not discovered after creation. "
@@ -150,7 +165,7 @@ class TestTableDiscovery:
 
         # Create table and verify it appears
         integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
-        before = collect_metadata(integration, templates, tv["database"], schemas)
+        before = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
         assert find_test_table(before, functional_ops) is not None, (
             f"Table {tv['table']} was not found after creation. "
             f"Cannot test drop behavior."
@@ -158,7 +173,7 @@ class TestTableDiscovery:
 
         # Drop and verify
         integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        after = collect_metadata(integration, templates, tv["database"], schemas)
+        after = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
         assert find_test_table(after, functional_ops) is None, (
             f"Table {tv['table']} still appears in metadata after being dropped. "
             f"Your get_tables_query_template() may be reading from a stale catalog or cache."
@@ -176,7 +191,7 @@ class TestVolumeAndFreshness:
         integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
         integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
-            before_metadata = collect_metadata(integration, templates, tv["database"], schemas)
+            before_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             before_table = find_test_table(before_metadata, functional_ops)
             assert before_table is not None, (
                 f"Test table {tv['table']} not found in metadata after creation."
@@ -194,7 +209,7 @@ class TestVolumeAndFreshness:
                 templates, templates.insert_rows_template, functional_ops, num_rows=num_rows,
             ))
 
-            after_metadata = collect_metadata(integration, templates, tv["database"], schemas)
+            after_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             after_table = find_test_table(after_metadata, functional_ops)
             assert after_table is not None, "Test table disappeared from metadata after insert."
             after_count = after_table.row_count
@@ -218,7 +233,7 @@ class TestVolumeAndFreshness:
         integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
         integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
-            before_metadata = collect_metadata(integration, templates, tv["database"], schemas)
+            before_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             before_table = find_test_table(before_metadata, functional_ops)
             assert before_table is not None, (
                 f"Test table {tv['table']} not found in metadata after creation."
@@ -236,7 +251,7 @@ class TestVolumeAndFreshness:
                 templates, templates.insert_rows_template, functional_ops, num_rows=num_rows,
             ))
 
-            after_metadata = collect_metadata(integration, templates, tv["database"], schemas)
+            after_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             after_table = find_test_table(after_metadata, functional_ops)
             assert after_table is not None, "Test table disappeared from metadata after insert."
             after_bytes = after_table.byte_count
@@ -260,7 +275,7 @@ class TestVolumeAndFreshness:
         integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
         integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
-            before_metadata = collect_metadata(integration, templates, tv["database"], schemas)
+            before_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             before_table = find_test_table(before_metadata, functional_ops)
             assert before_table is not None, (
                 f"Test table {tv['table']} not found in metadata after creation."
@@ -280,7 +295,7 @@ class TestVolumeAndFreshness:
                 templates, templates.insert_rows_template, functional_ops, num_rows=5,
             ))
 
-            after_metadata = collect_metadata(integration, templates, tv["database"], schemas)
+            after_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             after_table = find_test_table(after_metadata, functional_ops)
             assert after_table is not None, "Test table disappeared from metadata after insert."
             after_time = after_table.last_update_time

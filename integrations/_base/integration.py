@@ -144,15 +144,19 @@ class MetadataQueryTemplates:
             schemas (str): Comma-separated, quoted schema names.
             offset (int): Row offset for pagination.
             limit (int): Maximum rows to return.
+            table_names (str, optional): Comma-separated, quoted table names to filter by.
+                When provided, only tables matching these names are returned.
+                Format matches schemas: "'table1', 'table2'"
+                Use Jinja conditional: {% if table_names is defined and table_names %}AND table_name IN ({{ table_names }}){% endif %}
 
         Returns columns: database_name, schema_name, table_name, table_type,
             row_count (optional), byte_count (optional), last_update_time (optional),
             view_query (optional)
 
         Examples:
-            Snowflake: "SELECT ... FROM {{ database_name }}.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ({{ schemas }}) LIMIT {{ limit }} OFFSET {{ offset }}"
-            PostgreSQL: "SELECT ... FROM information_schema.tables WHERE table_schema IN ({{ schemas }}) LIMIT {{ limit }} OFFSET {{ offset }}"
-            BigQuery: "SELECT ... FROM `{{ database_name }}`.INFORMATION_SCHEMA.TABLES WHERE table_schema IN ({{ schemas }}) LIMIT {{ limit }} OFFSET {{ offset }}"
+            Snowflake: "SELECT ... FROM {{ database_name }}.INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ({{ schemas }}) {% if table_names is defined and table_names %}AND TABLE_NAME IN ({{ table_names }}){% endif %} LIMIT {{ limit }} OFFSET {{ offset }}"
+            PostgreSQL: "SELECT ... FROM information_schema.tables WHERE table_schema IN ({{ schemas }}) {% if table_names is defined and table_names %}AND table_name IN ({{ table_names }}){% endif %} LIMIT {{ limit }} OFFSET {{ offset }}"
+            BigQuery: "SELECT ... FROM `{{ database_name }}`.INFORMATION_SCHEMA.TABLES WHERE table_schema IN ({{ schemas }}) {% if table_names is defined and table_names %}AND table_name IN ({{ table_names }}){% endif %} LIMIT {{ limit }} OFFSET {{ offset }}"
 
         Enables: table discovery, volume rows, volume bytes, freshness
         """
