@@ -164,6 +164,42 @@ def test_fetch_tables_and_views(integration, database, schemas, tables):
     assert tables, f"Failed to fetch tables for database {database} and schemas {', '.join(schemas)}"
 
 
+@pytest.mark.template(
+    file="fetch_tables_query.sql.j2",
+    fixture="integration",
+    func="get_tables_query_template"
+)
+@pytest.mark.capability("supports_metadata")
+def test_fetch_tables_with_table_names_filter(integration, templates, database, schemas, tables):
+    """Verify that providing table_names filters results to only those tables."""
+    sample_tables = tables[:3]
+    assert len(sample_tables) > 0, "Need at least one table to test table_names filter"
+
+    table_names_param = ", ".join([f"'{t.table_name}'" for t in sample_tables])
+    schemas_param = ", ".join([f"'{sch}'" for sch in schemas])
+
+    query = templates.render_template(
+        templates.get_tables_query_template,
+        database_name=database,
+        schemas=schemas_param,
+        table_names=table_names_param,
+        offset=0,
+        limit=5000,
+    )
+    results = integration.execute_and_fetch_all(query)
+
+    expected_names = {t.table_name.lower() for t in sample_tables}
+    returned_names = set()
+    for row in results:
+        parsed = MetadataSchema(*row)
+        returned_names.add(parsed.table_name.lower())
+
+    assert returned_names == expected_names, (
+        f"table_names filter did not return the expected tables. "
+        f"Expected: {sorted(expected_names)}, Got: {sorted(returned_names)}"
+    )
+
+
 @pytest.mark.capability("supports_volume_rows")
 def test_volume_rows(tables):
     supports_rows = any(
