@@ -18,10 +18,6 @@ Read these files to understand the current state:
 2. `integrations/<name>/requirements.txt` — currently empty
 3. `integrations/<name>/.env` — currently empty
 
-Also read the reference implementations for patterns:
-- `integrations/postgres/integration.py` (lines 1-78) — PostgreSQL connection pattern
-- `integrations/teradata/integration.py` (lines 1-33) — Teradata connection pattern
-
 ## Step 2: Research the database driver
 
 Use web search to find the correct Python database driver for this database. Look for:

@@ -31,8 +31,6 @@ Read all of these before writing any code:
 
 1. `integrations/<name>/integration.py` — the file you'll be editing
 2. `integrations/_base/integration.py` — the base template with all docstrings (this is your API reference)
-3. `integrations/postgres/integration.py` — PostgreSQL reference implementation
-4. `integrations/teradata/integration.py` — Teradata reference implementation (different SQL dialect, good contrast)
 
 Understand the database dialect you're implementing for. Use web search if you need to look up SQL syntax for this database.
 
