@@ -8,29 +8,23 @@ Supports multiple integrations side by side so you can build and test several at
 
 An AI coding agent can implement all the template methods after you set up the database connection. This splits the work: you handle credentials and connectivity, the agent handles the ~100 template methods.
 
-### What you do first
+### Recommended: Claude Code skills
 
-Complete steps 1–6 of Quick Start below:
+The repo includes five skills that automate the full workflow end-to-end:
 
-1. Create the integration scaffold
-2. Add your database driver to `requirements.txt`
-3. Configure credentials in `.env`
-4. Implement `credential_env_vars`, `create_connection`, and `create_cursor` in `integration.py`
-5. Build the Docker image
-6. Verify connection tests pass (`-m connection`)
+| Step | Skill | What it does |
+|------|-------|-------------|
+| 1 | `/create-integration <name>` | Scaffold a new integration directory |
+| 2 | `/setup-connection <name>` | Install driver, implement connection methods, stub `.env` — **pauses for you to fill in credentials** |
+| 3 | `/implement-integration <name> [hybrid]` | Implement all template methods section by section |
+| 4 | `/build-agent-image <name> --agent-type TYPE [--mode MODE]` | Export capabilities and build deployable Docker image |
+| — | `/export-qlbase <name>` | *(Optional)* Convert Jinja templates to monolith QLBase class |
 
-### Hand off to the agent
+The only manual step is filling in `.env` credentials when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
 
-Provide `AGENTS.md` as context to your LLM along with the integration name. The agent will:
+### Fallback: Other AI agents
 
-- Implement the remaining `BaseIntegration` methods (`execute_query`, `fetch_all_results`, `close_connection`)
-- Implement all four template classes (or a subset for hybrid mode)
-- Run tests iteratively and fix failures
-- Export `capabilities.json` when all tests pass
-
-### Resume at step 9
-
-Once the agent finishes, pick back up at step 9 (Build a deployable agent image) to package and deploy your integration.
+If you're not using Claude Code, complete steps 1–6 of Quick Start below to set up connectivity, then provide `AGENTS.md` as context to your LLM along with the integration name. The agent will implement all remaining template methods, run tests iteratively, and export capabilities. Resume at step 9 to build the deployable image.
 
 ## Quick Start
 
@@ -48,7 +42,7 @@ This creates `integrations/<name>/` with:
 
 ### 2. Implement the integration classes
 
-Edit `integrations/<name>/integration.py` and fill in the five base classes:
+Edit `integrations/<name>/integration.py` and fill in the base classes:
 
 | Class | Purpose |
 |-------|---------|
@@ -278,6 +272,13 @@ custom-integration-setup/
     test_ql_prerequisites.py              # Prerequisite templates for metric monitors
     test_ql_metrics.py                    # Metric-specific templates (AVG, STDDEV, LENGTH, regexp, etc.)
     test_functional_validation.py         # Functional validation tests (real-time metadata accuracy)
+  .claude/
+    skills/                               # Claude Code automation skills
+      create-integration/SKILL.md
+      setup-connection/SKILL.md
+      implement-integration/SKILL.md
+      build-agent-image/SKILL.md
+      export-qlbase/SKILL.md
   AGENTS.md                               # Instructions for AI coding agents
   pytest.toml                             # Pytest configuration and markers
   requirements.txt                        # Shared Python dependencies
