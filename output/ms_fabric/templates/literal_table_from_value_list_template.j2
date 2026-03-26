@@ -1,0 +1,1 @@
+SELECT val AS value FROM (VALUES ({{ values | join('), (') }})) AS t(val)

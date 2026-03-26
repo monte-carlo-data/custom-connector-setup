@@ -1,0 +1,1 @@
+SELECT {{ name_column }}, {{ value_column }} FROM ({{ query }}) AS _src UNPIVOT ({{ value_column }} FOR {{ name_column }} IN ({{ columns | join(', ') }})) AS _unpivoted

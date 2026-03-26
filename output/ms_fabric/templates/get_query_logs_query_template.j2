@@ -1,0 +1,1 @@
+SELECT login_name, submit_time AS start_time, end_time, distributed_statement_id AS query_id, command AS query_text, status FROM queryinsights.exec_requests_history WHERE submit_time >= '{{ start_time.strftime('%Y-%m-%d %H:%M:%S') }}' AND submit_time < '{{ end_time.strftime('%Y-%m-%d %H:%M:%S') }}' ORDER BY submit_time OFFSET {{ offset }} ROWS FETCH NEXT {{ limit }} ROWS ONLY
