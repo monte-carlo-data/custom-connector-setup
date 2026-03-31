@@ -196,21 +196,38 @@ class QueryLogCollectionTemplates:
             limit (int): Maximum number of rows to return per page.
             offset (int): Number of rows to skip for pagination.
 
+        Expected output columns (in order):
+            query_id (str): Unique identifier for the query. **Required.**
+            start_time (datetime): When the query started executing. **Required.**
+            end_time (datetime): When the query finished executing. **Required.**
+            query_text (str): The SQL text of the query. **Required.**
+            user (str): The user who executed the query. Optional.
+            error_code (str): Error code if the query failed. Optional.
+            error_text (str): Error message if the query failed. Optional.
+            returned_rows (int): Number of rows returned by the query. Optional.
+
         Examples:
             Snowflake:
-                "SELECT ... FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+                "SELECT QUERY_ID, START_TIME, END_TIME, QUERY_TEXT,
+                        USER_NAME, ERROR_CODE, ERROR_MESSAGE, ROWS_PRODUCED
+                 FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
                  WHERE START_TIME >= '{{ start_time }}' AND START_TIME < '{{ end_time }}'
                  ORDER BY START_TIME
                  LIMIT {{ limit }} OFFSET {{ offset }}"
 
             PostgreSQL:
-                "SELECT ... FROM pg_stat_activity
+                "SELECT query_id, query_start, query_end, query,
+                        usename, sqlstate, NULL, NULL
+                 FROM pg_stat_activity
                  WHERE query_start >= '{{ start_time }}' AND query_start < '{{ end_time }}'
                  ORDER BY query_start
                  LIMIT {{ limit }} OFFSET {{ offset }}"
 
             BigQuery:
-                "SELECT ... FROM `region-us`.INFORMATION_SCHEMA.JOBS
+                "SELECT job_id, creation_time, end_time, query,
+                        user_email, error_result.reason, error_result.message,
+                        total_rows
+                 FROM `region-us`.INFORMATION_SCHEMA.JOBS
                  WHERE creation_time >= '{{ start_time }}' AND creation_time < '{{ end_time }}'
                  ORDER BY creation_time
                  LIMIT {{ limit }} OFFSET {{ offset }}"

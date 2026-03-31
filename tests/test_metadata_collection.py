@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, UTC, timedelta
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import pytest
@@ -48,6 +48,19 @@ class ParsedMCON:
 class SchemaItem(DataClassJsonMixin):
     name: str
     type: str
+
+
+@dataclass
+class PluginQueryLog(DataClassJsonMixin):
+    query_id: str
+    start_time: datetime
+    end_time: datetime
+    query_text: str
+    user: Optional[str] = None
+    error_code: Optional[str] = None
+    error_text: Optional[str] = None
+    returned_rows: Optional[int] = None
+    extra: Dict[str, Optional[Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -243,17 +256,23 @@ def test_fetch_columns(integration, templates, database, tables):
         database_name=database
     )
     results = integration.execute_and_fetch_all(query)
+    assert len(results) > 0, "No columns returned — check that full_table_id format matches between get_tables and get_columns templates"
 
+    matched_table_ids = set()
     for res in results:
         table_name, col_name, col_type = res
         assert isinstance(table_name, str), f"Fetching columns returned a table_name that is not a string. Table: {table_name}, Column_name: {col_name}, Column_type: {col_type}"
         assert isinstance(col_name, str), f"Fetching columns returned a column name that is not a string. Table: {table_name}, Column_name: {col_name}, Column_type: {col_type}"
         assert isinstance(col_type, str), f"Fetching columns returned a column type that is not a string. Table: {table_name}, Column_name: {col_name}, Column_type: {col_type}"
         table = next((t for t in tables if t.full_table_id == table_name), None)
-        if table:
-            if not table.schema:
-                table.schema = []
-            table.schema.append(SchemaItem(name=col_name, type=col_type))
+        assert table is not None, (
+            f"Column result full_table_id '{table_name}' did not match any table from get_tables. "
+            f"Expected one of: {[t.full_table_id for t in tables[:5]]}"
+        )
+        matched_table_ids.add(table_name)
+        if not table.schema:
+            table.schema = []
+        table.schema.append(SchemaItem(name=col_name, type=col_type))
 
 
 #############################################
@@ -279,3 +298,42 @@ def test_get_query_logs(integration, templates):
     )
     results = integration.execute_and_fetch_all(query)
     assert len(results) > 0, f"No query logs retrieved from {start_time} to {end_time}"
+
+    for row in results:
+        assert len(row) >= 4, (
+            f"Query log row must have at least 4 columns "
+            f"(query_id, start_time, end_time, query_text), got {len(row)}"
+        )
+        log = PluginQueryLog(*row[:8])
+
+        # Required fields
+        assert isinstance(log.query_id, str), (
+            f"query_id should be a str but got {type(log.query_id)}"
+        )
+        assert isinstance(log.start_time, datetime), (
+            f"start_time should be a datetime but got {type(log.start_time)}"
+        )
+        assert isinstance(log.end_time, datetime), (
+            f"end_time should be a datetime but got {type(log.end_time)}"
+        )
+        assert isinstance(log.query_text, str), (
+            f"query_text should be a str but got {type(log.query_text)}"
+        )
+
+        # Optional fields
+        if log.user is not None:
+            assert isinstance(log.user, str), (
+                f"user should be a str but got {type(log.user)}"
+            )
+        if log.error_code is not None:
+            assert isinstance(log.error_code, str), (
+                f"error_code should be a str but got {type(log.error_code)}"
+            )
+        if log.error_text is not None:
+            assert isinstance(log.error_text, str), (
+                f"error_text should be a str but got {type(log.error_text)}"
+            )
+        if log.returned_rows is not None:
+            assert isinstance(log.returned_rows, int), (
+                f"returned_rows should be an int but got {type(log.returned_rows)}"
+            )
