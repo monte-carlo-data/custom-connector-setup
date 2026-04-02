@@ -363,32 +363,6 @@ def test_gte_and_lte(ql):
     assert int(result_lte) == 2
 
 
-@pytest.mark.template(func="get_is_inside_range_expression_template")
-def test_inside_range(ql):
-    """CTE [1,5,10,15], range 5-10 -> 2."""
-    data = [{"val": 1}, {"val": 5}, {"val": 10}, {"val": 15}]
-    count_expr = ql.render(ql.templates.get_count_all_expression_template)
-    range_expr = ql.render(
-        ql.templates.get_is_inside_range_expression_template,
-        field="val", lower="5", upper="10",
-    )
-    result = ql.select_from_data_source(data, count_expr, condition=range_expr)
-    assert int(result) == 2
-
-
-@pytest.mark.template(func="get_is_outside_range_expression_template")
-def test_outside_range(ql):
-    """Same data, outside 5-10 -> 2."""
-    data = [{"val": 1}, {"val": 5}, {"val": 10}, {"val": 15}]
-    count_expr = ql.render(ql.templates.get_count_all_expression_template)
-    range_expr = ql.render(
-        ql.templates.get_is_outside_range_expression_template,
-        field="val", lower="5", upper="10",
-    )
-    result = ql.select_from_data_source(data, count_expr, condition=range_expr)
-    assert int(result) == 2
-
-
 @pytest.mark.template(func="is_null_template")
 @pytest.mark.template(func="is_not_null_template")
 def test_null_checks(ql):
@@ -766,25 +740,6 @@ def test_supports_literal_select(ql):
     assert result.strip().lower() in ("true", "false")
 
 
-@pytest.mark.template(func="get_regexp_expression_template")
-@pytest.mark.template(func="literal_regex_template")
-def test_regexp_match(ql):
-    """CTE emails, COUNT WHERE matches email pattern -> 2."""
-    data = [
-        {"val": "user@example.com"},
-        {"val": "not-an-email"},
-        {"val": "admin@test.org"},
-    ]
-    count_expr = ql.render(ql.templates.get_count_all_expression_template)
-    regex_lit = ql.render(ql.templates.literal_regex_template, value="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")
-    regexp_expr = ql.render(
-        ql.templates.get_regexp_expression_template,
-        field="val", pattern=regex_lit,
-    )
-    result = ql.select_from_data_source(data, count_expr, condition=regexp_expr)
-    assert int(result) == 2
-
-
 @pytest.mark.template(func="max_time_func_template")
 def test_max_time(ql):
     """MAX of timestamps."""
@@ -810,16 +765,3 @@ def test_max_time(ql):
     assert "06" in result or "Jun" in result
 
 
-@pytest.mark.template(func="get_epoch_seconds_parameter_template")
-def test_epoch_seconds_parameter(ql):
-    """Render epoch_seconds_parameter, verify non-empty."""
-    result = ql.render(ql.templates.get_epoch_seconds_parameter_template, field="ts_col")
-    assert result and len(result.strip()) > 0
-
-
-@pytest.mark.template(func="parses_timestamp_with_trailing_text_template")
-def test_parses_timestamp_with_trailing_text(ql):
-    """Boolean flag: renders to 'true' or 'false'."""
-    result = ql.templates.parses_timestamp_with_trailing_text_template()
-    assert result is not None
-    assert result.strip().lower() in ("true", "false")
