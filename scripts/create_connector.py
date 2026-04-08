@@ -44,8 +44,8 @@ def main():
     )
 
     # Generate manifest.json with unique connector type
-    connector_type = f"custom-connector-{secrets.token_hex(4)[:7]}"
-    manifest = {"connector_type": connector_type, "name": name}
+    connection_type = f"custom-connector-{secrets.token_hex(4)[:7]}"
+    manifest = {"connection_type": connection_type, "name": name}
     with open(os.path.join(target_dir, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=2)
         f.write("\n")
@@ -59,7 +59,7 @@ def main():
         f.write("# Add your database driver here, e.g.:\n# psycopg2-binary==2.9.9\n")
 
     print(f"Created connector '{name}' at connectors/{name}/")
-    print(f"  connector_type: {connector_type}")
+    print(f"  connection_type: {connection_type}")
     print()
     print("Next steps:")
     print(f"  1. Edit connectors/{name}/connector.py    — fill in the stubs")

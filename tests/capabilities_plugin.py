@@ -273,14 +273,14 @@ def pytest_sessionfinish(session, exitstatus):
     # Resolve connector name (set by conftest._get_connector)
     connector_name = getattr(session.config, "_connector_name", None)
 
-    # Read connector_type from manifest.json
-    connector_type = None
+    # Read connection_type from manifest.json
+    connection_type = None
     if connector_name:
         manifest_path = os.path.join(root, "connectors", connector_name, "manifest.json")
         if os.path.exists(manifest_path):
             with open(manifest_path) as f:
                 manifest = json.load(f)
-                connector_type = manifest.get("connector_type")
+                connection_type = manifest.get("connection_type")
 
     # Fill in defaults for capabilities not set by markers
     for cap in ALL_CAPABILITIES:
@@ -304,8 +304,8 @@ def pytest_sessionfinish(session, exitstatus):
         "capabilities": results["capabilities"],
         "metrics": metrics,
     }
-    if connector_type:
-        output["connector_type"] = connector_type
+    if connection_type:
+        output["connection_type"] = connection_type
 
     # Write capabilities.json
     if connector_name:
