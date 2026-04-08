@@ -1,7 +1,7 @@
 ---
 name: build-agent-image
-description: Export capabilities and build a custom agent Docker image for an integration
-argument-hint: <integration-name> [--agent-type TYPE] [--mode MODE]
+description: Export capabilities and build a custom agent Docker image for a connector
+argument-hint: <connector-name> [--agent-type TYPE] [--mode MODE]
 disable-model-invocation: true
 ---
 
@@ -10,20 +10,20 @@ disable-model-invocation: true
 ## Arguments
 
 `$ARGUMENTS` contains:
-- `integration_name` (required): e.g., `postgres`, `snowflake`
+- `connector_name` (required): e.g., `postgres`, `snowflake`
 - `--agent-type TYPE` (optional): one of `aws-generic`, `aws-proxied`, `azure`, `cloudrun`, `lambda`. Default: `aws-generic`
 - `--mode MODE` (optional): `full` or `hybrid`. Default: `full`
 
-Parse any flags from `$ARGUMENTS`. Anything not prefixed with `--` is the integration name.
+Parse any flags from `$ARGUMENTS`. Anything not prefixed with `--` is the connector name.
 
-## Step 1: Verify integration files exist
+## Step 1: Verify connector files exist
 
 Check that these files exist:
-- `integrations/<name>/integration.py`
-- `integrations/<name>/manifest.json`
-- `integrations/<name>/requirements.txt`
+- `connectors/<name>/connector.py`
+- `connectors/<name>/manifest.json`
+- `connectors/<name>/requirements.txt`
 
-If any are missing, stop and tell the user to run `/create-integration <name>` first.
+If any are missing, stop and tell the user to run `/create-connector <name>` first.
 
 ## Step 2: Check for existing export
 
@@ -42,10 +42,10 @@ ls output/<name>/capabilities.json 2>/dev/null
 Run the full test suite with `--export`:
 
 ```bash
-INTEGRATION=<name> docker compose run --rm test --export
+CONNECTOR=<name> docker compose run --rm test --export
 ```
 
-This generates `output/<name>/capabilities.json` and `output/<name>/templates/`. If tests fail, report the failures and stop — the integration needs fixing before an image can be built.
+This generates `output/<name>/capabilities.json` and `output/<name>/templates/`. If tests fail, report the failures and stop — the connector needs fixing before an image can be built.
 
 ## Step 4: Build the Docker image
 
@@ -54,7 +54,7 @@ Run the image generator. Use `echo y |` to auto-accept the metric warning prompt
 ```bash
 echo y | python scripts/generate_agent_image.py \
   --agent-type <agent-type> \
-  --integration <name> \
+  --connector <name> \
   --mode <mode>
 ```
 
@@ -66,7 +66,7 @@ Where:
 
 **If the build succeeds**, report:
 - The image tag (e.g., `custom-agent:latest-aws-generic`)
-- Verification command: `docker run --rm --entrypoint ls <tag> /opt/custom-integrations/`
+- Verification command: `docker run --rm --entrypoint ls <tag> /opt/custom-connectors/`
 - Push instructions:
   ```
   docker tag <tag> <your-registry>/<tag>

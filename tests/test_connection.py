@@ -3,11 +3,11 @@ import pytest
 pytestmark = [pytest.mark.connection]
 
 
-def test_create_connection(integration):
+def test_create_connection(connector):
     """Test that a database connection can be established."""
-    assert integration.connection is not None, "Failed to create a connection to the database."
+    assert connector.connection is not None, "Failed to create a connection to the database."
 
 
-def test_create_cursor(integration):
+def test_create_cursor(connector):
     """Test that a cursor can be created from the connection."""
-    assert integration.cursor is not None, "Failed to create a cursor from the connection."
+    assert connector.cursor is not None, "Failed to create a cursor from the connection."

@@ -1,26 +1,26 @@
 ---
 name: export-qlbase
 description: Convert completed pandora-setup Jinja templates into a monolith-compatible QLBase Python class
-argument-hint: <integration-name> [monolith-path]
+argument-hint: <connector-name> [monolith-path]
 disable-model-invocation: true
 ---
 
 # Export QLBase: Convert Pandora Jinja Templates → Monolith QLBase Class
 
-You are converting a completed pandora-setup integration's Jinja template methods into a monolith-compatible `QLBase` subclass (Python methods).
+You are converting a completed pandora-setup connector's Jinja template methods into a monolith-compatible `QLBase` subclass (Python methods).
 
 ## Arguments
 
-`$ARGUMENTS` contains the integration name, and optionally a custom monolith path.
+`$ARGUMENTS` contains the connector name, and optionally a custom monolith path.
 
-Parse like: `<integration_name> [monolith_path]`
-- `integration_name` (required): e.g., `teradata`, `postgres`
+Parse like: `<connector_name> [monolith_path]`
+- `connector_name` (required): e.g., `teradata`, `postgres`
 - `monolith_path` (optional): defaults to `~/repos/monolith-django`
 
 ## Step 1: Read Source Files
 
 Read these files:
-1. **Pandora integration**: `integrations/$0/integration.py` — the source Jinja templates
+1. **Pandora connector**: `connectors/$0/connector.py` — the source Jinja templates
 2. **Monolith QLBase**: `$1/monolith/metrics/query_language/base.py` (or `~/repos/monolith-django/monolith/metrics/query_language/base.py` if no second arg) — the target interface
 3. **Monolith PostgresQL**: same directory `postgres.py` — a reference implementation showing the pattern
 
@@ -28,7 +28,7 @@ Examine every method in the pandora `QueryLanguageTemplates` class and the `Cust
 
 ## Step 2: Convert Templates to Python
 
-Generate a class `<IntegrationName>QL(QLBase)` (e.g., `TeradataQL`, `PostgresQL`).
+Generate a class `<ConnectorName>QL(QLBase)` (e.g., `TeradataQL`, `PostgresQL`).
 
 ### Conversion Rules
 
@@ -149,7 +149,7 @@ Write the generated class to `output/$0/qlbase.py`.
 ### File structure:
 ```python
 """
-Auto-generated QLBase class for <integration_name>.
+Auto-generated QLBase class for <connector_name>.
 
 Converted from pandora-setup Jinja templates to monolith-compatible Python.
 Review TODOs before using in production.
@@ -164,7 +164,7 @@ from montecarlodata_common.mcon import ParsedMCON
 from monolith.metrics.query_language.base import QLBase
 from monolith.metrics.query_language.fields import FieldsUtil
 
-class <IntegrationName>QL(QLBase):
+class <ConnectorName>QL(QLBase):
     # ... class-level constants (truncation dicts, cast dicts) ...
     # ... property implementations ...
     # ... method implementations ...

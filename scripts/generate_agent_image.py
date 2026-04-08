@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build a custom agent Docker image with integration artifacts.
+"""Build a custom agent Docker image with connector artifacts.
 
 Usage:
     python scripts/generate_agent_image.py --agent-type aws-generic
     python scripts/generate_agent_image.py --agent-type lambda --version 1.4.12
-    python scripts/generate_agent_image.py --agent-type azure --integration postgres --integration teradata
+    python scripts/generate_agent_image.py --agent-type azure --connector postgres --connector teradata
 
 Hybrid mode (metadata pushed externally — only metric monitor support required):
     python scripts/generate_agent_image.py --agent-type aws-generic --mode hybrid
@@ -20,14 +20,14 @@ import tempfile
 VALID_AGENT_TYPES = ["aws-generic", "aws-proxied", "azure", "cloudrun", "lambda"]
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INTEGRATIONS_DIR = os.path.join(REPO_ROOT, "integrations")
+CONNECTORS_DIR = os.path.join(REPO_ROOT, "connectors")
 OUTPUT_DIR = os.path.join(REPO_ROOT, "output")
 
-REQUIRED_SOURCE_FILES = ["integration.py", "manifest.json", "requirements.txt"]
+REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
 
 
-def discover_integrations():
-    """Return integration names that have output directories."""
+def discover_connectors():
+    """Return connector names that have output directories."""
     if not os.path.isdir(OUTPUT_DIR):
         return []
     return sorted(
@@ -37,8 +37,8 @@ def discover_integrations():
     )
 
 
-def validate_integration(name, mode="full"):
-    """Validate that an integration has all required artifacts. Returns list of errors."""
+def validate_connector(name, mode="full"):
+    """Validate that a connector has all required artifacts. Returns list of errors."""
     errors = []
 
     capabilities_path = os.path.join(OUTPUT_DIR, name, "capabilities.json")
@@ -68,9 +68,9 @@ def validate_integration(name, mode="full"):
         errors.append(f"  - Missing or empty output/{name}/templates/")
 
     for filename in REQUIRED_SOURCE_FILES:
-        path = os.path.join(INTEGRATIONS_DIR, name, filename)
+        path = os.path.join(CONNECTORS_DIR, name, filename)
         if not os.path.isfile(path):
-            errors.append(f"  - Missing integrations/{name}/{filename}")
+            errors.append(f"  - Missing connectors/{name}/{filename}")
 
     return errors
 
@@ -97,36 +97,36 @@ def check_metric_warnings(name):
         for metric in passing_metrics:
             lines.append(f"      - {metric}")
         lines.append(f"    Re-run tests to see which prerequisite templates are failing:")
-        lines.append(f"      INTEGRATION={name} docker compose run --rm test -m ql_prerequisites")
+        lines.append(f"      CONNECTOR={name} docker compose run --rm test -m ql_prerequisites")
         return "\n".join(lines)
     return None
 
 
-def generate_dockerfile(integrations, version, agent_type, base_image=None):
+def generate_dockerfile(connectors, version, agent_type, base_image=None):
     """Generate Dockerfile contents for the custom agent image."""
     from_image = base_image or f"montecarlodata/agent:{version}-{agent_type}"
-    lines = [f"FROM {from_image}", "", "ENV MCD_CUSTOM_INTEGRATIONS_ENABLED=true", ""]
+    lines = [f"FROM {from_image}", "", "ENV MCD_CUSTOM_CONNECTORS_ENABLED=true", ""]
 
-    for name in integrations:
-        lines.append(f"# Integration: {name}")
-        lines.append(f"COPY custom-integrations/{name}/ /opt/custom-integrations/{name}/")
+    for name in connectors:
+        lines.append(f"# Connector: {name}")
+        lines.append(f"COPY custom-connectors/{name}/ /opt/custom-connectors/{name}/")
         lines.append(
-            f"RUN pip install --no-cache-dir -r /opt/custom-integrations/{name}/requirements.txt"
+            f"RUN pip install --no-cache-dir -r /opt/custom-connectors/{name}/requirements.txt"
         )
         lines.append("")
 
     return "\n".join(lines)
 
 
-def build_context(tmp_dir, integrations):
-    """Copy integration artifacts into the temporary build context."""
-    for name in integrations:
-        dest = os.path.join(tmp_dir, "custom-integrations", name)
+def build_context(tmp_dir, connectors):
+    """Copy connector artifacts into the temporary build context."""
+    for name in connectors:
+        dest = os.path.join(tmp_dir, "custom-connectors", name)
         os.makedirs(dest, exist_ok=True)
 
-        # Copy source files from integrations/<name>/
+        # Copy source files from connectors/<name>/
         for filename in REQUIRED_SOURCE_FILES:
-            shutil.copy2(os.path.join(INTEGRATIONS_DIR, name, filename), dest)
+            shutil.copy2(os.path.join(CONNECTORS_DIR, name, filename), dest)
 
         # Copy capabilities.json from output/<name>/
         shutil.copy2(os.path.join(OUTPUT_DIR, name, "capabilities.json"), dest)
@@ -140,7 +140,7 @@ def build_context(tmp_dir, integrations):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Build a custom agent Docker image with integration artifacts"
+        description="Build a custom agent Docker image with connector artifacts"
     )
     parser.add_argument(
         "--agent-type",
@@ -154,10 +154,10 @@ def main():
         help="Agent base image version (default: latest)",
     )
     parser.add_argument(
-        "--integration",
+        "--connector",
         action="append",
-        dest="integrations",
-        help="Integration to include (repeatable). Defaults to all with output/",
+        dest="connectors",
+        help="Connector to include (repeatable). Defaults to all with output/",
     )
     parser.add_argument(
         "--docker-platform",
@@ -182,46 +182,46 @@ def main():
     )
     args = parser.parse_args()
 
-    # Determine integrations to include
-    if args.integrations:
-        integrations = args.integrations
+    # Determine connectors to include
+    if args.connectors:
+        connectors = args.connectors
     else:
-        integrations = discover_integrations()
+        connectors = discover_connectors()
 
-    if not integrations:
+    if not connectors:
         print(
-            "Error: No integrations found. Run tests and export first, or specify --integration.",
+            "Error: No connectors found. Run tests and export first, or specify --connector.",
             file=sys.stderr,
         )
         print(
-            "\n  INTEGRATION=<name> docker compose run --rm test --export\n",
+            "\n  CONNECTOR=<name> docker compose run --rm test --export\n",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    # Validate all integrations
+    # Validate all connectors
     all_errors = {}
-    for name in integrations:
-        errors = validate_integration(name, mode=args.mode)
+    for name in connectors:
+        errors = validate_connector(name, mode=args.mode)
         if errors:
             all_errors[name] = errors
 
     if all_errors:
-        print("Error: Some integrations are missing required artifacts:\n", file=sys.stderr)
+        print("Error: Some connectors are missing required artifacts:\n", file=sys.stderr)
         for name, errors in all_errors.items():
             print(f"  {name}:", file=sys.stderr)
             for err in errors:
                 print(err, file=sys.stderr)
         print(
             "\nRun the full test suite and export first:\n"
-            "  INTEGRATION=<name> docker compose run --rm test --export\n",
+            "  CONNECTOR=<name> docker compose run --rm test --export\n",
             file=sys.stderr,
         )
         sys.exit(1)
 
     # Warn when metric templates exist but prerequisite support is missing
     warnings = []
-    for name in integrations:
+    for name in connectors:
         warning = check_metric_warnings(name)
         if warning:
             warnings.append(warning)
@@ -231,7 +231,7 @@ def main():
         print("WARNING", file=sys.stderr)
         print("-------", file=sys.stderr)
         print(
-            "Some integrations have passing metric templates but metric monitors\n"
+            "Some connectors have passing metric templates but metric monitors\n"
             "will NOT be supported because prerequisite templates are incomplete.\n",
             file=sys.stderr,
         )
@@ -254,17 +254,17 @@ def main():
     try:
         # Generate Dockerfile
         dockerfile_content = generate_dockerfile(
-            integrations, args.version, args.agent_type, base_image=args.base_image
+            connectors, args.version, args.agent_type, base_image=args.base_image
         )
         dockerfile_path = os.path.join(tmp_dir, "Dockerfile")
         with open(dockerfile_path, "w") as f:
             f.write(dockerfile_content)
 
         # Copy artifacts into build context
-        build_context(tmp_dir, integrations)
+        build_context(tmp_dir, connectors)
 
         base_image = args.base_image or f"montecarlodata/agent:{args.version}-{args.agent_type}"
-        print(f"Building image '{tag}' with integrations: {', '.join(integrations)}")
+        print(f"Building image '{tag}' with connectors: {', '.join(connectors)}")
         print(f"Base image: {base_image}")
         print(f"Docker platform: {args.docker_platform}")
         if args.mode == "hybrid":
@@ -288,7 +288,7 @@ def main():
         print("Mode: hybrid (metadata pushed externally)")
     print()
     print("Next steps:")
-    print(f"  1. Verify: docker run --rm --entrypoint ls {tag} /opt/custom-integrations/")
+    print(f"  1. Verify: docker run --rm --entrypoint ls {tag} /opt/custom-connectors/")
     print(f"  2. Push to your container registry:")
     print(f"     docker tag {tag} <your-registry>/{tag}")
     print(f"     docker push <your-registry>/{tag}")

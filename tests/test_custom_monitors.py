@@ -3,9 +3,9 @@ import pytest
 pytestmark = [pytest.mark.custom_monitors, pytest.mark.capability("supports_custom_sql_monitor")]
 
 
-def test_execute_simple_query(integration):
+def test_execute_simple_query(connector):
     """Test that a simple query can be executed and returns results."""
-    results = integration.execute_and_fetch_all("SELECT 1")
+    results = connector.execute_and_fetch_all("SELECT 1")
     assert len(results) > 0, "Simple query returned no results."
     assert results[0][0] == 1
 

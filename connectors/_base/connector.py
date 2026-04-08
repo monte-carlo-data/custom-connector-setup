@@ -1,7 +1,7 @@
 from typing import Any, List
 
 
-class BaseIntegration:
+class BaseConnector:
     credentials: dict[str, str]
     connection: Any
     cursor: Any

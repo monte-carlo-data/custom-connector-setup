@@ -1,5 +1,5 @@
-from integrations._base.integration import (
-    BaseIntegration,
+from connectors._base.connector import (
+    BaseConnector,
     MetadataQueryTemplates,
     QueryLogCollectionTemplates,
     CustomSQLMonitorTemplates,
@@ -8,7 +8,7 @@ from integrations._base.integration import (
 )
 
 __all__ = [
-    "BaseIntegration",
+    "BaseConnector",
     "MetadataQueryTemplates",
     "QueryLogCollectionTemplates",
     "CustomSQLMonitorTemplates",

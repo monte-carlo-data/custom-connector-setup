@@ -1,7 +1,7 @@
 ---
 name: setup-connection
 description: Research the database driver, implement connection methods, stub .env, and verify with connection tests
-argument-hint: <integration-name>
+argument-hint: <connector-name>
 disable-model-invocation: true
 ---
 
@@ -9,14 +9,14 @@ disable-model-invocation: true
 
 ## Arguments
 
-`$ARGUMENTS` contains the integration name (required). Example: `snowflake`, `bigquery`, `redshift`.
+`$ARGUMENTS` contains the connector name (required). Example: `snowflake`, `bigquery`, `redshift`.
 
-## Step 1: Read the integration scaffold
+## Step 1: Read the connector scaffold
 
 Read these files to understand the current state:
-1. `integrations/<name>/integration.py` — the stub file
-2. `integrations/<name>/requirements.txt` — currently empty
-3. `integrations/<name>/.env` — currently empty
+1. `connectors/<name>/connector.py` — the stub file
+2. `connectors/<name>/requirements.txt` — currently empty
+3. `connectors/<name>/.env` — currently empty
 
 ## Step 2: Research the database driver
 
@@ -30,7 +30,7 @@ If web search is unavailable, fall back to training data knowledge.
 
 ## Step 3: Add the driver to requirements.txt
 
-Write the driver package with a pinned version to `integrations/<name>/requirements.txt`:
+Write the driver package with a pinned version to `connectors/<name>/requirements.txt`:
 
 ```
 # Example:
@@ -39,7 +39,7 @@ psycopg2-binary==2.9.9
 
 ## Step 4: Implement connection methods
 
-Edit `integrations/<name>/integration.py` to implement these three methods in `BaseIntegration`:
+Edit `connectors/<name>/connector.py` to implement these three methods in `BaseConnector`:
 
 ### `credential_env_vars()`
 Return a dict mapping logical credential names to environment variable names. Use a consistent prefix based on the database name (e.g., `PGHOST` for Postgres, `SF_ACCOUNT` for Snowflake).
@@ -50,11 +50,11 @@ Import the driver at the top of the file and create a connection using `self.cre
 ### `create_cursor()`
 Return a cursor from `self.connection`. Add any session-level settings if needed (e.g., date format, timezone).
 
-**Do not implement** `execute_query`, `fetch_all_results`, `close_connection`, or any template methods — those come later in `/implement-integration`.
+**Do not implement** `execute_query`, `fetch_all_results`, `close_connection`, or any template methods — those come later in `/implement-connector`.
 
 ## Step 5: Stub the .env file
 
-Write `integrations/<name>/.env` with the environment variable names from `credential_env_vars()`, with empty values for the user to fill in:
+Write `connectors/<name>/.env` with the environment variable names from `credential_env_vars()`, with empty values for the user to fill in:
 
 ```
 # <Database Name> credentials
@@ -66,7 +66,7 @@ ANOTHER_VARIABLE=
 
 **You must stop here and tell the user:**
 
-> Connection code is ready. Please fill in your database credentials in `integrations/<name>/.env` and confirm when done so I can run the connection test.
+> Connection code is ready. Please fill in your database credentials in `connectors/<name>/.env` and confirm when done so I can run the connection test.
 
 **Do not proceed until the user confirms.** The connection test will fail without real credentials.
 
@@ -76,13 +76,13 @@ After user confirms credentials are set:
 
 ```bash
 docker compose build
-INTEGRATION=<name> docker compose run --rm test -m connection
+CONNECTOR=<name> docker compose run --rm test -m connection
 ```
 
 ## Step 8: Handle results
 
 **If tests pass:** Report success and suggest:
-> Connection verified! Next step: run `/implement-integration <name>` to implement all template methods.
+> Connection verified! Next step: run `/implement-connector <name>` to implement all template methods.
 
 **If tests fail:** Read the error output carefully.
 - **ImportError**: Driver not installed correctly — check `requirements.txt` spelling and rebuild

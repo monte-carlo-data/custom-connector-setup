@@ -25,7 +25,7 @@ def render_functional(templates, template_method, functional_ops, **extra) -> st
     return templates.render_template(template_method, **kwargs)
 
 
-def collect_metadata(integration, templates, database, schemas, table_names=None) -> List[MetadataSchema]:
+def collect_metadata(connector, templates, database, schemas, table_names=None) -> List[MetadataSchema]:
     """Run the get_tables_query_template and return parsed MetadataSchema rows.
 
     Args:
@@ -44,11 +44,11 @@ def collect_metadata(integration, templates, database, schemas, table_names=None
         templates.get_tables_query_template,
         **render_kwargs,
     )
-    results = integration.execute_and_fetch_all(query)
+    results = connector.execute_and_fetch_all(query)
     return [MetadataSchema(*row) for row in results]
 
 
-def collect_test_table_columns(integration, templates, functional_ops) -> List[SchemaItem]:
+def collect_test_table_columns(connector, templates, functional_ops) -> List[SchemaItem]:
     """Run the get_columns_query_template and return columns for the test table.
 
     The ``tables`` filter format varies by dialect — some WHERE clauses match
@@ -69,7 +69,7 @@ def collect_test_table_columns(integration, templates, functional_ops) -> List[S
         tables=tables_param,
         database_name=db,
     )
-    results = integration.execute_and_fetch_all(query)
+    results = connector.execute_and_fetch_all(query)
     target = table.lower()
     columns = []
     for full_id, col_name, col_type in results:
@@ -108,28 +108,28 @@ def table_names_param(functional_ops) -> str:
 # Fixtures
 #############################################
 @pytest.fixture(scope="module", autouse=True)
-def functional_setup(integration, templates, functional_ops):
+def functional_setup(connector, templates, functional_ops):
     """Clean up stale test tables before and after the test module."""
     if functional_ops is None:
         yield
         return
     # Pre-cleanup
-    integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+    connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
     yield
     # Post-cleanup
-    integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+    connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
 
 def _skip_if_no_ops(functional_ops):
     if functional_ops is None:
-        pytest.skip("FunctionalTestOperations not implemented for this integration")
+        pytest.skip("FunctionalTestOperations not implemented for this connector")
 
 
 #############################################
 # Tests
 #############################################
 class TestTableDiscovery:
-    def test_table_discovery_after_create(self, integration, templates, functional_ops):
+    def test_table_discovery_after_create(self, connector, templates, functional_ops):
         """New table appears in metadata after creation."""
         _skip_if_no_ops(functional_ops)
 
@@ -137,26 +137,26 @@ class TestTableDiscovery:
         schemas = schemas_param(functional_ops)
 
         # Ensure table does not exist
-        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        before = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+        connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        before = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
         assert find_test_table(before, functional_ops) is None, (
             f"Test table {tv['table']} already appears in metadata "
             f"before creation. Drop it manually or check your drop_test_table_template()."
         )
 
         # Create and verify
-        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
-            after = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+            after = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             found = find_test_table(after, functional_ops)
             assert found is not None, (
                 f"Table {tv['table']} was not discovered after creation. "
                 f"Your get_tables_query_template() may be filtering it out or using a stale cache."
             )
         finally:
-            integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+            connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
-    def test_table_discovery_after_drop(self, integration, templates, functional_ops):
+    def test_table_discovery_after_drop(self, connector, templates, functional_ops):
         """Dropped table disappears from metadata."""
         _skip_if_no_ops(functional_ops)
 
@@ -164,16 +164,16 @@ class TestTableDiscovery:
         schemas = schemas_param(functional_ops)
 
         # Create table and verify it appears
-        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
-        before = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+        connector.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        before = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
         assert find_test_table(before, functional_ops) is not None, (
             f"Table {tv['table']} was not found after creation. "
             f"Cannot test drop behavior."
         )
 
         # Drop and verify
-        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        after = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+        connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        after = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
         assert find_test_table(after, functional_ops) is None, (
             f"Table {tv['table']} still appears in metadata after being dropped. "
             f"Your get_tables_query_template() may be reading from a stale catalog or cache."
@@ -181,17 +181,17 @@ class TestTableDiscovery:
 
 
 class TestVolumeAndFreshness:
-    def test_volume_change_after_insert(self, integration, templates, functional_ops):
+    def test_volume_change_after_insert(self, connector, templates, functional_ops):
         """row_count increases after inserting rows."""
         _skip_if_no_ops(functional_ops)
 
         tv = table_vars(functional_ops)
         schemas = schemas_param(functional_ops)
 
-        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
-            before_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+            before_metadata = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             before_table = find_test_table(before_metadata, functional_ops)
             assert before_table is not None, (
                 f"Test table {tv['table']} not found in metadata after creation."
@@ -205,11 +205,11 @@ class TestVolumeAndFreshness:
 
             before_count = before_table.row_count
             num_rows = 10
-            integration.execute_only(render_functional(
+            connector.execute_only(render_functional(
                 templates, templates.insert_rows_template, functional_ops, num_rows=num_rows,
             ))
 
-            after_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+            after_metadata = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             after_table = find_test_table(after_metadata, functional_ops)
             assert after_table is not None, "Test table disappeared from metadata after insert."
             after_count = after_table.row_count
@@ -221,19 +221,19 @@ class TestVolumeAndFreshness:
                 f"that only updates when stats are collected."
             )
         finally:
-            integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+            connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
-    def test_byte_count_change_after_insert(self, integration, templates, functional_ops):
+    def test_byte_count_change_after_insert(self, connector, templates, functional_ops):
         """byte_count increases after inserting rows."""
         _skip_if_no_ops(functional_ops)
 
         tv = table_vars(functional_ops)
         schemas = schemas_param(functional_ops)
 
-        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
-            before_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+            before_metadata = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             before_table = find_test_table(before_metadata, functional_ops)
             assert before_table is not None, (
                 f"Test table {tv['table']} not found in metadata after creation."
@@ -247,11 +247,11 @@ class TestVolumeAndFreshness:
 
             before_bytes = before_table.byte_count
             num_rows = 10
-            integration.execute_only(render_functional(
+            connector.execute_only(render_functional(
                 templates, templates.insert_rows_template, functional_ops, num_rows=num_rows,
             ))
 
-            after_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+            after_metadata = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             after_table = find_test_table(after_metadata, functional_ops)
             assert after_table is not None, "Test table disappeared from metadata after insert."
             after_bytes = after_table.byte_count
@@ -263,19 +263,19 @@ class TestVolumeAndFreshness:
                 f"that only updates when stats are collected."
             )
         finally:
-            integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+            connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
-    def test_freshness_change_after_insert(self, integration, templates, functional_ops):
+    def test_freshness_change_after_insert(self, connector, templates, functional_ops):
         """last_update_time advances after inserting rows."""
         _skip_if_no_ops(functional_ops)
 
         tv = table_vars(functional_ops)
         schemas = schemas_param(functional_ops)
 
-        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
-            before_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+            before_metadata = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             before_table = find_test_table(before_metadata, functional_ops)
             assert before_table is not None, (
                 f"Test table {tv['table']} not found in metadata after creation."
@@ -291,11 +291,11 @@ class TestVolumeAndFreshness:
 
             # Small delay to ensure timestamp difference is detectable
             time.sleep(1)
-            integration.execute_only(render_functional(
+            connector.execute_only(render_functional(
                 templates, templates.insert_rows_template, functional_ops, num_rows=5,
             ))
 
-            after_metadata = collect_metadata(integration, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
+            after_metadata = collect_metadata(connector, templates, tv["database"], schemas, table_names=table_names_param(functional_ops))
             after_table = find_test_table(after_metadata, functional_ops)
             assert after_table is not None, "Test table disappeared from metadata after insert."
             after_time = after_table.last_update_time
@@ -307,30 +307,30 @@ class TestVolumeAndFreshness:
                 f"that only updates when stats are collected."
             )
         finally:
-            integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+            connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
 
 class TestSchemaChange:
-    def test_schema_change_after_add_column(self, integration, templates, functional_ops):
+    def test_schema_change_after_add_column(self, connector, templates, functional_ops):
         """New column appears in column metadata after ALTER TABLE ADD COLUMN."""
         _skip_if_no_ops(functional_ops)
 
         if not templates.get_columns_query_template():
             pytest.skip("get_columns_query_template not implemented. Skipping schema change test.")
 
-        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
-            before_cols = collect_test_table_columns(integration, templates, functional_ops)
+            before_cols = collect_test_table_columns(connector, templates, functional_ops)
             before_names = {c.name.lower() for c in before_cols}
 
             col_name = "pandora_test_col"
-            integration.execute_only(render_functional(
+            connector.execute_only(render_functional(
                 templates, templates.add_column_template, functional_ops,
                 column_name=col_name, column_type="TEXT",
             ))
 
-            after_cols = collect_test_table_columns(integration, templates, functional_ops)
+            after_cols = collect_test_table_columns(connector, templates, functional_ops)
             after_names = {c.name.lower() for c in after_cols}
 
             assert col_name.lower() in after_names, (
@@ -339,9 +339,9 @@ class TestSchemaChange:
                 f"Your get_columns_query_template() may be reading from a stale catalog."
             )
         finally:
-            integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+            connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
-    def test_schema_change_after_drop_column(self, integration, templates, functional_ops):
+    def test_schema_change_after_drop_column(self, connector, templates, functional_ops):
         """Dropped column disappears from column metadata."""
         _skip_if_no_ops(functional_ops)
 
@@ -351,27 +351,27 @@ class TestSchemaChange:
         if not getattr(templates, 'drop_column_template', None) or not templates.drop_column_template():
             pytest.skip("drop_column_template not implemented.")
 
-        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
             col_name = "pandora_drop_col"
-            integration.execute_only(render_functional(
+            connector.execute_only(render_functional(
                 templates, templates.add_column_template, functional_ops,
                 column_name=col_name, column_type="TEXT",
             ))
 
-            mid_cols = collect_test_table_columns(integration, templates, functional_ops)
+            mid_cols = collect_test_table_columns(connector, templates, functional_ops)
             mid_names = {c.name.lower() for c in mid_cols}
             assert col_name.lower() in mid_names, (
                 f"Column '{col_name}' was not found after ADD COLUMN — cannot test drop."
             )
 
-            integration.execute_only(render_functional(
+            connector.execute_only(render_functional(
                 templates, templates.drop_column_template, functional_ops,
                 column_name=col_name,
             ))
 
-            after_cols = collect_test_table_columns(integration, templates, functional_ops)
+            after_cols = collect_test_table_columns(connector, templates, functional_ops)
             after_names = {c.name.lower() for c in after_cols}
 
             assert col_name.lower() not in after_names, (
@@ -380,10 +380,10 @@ class TestSchemaChange:
                 f"Your get_columns_query_template() may be reading from a stale catalog."
             )
         finally:
-            integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+            connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
 
 class TestQueryLogCapture:
-    def test_query_log_capture(self, integration, templates, functional_ops):
+    def test_query_log_capture(self, connector, templates, functional_ops):
         """Executed query appears in query logs."""
         _skip_if_no_ops(functional_ops)
 
@@ -396,11 +396,11 @@ class TestQueryLogCapture:
             pytest.skip("create_lineage_query_template not implemented. Skipping query log test.")
 
         # Ensure the test table exists so the lineage query can run
-        integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
-        integration.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+        connector.execute_only(render_functional(templates, templates.create_test_table_template, functional_ops))
         try:
             start_time = datetime.now(tz=UTC)
-            integration.execute_only(lineage_sql)
+            connector.execute_only(lineage_sql)
 
             # Allow time for the query to appear in logs
             time.sleep(2)
@@ -413,7 +413,7 @@ class TestQueryLogCapture:
                 limit=1000,
                 offset=0,
             )
-            results = integration.execute_and_fetch_all(query)
+            results = connector.execute_and_fetch_all(query)
 
             # Search for the lineage query text in the results.
             # Query log rows vary by dialect but the SQL text is typically in one of the columns.
@@ -434,4 +434,4 @@ class TestQueryLogCapture:
                 f"Your get_query_logs_query_template() may not capture this type of query."
             )
         finally:
-            integration.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
+            connector.execute_only(render_functional(templates, templates.drop_test_table_template, functional_ops))
