@@ -133,10 +133,17 @@ def tables(connector, templates, database, schemas) -> List[MetadataSchema]:
         # Optional fields
         if row_count := plugin_table.row_count:
             assert isinstance(row_count, int), f"Row count should be an int but returned {type(row_count)} for table {plugin_table.full_table_id}"
+            assert row_count >= 0, f"Row count should not be negative but returned {row_count} for table {plugin_table.full_table_id}"
         if byte_count := plugin_table.byte_count:
             assert isinstance(byte_count, int), f"Byte count should be an int but returned {type(byte_count)} for table {plugin_table.full_table_id}"
         if last_update_time := plugin_table.last_update_time:
-            assert isinstance(last_update_time, datetime), f"Last_update_time should be a datetime but returned {type(last_update_time)} for table {plugin_table.full_table_id}"
+            if isinstance(last_update_time, str):
+                try:
+                    datetime.fromisoformat(last_update_time)
+                except ValueError:
+                    pytest.fail(f"Last_update_time string is not ISO 8601 parseable: '{last_update_time}' for table {plugin_table.full_table_id}")
+            else:
+                assert isinstance(last_update_time, datetime), f"Last_update_time should be a datetime or ISO 8601 string but returned {type(last_update_time)} for table {plugin_table.full_table_id}"
         if view_query := plugin_table.view_query:
             assert plugin_table.table_type == 'view', f"A view_query was returned for the table {plugin_table.full_table_id}"
             assert isinstance(view_query, str), f"View_query should be a string but returned a {type(view_query)} for view {plugin_table.full_table_id}"
