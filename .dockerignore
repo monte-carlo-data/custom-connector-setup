@@ -1,5 +1,5 @@
 .env
-integrations/*/.env
+connectors/*/.env
 .git
 .idea
 __pycache__

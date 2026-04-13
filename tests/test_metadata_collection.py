@@ -84,28 +84,28 @@ class MetadataSchema(DataClassJsonMixin):
 # Add Metadata Fixtures
 #############################################
 @pytest.fixture(scope="session")
-def database(integration, templates) -> str:
+def database(connector, templates) -> str:
     query = templates.render_template(
         templates.get_databases_query_template,
     )
-    results = integration.execute_and_fetch_all(query)
+    results = connector.execute_and_fetch_all(query)
 
     return results[0][0]
 
 
 @pytest.fixture(scope="session")
-def schemas(integration, templates, database) -> List[str]:
+def schemas(connector, templates, database) -> List[str]:
     query = templates.render_template(
         templates.get_schemas_query_template,
         database_name=database
     )
-    results = integration.execute_and_fetch_all(query)
+    results = connector.execute_and_fetch_all(query)
 
     return [row[0] for row in results[:5]]
 
 
 @pytest.fixture(scope="session")
-def tables(integration, templates, database, schemas) -> List[MetadataSchema]:
+def tables(connector, templates, database, schemas) -> List[MetadataSchema]:
     offset = 0
     limit = 5000
     query = templates.render_template(
@@ -115,7 +115,7 @@ def tables(integration, templates, database, schemas) -> List[MetadataSchema]:
         offset=offset,
         limit=limit,
     )
-    results = integration.execute_and_fetch_all(query)
+    results = connector.execute_and_fetch_all(query)
     assert len(results) > 0, f"No tables found for database {database} for schemas {', '.join(schemas)}"
     assert len(results) <= limit, f"Table results should be limited to {limit} but {len(results)} were returned."
 
@@ -151,7 +151,7 @@ def tables(integration, templates, database, schemas) -> List[MetadataSchema]:
 #############################################
 @pytest.mark.template(
     file="fetch_databases_query.sql.j2",
-    fixture="integration",
+    fixture="connector",
     func="get_databases_query_template"
 )
 def test_fetch_databases(database):
@@ -160,7 +160,7 @@ def test_fetch_databases(database):
 
 @pytest.mark.template(
     file="fetch_schemas_query.sql.j2",
-    fixture="integration",
+    fixture="connector",
     func="get_schemas_query_template"
 )
 def test_fetch_schemas(database, schemas):
@@ -169,21 +169,21 @@ def test_fetch_schemas(database, schemas):
 
 @pytest.mark.template(
     file="fetch_tables_query.sql.j2",
-    fixture="integration",
+    fixture="connector",
     func="get_tables_query_template"
 )
 @pytest.mark.capability("supports_metadata")
-def test_fetch_tables_and_views(integration, database, schemas, tables):
+def test_fetch_tables_and_views(connector, database, schemas, tables):
     assert tables, f"Failed to fetch tables for database {database} and schemas {', '.join(schemas)}"
 
 
 @pytest.mark.template(
     file="fetch_tables_query.sql.j2",
-    fixture="integration",
+    fixture="connector",
     func="get_tables_query_template"
 )
 @pytest.mark.capability("supports_metadata")
-def test_fetch_tables_with_table_names_filter(integration, templates, database, schemas, tables):
+def test_fetch_tables_with_table_names_filter(connector, templates, database, schemas, tables):
     """Verify that providing table_names filters results to only those tables."""
     sample_tables = tables[:3]
     assert len(sample_tables) > 0, "Need at least one table to test table_names filter"
@@ -199,7 +199,7 @@ def test_fetch_tables_with_table_names_filter(integration, templates, database, 
         offset=0,
         limit=5000,
     )
-    results = integration.execute_and_fetch_all(query)
+    results = connector.execute_and_fetch_all(query)
 
     expected_names = {t.table_name.lower() for t in sample_tables}
     returned_names = set()
@@ -246,16 +246,16 @@ def test_freshness(tables):
 @pytest.mark.capability("supports_schema")
 @pytest.mark.template(
     file="fetch_columns_query.sql.j2",
-    fixture="integration",
+    fixture="connector",
     func="get_columns_query_template"
 )
-def test_fetch_columns(integration, templates, database, tables):
+def test_fetch_columns(connector, templates, database, tables):
     query = templates.render_template(
         templates.get_columns_query_template,
         tables=", ".join([f"'{table.full_table_id}'" for table in tables]),
         database_name=database
     )
-    results = integration.execute_and_fetch_all(query)
+    results = connector.execute_and_fetch_all(query)
     assert len(results) > 0, "No columns returned — check that full_table_id format matches between get_tables and get_columns templates"
 
     matched_table_ids = set()
@@ -281,10 +281,10 @@ def test_fetch_columns(integration, templates, database, tables):
 @pytest.mark.capability("supports_query_logs", "supports_lineage", "supports_field_lineage")
 @pytest.mark.template(
     file="fetch_query_logs_query.sql.j2",
-    fixture="integration",
+    fixture="connector",
     func="get_query_logs_query_template"
 )
-def test_get_query_logs(integration, templates):
+def test_get_query_logs(connector, templates):
     if not templates.get_query_logs_query_template():
         pytest.xfail("Optional feature: query log collection not implemented.")
     end_time = datetime.now(tz=UTC)
@@ -296,7 +296,7 @@ def test_get_query_logs(integration, templates):
         limit=100,
         offset=0
     )
-    results = integration.execute_and_fetch_all(query)
+    results = connector.execute_and_fetch_all(query)
     assert len(results) > 0, f"No query logs retrieved from {start_time} to {end_time}"
 
     for row in results:

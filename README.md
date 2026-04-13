@@ -1,8 +1,8 @@
-# custom-integration-setup
+# custom-connector-setup
 
-A validation toolkit for building custom database integrations. You implement a set of base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your integration supports.
+A validation toolkit for building custom database connectors. You implement a set of base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your connector supports.
 
-Supports multiple integrations side by side so you can build and test several at once.
+Supports multiple connectors side by side so you can build and test several at once.
 
 ## Using an AI Coding Agent
 
@@ -14,9 +14,9 @@ The repo includes five skills that automate the full workflow end-to-end:
 
 | Step | Skill | What it does |
 |------|-------|-------------|
-| 1 | `/create-integration <name>` | Scaffold a new integration directory |
+| 1 | `/create-connector <name>` | Scaffold a new connector directory |
 | 2 | `/setup-connection <name>` | Install driver, implement connection methods, stub `.env` — **pauses for you to fill in credentials** |
-| 3 | `/implement-integration <name> [hybrid]` | Implement all template methods section by section |
+| 3 | `/implement-connector <name> [hybrid]` | Implement all template methods section by section |
 | 4 | `/build-agent-image <name> --agent-type TYPE [--mode MODE]` | Export capabilities and build deployable Docker image |
 | — | `/export-qlbase <name>` | *(Optional)* Convert Jinja templates to monolith QLBase class |
 
@@ -24,29 +24,29 @@ The only manual step is filling in `.env` credentials when `/setup-connection` p
 
 ### Fallback: Other AI agents
 
-If you're not using Claude Code, complete steps 1–6 of Quick Start below to set up connectivity, then provide `AGENTS.md` as context to your LLM along with the integration name. The agent will implement all remaining template methods, run tests iteratively, and export capabilities. Resume at step 9 to build the deployable image.
+If you're not using Claude Code, complete steps 1–6 of Quick Start below to set up connectivity, then provide `AGENTS.md` as context to your LLM along with the connector name. The agent will implement all remaining template methods, run tests iteratively, and export capabilities. Resume at step 9 to build the deployable image.
 
 ## Quick Start
 
-### 1. Create an integration
+### 1. Create a connector
 
 ```bash
-python scripts/create_integration.py <name>
+python scripts/create_connector.py <name>
 ```
 
-This creates `integrations/<name>/` with:
-- `integration.py` — base classes to implement (copy of the canonical template)
+This creates `connectors/<name>/` with:
+- `connector.py` — base classes to implement (copy of the canonical template)
 - `manifest.json` — unique `connection_type` identifier
 - `.env` — credentials file (gitignored)
 - `requirements.txt` — database driver dependencies
 
-### 2. Implement the integration classes
+### 2. Implement the connector classes
 
-Edit `integrations/<name>/integration.py` and fill in the base classes:
+Edit `connectors/<name>/connector.py` and fill in the base classes:
 
 | Class | Purpose |
 |-------|---------|
-| `BaseIntegration` | Connection lifecycle — `create_connection`, `create_cursor`, `execute_query`, `fetch_all_results`, `close_connection` |
+| `BaseConnector` | Connection lifecycle — `create_connection`, `create_cursor`, `execute_query`, `fetch_all_results`, `close_connection` |
 | `MetadataQueryTemplates` | Jinja templates for discovering databases, schemas, tables, and columns |
 | `QueryLogCollectionTemplates` | Jinja template for fetching query logs |
 | `CustomSQLMonitorTemplates` | Jinja templates for custom SQL monitor operations (count wrapping, row limits) |
@@ -64,7 +64,7 @@ Each method has a docstring documenting its Jinja variables, example implementat
 
 ### 3. Add your database driver
 
-Add your driver to `integrations/<name>/requirements.txt`:
+Add your driver to `connectors/<name>/requirements.txt`:
 
 ```
 psycopg2-binary==2.9.9
@@ -78,7 +78,7 @@ docker compose build
 
 ### 4. Configure credentials
 
-Override `credential_env_vars()` in `BaseIntegration` to map credential keys to environment variable names:
+Override `credential_env_vars()` in `BaseConnector` to map credential keys to environment variable names:
 
 ```python
 def credential_env_vars(self) -> dict[str, str]:
@@ -105,7 +105,7 @@ def create_connection(self):
     )
 ```
 
-Add your credentials to `integrations/<name>/.env`:
+Add your credentials to `connectors/<name>/.env`:
 
 ```
 PGHOST=localhost
@@ -127,17 +127,17 @@ Some database drivers include native libraries built for a specific architecture
 docker compose build --build-arg TARGETPLATFORM=linux/amd64
 ```
 
-Rebuild whenever you change `requirements.txt` (either root or per-integration).
+Rebuild whenever you change `requirements.txt` (either root or per-connector).
 
 ### 6. Verify the connection
 
 ```bash
-INTEGRATION=<name> docker compose run --rm test -m connection
+CONNECTOR=<name> docker compose run --rm test -m connection
 ```
 
 This runs two quick checks: connection creation and cursor creation. Fix any credential or networking issues before moving on.
 
-If only one integration exists, you can omit `INTEGRATION=`:
+If only one connector exists, you can omit `CONNECTOR=`:
 
 ```bash
 docker compose run --rm test -m connection
@@ -147,18 +147,18 @@ docker compose run --rm test -m connection
 
 ```bash
 # Run all tests
-INTEGRATION=<name> docker compose run --rm test
+CONNECTOR=<name> docker compose run --rm test
 
 # Run by section
-INTEGRATION=<name> docker compose run --rm test -m metadata
-INTEGRATION=<name> docker compose run --rm test -m query_language
-INTEGRATION=<name> docker compose run --rm test -m ql_prerequisites
-INTEGRATION=<name> docker compose run --rm test -m ql_metrics
-INTEGRATION=<name> docker compose run --rm test -m custom_monitors
-INTEGRATION=<name> docker compose run --rm test -m functional
+CONNECTOR=<name> docker compose run --rm test -m metadata
+CONNECTOR=<name> docker compose run --rm test -m query_language
+CONNECTOR=<name> docker compose run --rm test -m ql_prerequisites
+CONNECTOR=<name> docker compose run --rm test -m ql_metrics
+CONNECTOR=<name> docker compose run --rm test -m custom_monitors
+CONNECTOR=<name> docker compose run --rm test -m functional
 
 # Export capabilities.json and passing templates
-INTEGRATION=<name> docker compose run --rm test --export
+CONNECTOR=<name> docker compose run --rm test --export
 ```
 
 Note: `--export` requires the full test suite (no `-m` filter). Use `-m` to iterate on specific test categories, then run the full suite with `--export` when ready.
@@ -167,21 +167,21 @@ Note: `--export` requires the full test suite (no `-m` filter). Use `-m` to iter
 
 After a full test run with `--export`, `output/<name>/capabilities.json` is generated with:
 
-- **connection_type** — unique identifier for this integration (from `manifest.json`)
-- **capabilities** — which features your integration supports (metadata collection, query logs, custom SQL monitors, metric monitors, etc.)
-- **metrics** — which metrics your integration supports, derived from template results and the metrics mapping
+- **connection_type** — unique identifier for this connector (from `manifest.json`)
+- **capabilities** — which features your connector supports (metadata collection, query logs, custom SQL monitors, metric monitors, etc.)
+- **metrics** — which metrics your connector supports, derived from template results and the metrics mapping
 
 Passing templates are exported to `output/<name>/templates/`.
 
 ### 9. Build a deployable agent image
 
-Once your integration passes tests and templates are exported, package everything into a custom agent image:
+Once your connector passes tests and templates are exported, package everything into a custom agent image:
 
 ```bash
 python scripts/generate_agent_image.py --agent-type aws-generic
 ```
 
-This takes the public `montecarlodata/agent` image as a base and layers on your integration artifacts (templates, capabilities, integration code, and dependencies).
+This takes the public `montecarlodata/agent` image as a base and layers on your connector artifacts (templates, capabilities, connector code, and dependencies).
 
 **Options:**
 
@@ -189,15 +189,15 @@ This takes the public `montecarlodata/agent` image as a base and layers on your 
 |------|---------|-------------|
 | `--agent-type` (required) | — | One of: `aws-generic`, `aws-proxied`, `azure`, `cloudrun`, `lambda` |
 | `--version` | `latest` | Agent base image version (e.g. `1.4.12`) |
-| `--integration` | all with output/ | Which integrations to include (repeatable) |
+| `--connector` | all with output/ | Which connectors to include (repeatable) |
 | `--docker-platform` | `linux/amd64` | Docker platform for the image |
 | `--tag` | `custom-agent:{version}-{agent-type}` | Output image tag |
 | `--mode` | `full` | `full` or `hybrid` — see Modes below |
 
-Include specific integrations:
+Include specific connectors:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic --integration postgres --integration mysql
+python scripts/generate_agent_image.py --agent-type aws-generic --connector postgres --connector mysql
 ```
 
 **Modes:**
@@ -207,7 +207,7 @@ python scripts/generate_agent_image.py --agent-type aws-generic --integration po
 | Metadata & query logs | Collected by the agent | Pushed externally |
 | Requires | `supports_metadata == true` | `supports_custom_sql_monitor == true` |
 | Metric monitors | Optional (warning if prereqs incomplete) | Optional (warning if prereqs incomplete) |
-| Classes to implement | All 5 | BaseIntegration + CustomSQLMonitorTemplates (+ QueryLanguageTemplates for metric monitors) |
+| Classes to implement | All 5 | BaseConnector + CustomSQLMonitorTemplates (+ QueryLanguageTemplates for metric monitors) |
 
 Full mode (default) — the agent handles metadata collection and metric monitors:
 
@@ -224,7 +224,7 @@ python scripts/generate_agent_image.py --agent-type aws-generic --mode hybrid
 Verify the image:
 
 ```bash
-docker run --rm --entrypoint ls custom-agent:latest-aws-generic /opt/custom-integrations/
+docker run --rm --entrypoint ls custom-agent:latest-aws-generic /opt/custom-connectors/
 ```
 
 Then push to your container registry and deploy.
@@ -246,25 +246,25 @@ Nothing is installed on your machine — everything runs inside the container.
 ## Project Structure
 
 ```
-custom-integration-setup/
-  integrations/
+custom-connector-setup/
+  connectors/
     _base/                                # Provided — do not edit
-      integration.py                      # Canonical template with all base classes
+      connector.py                        # Canonical template with all base classes
       __init__.py                         # Exports the base classes
-    <your-database>/                      # Created by you (one directory per integration)
-      integration.py                      # Your implementation (fill in stubs)
+    <your-database>/                      # Created by you (one directory per connector)
+      connector.py                        # Your implementation (fill in stubs)
       .env                                # Database credentials (gitignored)
-      manifest.json                       # {"connection_type": "custom-integration-xxx", "name": "..."}
+      manifest.json                       # {"connection_type": "custom-connector-xxx", "name": "..."}
       requirements.txt                    # Database driver deps
   output/                                 # Auto-generated by --export (gitignored)
     <your-database>/
       capabilities.json                   # Test results and supported features
       templates/                          # Passing .j2 templates
   scripts/                                # Provided
-    create_integration.py                 # Scaffolding helper (stdlib only)
+    create_connector.py                   # Scaffolding helper (stdlib only)
     generate_agent_image.py               # Builds deployable custom agent Docker image
   tests/                                  # Provided — do not edit
-    conftest.py                           # Test fixtures (TestIntegration, Templates, QueryTestHelper)
+    conftest.py                           # Test fixtures (TestConnector, Templates, QueryTestHelper)
     capabilities_plugin.py                # Pytest plugin — generates capabilities.json
     test_connection.py                    # Connection tests
     test_metadata_collection.py           # Metadata discovery tests
@@ -274,9 +274,9 @@ custom-integration-setup/
     test_functional_validation.py         # Functional validation tests (real-time metadata accuracy)
   .claude/
     skills/                               # Claude Code automation skills
-      create-integration/SKILL.md
+      create-connector/SKILL.md
       setup-connection/SKILL.md
-      implement-integration/SKILL.md
+      implement-connector/SKILL.md
       build-agent-image/SKILL.md
       export-qlbase/SKILL.md
   AGENTS.md                               # Instructions for AI coding agents
@@ -312,7 +312,7 @@ def supports_literal_select_template(self) -> str:
 
 ## How Tests Work
 
-Tests use the `ql` fixture (a `QueryTestHelper` instance) that bridges your integration and templates:
+Tests use the `ql` fixture (a `QueryTestHelper` instance) that bridges your connector and templates:
 
 ```python
 @pytest.mark.template(func="get_avg_function_template")
@@ -335,7 +335,7 @@ The tests create a test table, run metadata collection, mutate the table (insert
 
 ### Implementing `FunctionalTestOperations`
 
-Add a `FunctionalTestOperations` class to your `integration.py`. All you need is a table identifier and Jinja templates for basic DDL/DML operations:
+Add a `FunctionalTestOperations` class to your `connector.py`. All you need is a table identifier and Jinja templates for basic DDL/DML operations:
 
 ```python
 class FunctionalTestOperations:
@@ -376,12 +376,12 @@ class FunctionalTestOperations:
 | `test_schema_change_after_drop_column` | Dropped column disappears from column metadata |
 | `test_query_log_capture` | Executed query appears in query logs |
 
-Tests auto-skip when stubs are not implemented or when the relevant feature (row_count, freshness, columns, query logs) is not supported by your integration.
+Tests auto-skip when stubs are not implemented or when the relevant feature (row_count, freshness, columns, query logs) is not supported by your connector.
 
 ### Running functional tests
 
 ```bash
-INTEGRATION=<name> docker compose run --rm test -m functional
+CONNECTOR=<name> docker compose run --rm test -m functional
 ```
 
 ## Advanced Usage
@@ -397,8 +397,8 @@ cd apollo-agent
 docker build -t local-agent .
 
 # Use the local build as the base for your custom image
-cd /path/to/custom-integration-setup
+cd /path/to/custom-connector-setup
 python scripts/generate_agent_image.py --agent-type aws-generic --base-image local-agent
 ```
 
-This is useful for debugging agent-side behavior or verifying your integration works with in-development agent changes before they're published.
+This is useful for debugging agent-side behavior or verifying your connector works with in-development agent changes before they're published.

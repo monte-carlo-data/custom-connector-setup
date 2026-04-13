@@ -270,13 +270,13 @@ def pytest_sessionfinish(session, exitstatus):
     results = session.config._capabilities_results
     root = os.path.dirname(os.path.dirname(__file__))
 
-    # Resolve integration name (set by conftest._get_integration)
-    integration_name = getattr(session.config, "_integration_name", None)
+    # Resolve connector name (set by conftest._get_connector)
+    connector_name = getattr(session.config, "_connector_name", None)
 
     # Read connection_type from manifest.json
     connection_type = None
-    if integration_name:
-        manifest_path = os.path.join(root, "integrations", integration_name, "manifest.json")
+    if connector_name:
+        manifest_path = os.path.join(root, "connectors", connector_name, "manifest.json")
         if os.path.exists(manifest_path):
             with open(manifest_path) as f:
                 manifest = json.load(f)
@@ -308,8 +308,8 @@ def pytest_sessionfinish(session, exitstatus):
         output["connection_type"] = connection_type
 
     # Write capabilities.json
-    if integration_name:
-        output_dir = os.path.join(root, "output", integration_name)
+    if connector_name:
+        output_dir = os.path.join(root, "output", connector_name)
     else:
         output_dir = root
     os.makedirs(output_dir, exist_ok=True)
@@ -321,8 +321,8 @@ def pytest_sessionfinish(session, exitstatus):
     templates_instance = getattr(session.config, "_templates_instance", None)
     if templates_instance is None:
         return
-    if integration_name:
-        export_path = os.path.join(root, "output", integration_name, "templates")
+    if connector_name:
+        export_path = os.path.join(root, "output", connector_name, "templates")
     else:
         export_path = os.path.join(root, "templates")
     os.makedirs(export_path, exist_ok=True)

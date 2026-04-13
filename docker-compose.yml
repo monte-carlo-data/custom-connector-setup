@@ -2,6 +2,6 @@ services:
   test:
     build: .
     environment:
-      - INTEGRATION=${INTEGRATION:-}
+      - CONNECTOR=${CONNECTOR:-}
     volumes:
       - .:/app
