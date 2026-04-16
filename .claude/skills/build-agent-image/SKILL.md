@@ -27,10 +27,10 @@ If any are missing, stop and tell the user to run `/create-connector <name>` fir
 
 ## Step 2: Check for existing export
 
-Check if `output/<name>/capabilities.json` already exists:
+Check if `output/<name>/manifest.json` already exists:
 
 ```bash
-ls output/<name>/capabilities.json 2>/dev/null
+ls output/<name>/manifest.json 2>/dev/null
 ```
 
 **If it exists:** Ask the user whether to re-export or use the existing export. If they want to re-export, continue to Step 3. If they want to use existing, skip to Step 4.
@@ -45,7 +45,7 @@ Run the full test suite with `--export`:
 CONNECTOR=<name> docker compose run --rm test --export
 ```
 
-This generates `output/<name>/capabilities.json` and `output/<name>/templates/`. If tests fail, report the failures and stop — the connector needs fixing before an image can be built.
+This generates `output/<name>/manifest.json` and `output/<name>/templates/`. If tests fail, report the failures and stop — the connector needs fixing before an image can be built.
 
 ## Step 4: Build the Docker image
 

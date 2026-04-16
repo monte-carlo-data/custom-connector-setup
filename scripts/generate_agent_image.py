@@ -41,24 +41,24 @@ def validate_connector(name, mode="full"):
     """Validate that a connector has all required artifacts. Returns list of errors."""
     errors = []
 
-    capabilities_path = os.path.join(OUTPUT_DIR, name, "capabilities.json")
-    if not os.path.isfile(capabilities_path):
-        errors.append(f"  - Missing output/{name}/capabilities.json")
+    manifest_path = os.path.join(OUTPUT_DIR, name, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        errors.append(f"  - Missing output/{name}/manifest.json")
     else:
-        with open(capabilities_path) as f:
-            caps = json.load(f)
+        with open(manifest_path) as f:
+            manifest = json.load(f)
         if mode == "hybrid":
-            if not caps.get("capabilities", {}).get("supports_custom_sql_monitor"):
+            if not manifest.get("capabilities", {}).get("supports_custom_sql_monitor"):
                 errors.append(
                     f"  - Custom SQL monitor support has not been implemented — this is a requirement for hybrid mode."
                 )
-            if caps.get("capabilities", {}).get("supports_metadata"):
+            if manifest.get("capabilities", {}).get("supports_metadata"):
                 errors.append(
                     f"  - Metadata is implemented but hybrid mode requires metadata to be pushed externally."
                     f" Use --mode full instead, or remove MetadataQueryTemplates."
                 )
         else:
-            if not caps.get("capabilities", {}).get("supports_metadata"):
+            if not manifest.get("capabilities", {}).get("supports_metadata"):
                 errors.append(
                     f"  - Metadata collection has not been implemented — this is a requirement."
                 )
@@ -77,15 +77,15 @@ def validate_connector(name, mode="full"):
 
 def check_metric_warnings(name):
     """Return a warning string if metric monitors are unsupported but some metrics pass, else None."""
-    capabilities_path = os.path.join(OUTPUT_DIR, name, "capabilities.json")
-    if not os.path.isfile(capabilities_path):
+    manifest_path = os.path.join(OUTPUT_DIR, name, "manifest.json")
+    if not os.path.isfile(manifest_path):
         return None
 
-    with open(capabilities_path) as f:
-        caps = json.load(f)
+    with open(manifest_path) as f:
+        manifest = json.load(f)
 
-    supports_metrics = caps.get("capabilities", {}).get("supports_metric_monitors", False)
-    metrics = caps.get("metrics", {})
+    supports_metrics = manifest.get("capabilities", {}).get("supports_metric_monitors", False)
+    metrics = manifest.get("metrics", {})
     passing_metrics = sorted(m for m, v in metrics.items() if v is True)
 
     if not supports_metrics and passing_metrics:
@@ -128,8 +128,8 @@ def build_context(tmp_dir, connectors):
         for filename in REQUIRED_SOURCE_FILES:
             shutil.copy2(os.path.join(CONNECTORS_DIR, name, filename), dest)
 
-        # Copy capabilities.json from output/<name>/
-        shutil.copy2(os.path.join(OUTPUT_DIR, name, "capabilities.json"), dest)
+        # Copy manifest.json from output/<name>/
+        shutil.copy2(os.path.join(OUTPUT_DIR, name, "manifest.json"), dest)
 
         # Copy templates from output/<name>/templates/
         shutil.copytree(
