@@ -9,7 +9,7 @@ def pytest_addoption(parser):
         "--export",
         action="store_true",
         default=False,
-        help="Export capabilities.json and passing templates (requires full test suite — cannot be used with -m)",
+        help="Export manifest.json and passing templates (requires full test suite — cannot be used with -m)",
     )
 
 
@@ -301,19 +301,19 @@ def pytest_sessionfinish(session, exitstatus):
                     metrics[metric_type] = False
 
     output = {
+        "connection_type": connection_type,
+        "connection_name": connector_name,
         "capabilities": results["capabilities"],
         "metrics": metrics,
     }
-    if connection_type:
-        output["connection_type"] = connection_type
 
-    # Write capabilities.json
+    # Write manifest.json
     if connector_name:
         output_dir = os.path.join(root, "output", connector_name)
     else:
         output_dir = root
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, "capabilities.json")
+    output_path = os.path.join(output_dir, "manifest.json")
     with open(output_path, "w") as f:
         json.dump(output, f, indent=4, sort_keys=True)
 
