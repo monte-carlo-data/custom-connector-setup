@@ -12,13 +12,13 @@ An AI coding agent can implement all the template methods after you set up the d
 
 The repo includes five skills that automate the full workflow end-to-end:
 
-| Step | Skill | What it does |
-|------|-------|-------------|
-| 1 | `/create-connector <name>` | Scaffold a new connector directory |
-| 2 | `/setup-connection <name>` | Install driver, implement connection methods, stub `.env` — **pauses for you to fill in credentials** |
-| 3 | `/implement-connector <name> [hybrid]` | Implement all template methods section by section |
-| 4 | `/build-agent-image <name> --agent-type TYPE [--mode MODE]` | Export capabilities and build deployable Docker image |
-| — | `/export-qlbase <name>` | *(Optional)* Convert Jinja templates to monolith QLBase class |
+| Step | Skill                                                       | What it does                                                                                          |
+| ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1    | `/create-connector <name>`                                  | Scaffold a new connector directory                                                                    |
+| 2    | `/setup-connection <name>`                                  | Install driver, implement connection methods, stub `.env` — **pauses for you to fill in credentials** |
+| 3    | `/implement-connector <name> [hybrid]`                      | Implement all template methods section by section                                                     |
+| 4    | `/build-agent-image <name> --agent-type TYPE [--mode MODE]` | Export capabilities and build deployable Docker image                                                 |
+| —    | `/export-qlbase <name>`                                     | _(Optional)_ Convert Jinja templates to monolith QLBase class                                         |
 
 The only manual step is filling in `.env` credentials when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
 
@@ -35,6 +35,7 @@ python scripts/create_connector.py <name>
 ```
 
 This creates `connectors/<name>/` with:
+
 - `connector.py` — base classes to implement (copy of the canonical template)
 - `manifest.json` — unique `connection_type` identifier
 - `.env` — credentials file (gitignored)
@@ -44,23 +45,26 @@ This creates `connectors/<name>/` with:
 
 Edit `connectors/<name>/connector.py` and fill in the base classes:
 
-| Class | Purpose |
-|-------|---------|
-| `BaseConnector` | Connection lifecycle — `create_connection`, `create_cursor`, `execute_query`, `fetch_all_results`, `close_connection` |
-| `MetadataQueryTemplates` | Jinja templates for discovering databases, schemas, tables, and columns |
-| `QueryLogCollectionTemplates` | Jinja template for fetching query logs |
-| `CustomSQLMonitorTemplates` | Jinja templates for custom SQL monitor operations (count wrapping, row limits) |
-| `QueryLanguageTemplates` | ~90 Jinja templates covering type casting, date/time functions, aggregations, comparisons, string operations, and more |
-| `FunctionalTestOperations` | *(Optional)* Jinja templates for functional validation — creating/dropping a test table, inserting rows, adding/dropping columns, and a lineage query |
+| Class                         | Purpose                                                                                                                                               |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BaseConnector`               | Connection lifecycle — `create_connection`, `create_cursor`, `execute_query`, `fetch_all_results`, `close_connection`                                 |
+| `MetadataQueryTemplates`      | Jinja templates for discovering databases, schemas, tables, and columns                                                                               |
+| `QueryLogCollectionTemplates` | Jinja template for fetching query logs                                                                                                                |
+| `CustomSQLMonitorTemplates`   | Jinja templates for custom SQL monitor operations (count wrapping, row limits)                                                                        |
+| `QueryLanguageTemplates`      | ~90 Jinja templates covering type casting, date/time functions, aggregations, comparisons, string operations, and more                                |
+| `FunctionalTestOperations`    | _(Optional)_ Jinja templates for functional validation — creating/dropping a test table, inserting rows, adding/dropping columns, and a lineage query |
 
-Every template method returns a Jinja template string. For example:
+Every template method returns a template string. Most use format-string placeholders like `{x}` (substituted later by the backend); some use Jinja `{{ variable }}` syntax. For example:
 
 ```python
 def get_avg_function_template(self) -> str:
-    return "AVG({{ field }})"
+    return "AVG({x})"                                   # placeholder — {x} substituted later
+
+def get_casting_to_numeric_expression_template(self) -> str:
+    return "CAST({{ expression }} AS NUMERIC)"           # Jinja variable — rendered at template time
 ```
 
-Each method has a docstring documenting its Jinja variables, example implementations for common databases, and which metrics it enables.
+Each method's docstring documents which pattern it uses, the expected variables, and example implementations for common databases. See [How Templates Work](#how-templates-work) for details.
 
 ### 3. Add your database driver
 
@@ -186,14 +190,14 @@ This takes the public `montecarlodata/agent` image as a base and layers on your 
 
 **Options:**
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--agent-type` (required) | — | One of: `aws-generic`, `aws-proxied`, `azure`, `cloudrun`, `lambda` |
-| `--version` | `latest` | Agent base image version (e.g. `1.4.12`) |
-| `--connector` | all with output/ | Which connectors to include (repeatable) |
-| `--docker-platform` | `linux/amd64` | Docker platform for the image |
-| `--tag` | `custom-agent:{version}-{agent-type}` | Output image tag |
-| `--mode` | `full` | `full` or `hybrid` — see Modes below |
+| Flag                      | Default                               | Description                                                         |
+| ------------------------- | ------------------------------------- | ------------------------------------------------------------------- |
+| `--agent-type` (required) | —                                     | One of: `aws-generic`, `aws-proxied`, `azure`, `cloudrun`, `lambda` |
+| `--version`               | `latest`                              | Agent base image version (e.g. `1.4.12`)                            |
+| `--connector`             | all with output/                      | Which connectors to include (repeatable)                            |
+| `--docker-platform`       | `linux/amd64`                         | Docker platform for the image                                       |
+| `--tag`                   | `custom-agent:{version}-{agent-type}` | Output image tag                                                    |
+| `--mode`                  | `full`                                | `full` or `hybrid` — see Modes below                                |
 
 Include specific connectors:
 
@@ -203,12 +207,12 @@ python scripts/generate_agent_image.py --agent-type aws-generic --connector post
 
 **Modes:**
 
-| | Full (default) | Hybrid |
-|---|---|---|
-| Metadata & query logs | Collected by the agent | Pushed externally |
-| Requires | `supports_metadata == true` | `supports_custom_sql_monitor == true` |
-| Metric monitors | Optional (warning if prereqs incomplete) | Optional (warning if prereqs incomplete) |
-| Classes to implement | All 5 | BaseConnector + CustomSQLMonitorTemplates (+ QueryLanguageTemplates for metric monitors) |
+|                       | Full (default)                           | Hybrid                                                                                   |
+| --------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Metadata & query logs | Collected by the agent                   | Pushed externally                                                                        |
+| Requires              | `supports_metadata == true`              | `supports_custom_sql_monitor == true`                                                    |
+| Metric monitors       | Optional (warning if prereqs incomplete) | Optional (warning if prereqs incomplete)                                                 |
+| Classes to implement  | All 5                                    | BaseConnector + CustomSQLMonitorTemplates (+ QueryLanguageTemplates for metric monitors) |
 
 Full mode (default) — the agent handles metadata collection and metric monitors:
 
@@ -291,15 +295,44 @@ custom-connector-setup/
 
 All customer-provided SQL is expressed as Jinja templates running in a sandboxed environment (`jinja2.sandbox.ImmutableSandboxedEnvironment`). No raw Python code is ingested by the backend — connection and execution logic stays in your deployment only.
 
-Templates receive typed variables and produce SQL fragments:
+Templates produce SQL fragments and come in three flavors:
+
+### Placeholder templates (most common)
+
+These receive **no Jinja variables**. They output Python format-string placeholders like `{x}` that the backend substitutes later via `.format(x=field_name)`. Because they pass through Jinja untouched (single braces aren't Jinja syntax), the rendered template is the format string itself.
 
 ```python
+def get_avg_function_template(self) -> str:
+    return "AVG({x})"                     # {x} is a literal — NOT a Jinja variable
+
 def get_is_gt_expression_template(self) -> str:
-    return "{{ field1 }} > {{ field2 }}"
+    return "{x} > {y}"                    # two placeholders
+```
 
+### Parameterized templates
+
+These receive **named Jinja variables** (`{{ var }}`) that the backend passes as keyword arguments at render time. Use these when the template needs actual values to produce correct SQL.
+
+```python
 def get_casting_to_numeric_expression_template(self) -> str:
-    return "CAST({{ field }} AS NUMERIC)"
+    return "CAST({{ expression }} AS NUMERIC)"
 
+def add_from_clause_template(self) -> str:
+    return "{{ select_clause }} FROM {{ from_expression }}"
+```
+
+Some templates are **hybrid** — they combine `{x}` placeholders with Jinja variables:
+
+```python
+def get_in_past_days_expression_template(self) -> str:
+    return "{x} >= CURRENT_DATE - INTERVAL '{{ days }} days'"
+```
+
+### Static templates
+
+No variables at all — the rendered output is always the same string.
+
+```python
 def current_timestamp_func_template(self) -> str:
     return "CURRENT_TIMESTAMP()"
 ```
@@ -311,6 +344,8 @@ def supports_literal_select_template(self) -> str:
     return "true"  # SELECT 1 works without FROM
 ```
 
+Each method's docstring documents which pattern it uses and what variables it expects. Read the docstring before implementing.
+
 ## How Tests Work
 
 Tests use the `ql` fixture (a `QueryTestHelper` instance) that bridges your connector and templates:
@@ -319,9 +354,18 @@ Tests use the `ql` fixture (a `QueryTestHelper` instance) that bridges your conn
 @pytest.mark.template(func="get_avg_function_template")
 def test_avg(ql):
     data = [{"val": 10}, {"val": 20}, {"val": 30}]
-    avg_expr = ql.render(ql.templates.get_avg_function_template, field="val")
+    # Placeholder templates: render first, then .format() to substitute {x}
+    avg_expr = ql.render(ql.templates.get_avg_function_template).format(x="val")
     result = ql.select_from_data_source(data, avg_expr)
     assert float(result) == pytest.approx(20.0)
+
+@pytest.mark.template(func="get_casting_to_numeric_expression_template")
+def test_cast_numeric(ql):
+    data = [{"val": "42"}]
+    # Parameterized templates: pass Jinja variables as keyword arguments
+    cast_expr = ql.render(ql.templates.get_casting_to_numeric_expression_template, expression="val")
+    result = ql.select_from_data_source(data, cast_expr)
+    assert float(result) == pytest.approx(42.0)
 ```
 
 The helper builds CTEs from Python dicts, renders templates, executes queries against your real database, and validates results.
@@ -366,16 +410,16 @@ class FunctionalTestOperations:
 
 ### What the tests verify
 
-| Test | What it validates |
-|------|------------------|
-| `test_table_discovery_after_create` | New table appears in metadata |
-| `test_table_discovery_after_drop` | Dropped table disappears from metadata |
-| `test_volume_change_after_insert` | `row_count` increases after insert |
-| `test_byte_count_change_after_insert` | `byte_count` increases after insert |
-| `test_freshness_change_after_insert` | `last_update_time` advances after insert |
-| `test_schema_change_after_add_column` | New column appears in column metadata |
+| Test                                   | What it validates                              |
+| -------------------------------------- | ---------------------------------------------- |
+| `test_table_discovery_after_create`    | New table appears in metadata                  |
+| `test_table_discovery_after_drop`      | Dropped table disappears from metadata         |
+| `test_volume_change_after_insert`      | `row_count` increases after insert             |
+| `test_byte_count_change_after_insert`  | `byte_count` increases after insert            |
+| `test_freshness_change_after_insert`   | `last_update_time` advances after insert       |
+| `test_schema_change_after_add_column`  | New column appears in column metadata          |
 | `test_schema_change_after_drop_column` | Dropped column disappears from column metadata |
-| `test_query_log_capture` | Executed query appears in query logs |
+| `test_query_log_capture`               | Executed query appears in query logs           |
 
 Tests auto-skip when stubs are not implemented or when the relevant feature (row_count, freshness, columns, query logs) is not supported by your connector.
 
