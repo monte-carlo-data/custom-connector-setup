@@ -189,18 +189,18 @@ class QueryTestHelper:
                 sql_val = self._python_value_to_sql_literal(row[key])
                 aliased = self.render(self.templates.alias_field_template, field=sql_val, alias=key)
                 field_exprs.append(aliased)
-            select_clause = self.render(self.templates.add_select_clause_template, fields=", ".join(field_exprs))
+            select_clause = self.render(self.templates.add_select_clause_template, select_expressions=[", ".join(field_exprs)])
             select_queries.append(select_clause)
 
         unioned = self.render(self.templates.union_queries_template, queries=select_queries)
-        cte = self.render(self.templates.build_cte_template, alias=alias, query=unioned)
+        cte = self.render(self.templates.build_cte_template, alias=alias, cte=unioned)
         return cte, alias
 
     def select_from_data_source(self, values: list[dict], expression: str, condition: Optional[str] = None) -> Any:
         """Build CTE + SELECT expression FROM alias [WHERE condition], return scalar."""
         cte, alias = self.make_data_source(values)
-        from_clause = self.render(self.templates.add_from_clause_template, table=alias)
-        select_clause = self.render(self.templates.add_select_clause_template, fields=expression)
+        from_clause = self.render(self.templates.add_from_clause_template, from_expression=alias)
+        select_clause = self.render(self.templates.add_select_clause_template, select_expressions=[expression])
         query = f"{cte} {select_clause} {from_clause}"
         if condition:
             query += f" WHERE {condition}"
@@ -210,11 +210,11 @@ class QueryTestHelper:
         """SELECT <expression> with no table, or FROM single-row CTE if DB doesn't support literal select."""
         supports = self.templates.supports_literal_select_template()
         if supports and supports.strip().lower() == "true":
-            query = self.render(self.templates.add_select_clause_template, fields=expression)
+            query = self.render(self.templates.add_select_clause_template, select_expressions=[expression])
         else:
             cte, alias = self.make_data_source([{"_dummy": 1}])
-            from_clause = self.render(self.templates.add_from_clause_template, table=alias)
-            select_clause = self.render(self.templates.add_select_clause_template, fields=expression)
+            from_clause = self.render(self.templates.add_from_clause_template, from_expression=alias)
+            select_clause = self.render(self.templates.add_select_clause_template, select_expressions=[expression])
             query = f"{cte} {select_clause} {from_clause}"
         return self.execute_scalar(query)
 
@@ -226,12 +226,12 @@ class QueryTestHelper:
         if isinstance(value, (int, float)):
             return str(value)
         if isinstance(value, str):
-            escaped = self.render(self.templates.escape_string_template, value=value)
-            return self.render(self.templates.string_literal_template, value=escaped)
+            escaped = self.render(self.templates.escape_string_template, string=value)
+            return self.render(self.templates.string_literal_template, string=escaped)
         if isinstance(value, datetime):
-            return self.render(self.templates.literal_datetime_template, value=value)
+            return self.render(self.templates.literal_datetime_template, date_time_value=value)
         if isinstance(value, date):
-            return self.render(self.templates.date_literal_template, value=value)
+            return self.render(self.templates.date_literal_template, timestamp=value)
         raise TypeError(f"Unsupported type for SQL literal: {type(value)}")
 
 
