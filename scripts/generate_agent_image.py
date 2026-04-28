@@ -84,14 +84,14 @@ def check_metric_warnings(name):
     with open(manifest_path) as f:
         manifest = json.load(f)
 
-    supports_metrics = manifest.get("capabilities", {}).get("supports_metric_monitors", False)
+    supports_ql = manifest.get("capabilities", {}).get("supports_full_query_language", False)
     metrics = manifest.get("metrics", {})
     passing_metrics = sorted(m for m, v in metrics.items() if v is True)
 
-    if not supports_metrics and passing_metrics:
+    if not supports_ql and passing_metrics:
         lines = [
             f"  {name}:",
-            f"    supports_metric_monitors = false",
+            f"    supports_full_query_language = false",
             f"    {len(passing_metrics)} metric(s) have passing templates:",
         ]
         for metric in passing_metrics:

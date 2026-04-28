@@ -16,8 +16,8 @@ def test_transform_into_count_query(ql):
     data = [{"val": 1}, {"val": 2}, {"val": 3}]
     cte, alias = ql.make_data_source(data)
     all_fields = ql.render(ql.templates.all_fields_expression_template)
-    from_clause = ql.render(ql.templates.add_from_clause_template, table=alias)
-    select_clause = ql.render(ql.templates.add_select_clause_template, fields=all_fields)
+    from_clause = ql.render(ql.templates.add_from_clause_template, from_expression=alias)
+    select_clause = ql.render(ql.templates.add_select_clause_template, select_expressions=[all_fields])
     inner_query = f"{select_clause} {from_clause}"
 
     count_query = ql.render(
@@ -35,8 +35,8 @@ def test_add_row_limit(ql):
     data = [{"val": i} for i in range(10)]
     cte, alias = ql.make_data_source(data)
     all_fields = ql.render(ql.templates.all_fields_expression_template)
-    from_clause = ql.render(ql.templates.add_from_clause_template, table=alias)
-    select_clause = ql.render(ql.templates.add_select_clause_template, fields=all_fields)
+    from_clause = ql.render(ql.templates.add_from_clause_template, from_expression=alias)
+    select_clause = ql.render(ql.templates.add_select_clause_template, select_expressions=[all_fields])
     inner_query = f"{select_clause} {from_clause}"
 
     limited_query = ql.render(
