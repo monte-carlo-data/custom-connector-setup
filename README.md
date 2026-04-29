@@ -231,7 +231,7 @@ Verify the image:
 docker run --rm --entrypoint ls custom-agent:latest-generic /opt/custom-connectors/
 ```
 
-Then push to your container registry and deploy.
+Then push to your container registry and deploy. The script also generates a credentials template for each connector at `output/<name>/credentials_template.json` — fill in your database credentials and use it to configure [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) in Monte Carlo.
 
 ### 10. Clean up
 

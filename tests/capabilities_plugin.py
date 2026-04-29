@@ -1,3 +1,4 @@
+import importlib
 import json
 import os
 
@@ -282,6 +283,15 @@ def pytest_sessionfinish(session, exitstatus):
                 manifest = json.load(f)
                 connection_type = manifest.get("connection_type")
 
+    # Extract credential keys from BaseConnector (keys only, not values)
+    credential_keys = []
+    if connector_name:
+        try:
+            module = importlib.import_module(f"connectors.{connector_name}.connector")
+            credential_keys = list(module.BaseConnector().credential_env_vars().keys())
+        except Exception:
+            pass
+
     # Fill in defaults for capabilities not set by markers
     for cap in ALL_CAPABILITIES:
         results["capabilities"].setdefault(cap, False)
@@ -316,6 +326,13 @@ def pytest_sessionfinish(session, exitstatus):
     output_path = os.path.join(output_dir, "manifest.json")
     with open(output_path, "w") as f:
         json.dump(output, f, indent=4, sort_keys=True)
+
+    # Write credentials template (keys only, no values)
+    if credential_keys:
+        creds_template = {"connect_args": {k: "<your-value>" for k in credential_keys}}
+        creds_path = os.path.join(output_dir, "credentials_template.json")
+        with open(creds_path, "w") as f:
+            json.dump(creds_template, f, indent=4)
 
     # Export passing templates to .j2 files
     templates_instance = getattr(session.config, "_templates_instance", None)
