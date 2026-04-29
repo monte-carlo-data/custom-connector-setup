@@ -2,12 +2,12 @@
 """Build a custom agent Docker image with connector artifacts.
 
 Usage:
-    python scripts/generate_agent_image.py --agent-type aws-generic
-    python scripts/generate_agent_image.py --agent-type lambda --version 1.4.12
-    python scripts/generate_agent_image.py --agent-type azure --connector postgres --connector teradata
+    python scripts/generate_agent_image.py
+    python scripts/generate_agent_image.py --version 0.0.11
+    python scripts/generate_agent_image.py --connector postgres --connector teradata
 
 Hybrid mode (metadata pushed externally — only metric monitor support required):
-    python scripts/generate_agent_image.py --agent-type aws-generic --mode hybrid
+    python scripts/generate_agent_image.py --mode hybrid
 """
 import argparse
 import json
@@ -17,7 +17,7 @@ import subprocess
 import sys
 import tempfile
 
-VALID_AGENT_TYPES = ["aws-generic", "aws-proxied", "azure", "cloudrun", "lambda"]
+AGENT_TYPE = "generic"
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONNECTORS_DIR = os.path.join(REPO_ROOT, "connectors")
@@ -102,9 +102,9 @@ def check_metric_warnings(name):
     return None
 
 
-def generate_dockerfile(connectors, version, agent_type, base_image=None):
+def generate_dockerfile(connectors, version, base_image=None):
     """Generate Dockerfile contents for the custom agent image."""
-    from_image = base_image or f"montecarlodata/agent:{version}-{agent_type}"
+    from_image = base_image or f"montecarlodata/agent:{version}-{AGENT_TYPE}"
     lines = [f"FROM {from_image}", "", "ENV MCD_CUSTOM_CONNECTORS_ENABLED=true", ""]
 
     for name in connectors:
@@ -143,12 +143,6 @@ def main():
         description="Build a custom agent Docker image with connector artifacts"
     )
     parser.add_argument(
-        "--agent-type",
-        required=True,
-        choices=VALID_AGENT_TYPES,
-        help="Agent type (e.g. aws-generic, lambda, azure)",
-    )
-    parser.add_argument(
         "--version",
         default="latest",
         help="Agent base image version (default: latest)",
@@ -167,7 +161,7 @@ def main():
     parser.add_argument(
         "--tag",
         default=None,
-        help="Output image tag (default: custom-agent:{version}-{agent-type})",
+        help="Output image tag (default: custom-agent:{version}-generic)",
     )
     parser.add_argument(
         "--base-image",
@@ -247,14 +241,14 @@ def main():
             sys.exit(1)
         print()
 
-    tag = args.tag or f"custom-agent:{args.version}-{args.agent_type}"
+    tag = args.tag or f"custom-agent:{args.version}-{AGENT_TYPE}"
 
     # Build in a temp directory
     tmp_dir = tempfile.mkdtemp(prefix="agent-build-")
     try:
         # Generate Dockerfile
         dockerfile_content = generate_dockerfile(
-            connectors, args.version, args.agent_type, base_image=args.base_image
+            connectors, args.version, base_image=args.base_image
         )
         dockerfile_path = os.path.join(tmp_dir, "Dockerfile")
         with open(dockerfile_path, "w") as f:
@@ -263,7 +257,7 @@ def main():
         # Copy artifacts into build context
         build_context(tmp_dir, connectors)
 
-        base_image = args.base_image or f"montecarlodata/agent:{args.version}-{args.agent_type}"
+        base_image = args.base_image or f"montecarlodata/agent:{args.version}-{AGENT_TYPE}"
         print(f"Building image '{tag}' with connectors: {', '.join(connectors)}")
         print(f"Base image: {base_image}")
         print(f"Docker platform: {args.docker_platform}")
@@ -294,6 +288,24 @@ def main():
     print(f"     docker push <your-registry>/{tag}")
     if args.mode == "hybrid":
         print(f"  3. Configure your external metadata pipeline to push metadata for the integrated data source")
+
+    # Point users to credentials.json for self-hosted setup
+    creds_files = []
+    for name in connectors:
+        creds_path = os.path.join(CONNECTORS_DIR, name, "credentials.json")
+        if os.path.isfile(creds_path):
+            creds_files.append(creds_path)
+
+    if creds_files:
+        print()
+        print("Self-hosted credentials")
+        print("-----------------------")
+        print("Use your credentials.json as the self-hosted credentials in Monte Carlo")
+        print("(swap in production values if you used dev/test credentials):")
+        for path in creds_files:
+            print(f"  {os.path.relpath(path, REPO_ROOT)}")
+        print()
+        print("See: https://docs.getmontecarlo.com/docs/self-hosted-credentials")
 
 
 if __name__ == "__main__":

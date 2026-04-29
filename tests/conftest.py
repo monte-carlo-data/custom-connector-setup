@@ -1,10 +1,10 @@
 import importlib
+import json
 import os
 from datetime import datetime, date
 from typing import Callable, List, Any, Optional
 
 import pytest
-from dotenv import load_dotenv
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 pytest_plugins = ["tests.capabilities_plugin"]
@@ -79,9 +79,6 @@ def _get_connector(config):
         config._connector_name = name
 
         connectors_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connectors")
-        env_path = os.path.join(connectors_dir, name, ".env")
-        if os.path.exists(env_path):
-            load_dotenv(env_path, override=True)
 
         module = importlib.import_module(f"connectors.{name}.connector")
         _connector_cache["name"] = name
@@ -93,19 +90,20 @@ def _get_connector(config):
 class TestConnector:
     """Wraps a loaded connector module's BaseConnector via delegation."""
 
-    def __init__(self, module):
+    def __init__(self, module, connector_name):
         self._delegate = module.BaseConnector()
-        self._delegate.credentials = self._load_credentials_from_env()
+        self._delegate.credentials = self._load_credentials(connector_name)
         self._delegate.connection = self._delegate.create_connection()
         self._delegate.cursor = self._delegate.create_cursor()
 
-    def _load_credentials_from_env(self) -> dict[str, str]:
-        creds = {}
-        for key, env_var in self._delegate.credential_env_vars().items():
-            val = os.environ.get(env_var)
-            if val is not None:
-                creds[key] = val
-        return creds
+    def _load_credentials(self, connector_name) -> dict:
+        connectors_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connectors")
+        creds_path = os.path.join(connectors_dir, connector_name, "credentials.json")
+        if os.path.isfile(creds_path):
+            with open(creds_path) as f:
+                data = json.load(f)
+            return data.get("connect_args", {})
+        return {}
 
     def execute_and_fetch_all(self, query: str) -> List[Any]:
         self._delegate.execute_query(query)
@@ -237,8 +235,8 @@ class QueryTestHelper:
 
 @pytest.fixture(scope="session")
 def connector(request):
-    _, module = _get_connector(request.config)
-    tc = TestConnector(module)
+    name, module = _get_connector(request.config)
+    tc = TestConnector(module, name)
     yield tc
     tc.close_connection()
 

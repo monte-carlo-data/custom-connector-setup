@@ -1,6 +1,6 @@
 ---
 name: create-connector
-description: Scaffold a new connector directory with base template, manifest, .env, and requirements.txt
+description: Scaffold a new connector directory with base template, manifest, credentials.json, and requirements.txt
 argument-hint: <connector-name>
 disable-model-invocation: true
 ---
@@ -20,7 +20,7 @@ python scripts/create_connector.py <connector-name>
 This creates `connectors/<name>/` with:
 - `connector.py` — base template with all stubs
 - `manifest.json` — unique connector type identifier
-- `.env` — empty credentials file
+- `credentials.json` — empty credentials template
 - `requirements.txt` — empty driver file
 
 ## Step 2: Verify

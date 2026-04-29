@@ -50,9 +50,11 @@ def main():
         json.dump(manifest, f, indent=2)
         f.write("\n")
 
-    # Create empty .env
-    with open(os.path.join(target_dir, ".env"), "w") as f:
-        f.write("# Add your database credentials here.\n")
+    # Create credentials.json template
+    creds = {"connect_args": {}}
+    with open(os.path.join(target_dir, "credentials.json"), "w") as f:
+        json.dump(creds, f, indent=2)
+        f.write("\n")
 
     # Create empty requirements.txt
     with open(os.path.join(target_dir, "requirements.txt"), "w") as f:
@@ -62,8 +64,8 @@ def main():
     print(f"  connection_type: {connection_type}")
     print()
     print("Next steps:")
-    print(f"  1. Edit connectors/{name}/connector.py    — fill in the stubs")
-    print(f"  2. Edit connectors/{name}/.env            — add credentials")
+    print(f"  1. Edit connectors/{name}/connector.py      — fill in the stubs")
+    print(f"  2. Edit connectors/{name}/credentials.json — add credentials")
     print(f"  3. Edit connectors/{name}/requirements.txt — add database driver")
     print(f"  4. docker compose build")
     print(f"  5. CONNECTOR={name} docker compose run test -m connection")

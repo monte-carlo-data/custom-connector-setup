@@ -15,12 +15,12 @@ The repo includes five skills that automate the full workflow end-to-end:
 | Step | Skill                                                       | What it does                                                                                          |
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | 1    | `/create-connector <name>`                                  | Scaffold a new connector directory                                                                    |
-| 2    | `/setup-connection <name>`                                  | Install driver, implement connection methods, stub `.env` — **pauses for you to fill in credentials** |
+| 2    | `/setup-connection <name>`                                  | Install driver, implement connection methods, stub `credentials.json` — **pauses for you to fill in credentials** |
 | 3    | `/implement-connector <name> [hybrid]`                      | Implement all template methods section by section                                                     |
-| 4    | `/build-agent-image <name> --agent-type TYPE [--mode MODE]` | Export capabilities and build deployable Docker image                                                 |
+| 4    | `/build-agent-image <name> [--mode MODE]` | Export capabilities and build deployable Docker image                                                 |
 | —    | `/export-qlbase <name>`                                     | _(Optional)_ Convert Jinja templates to monolith QLBase class                                         |
 
-The only manual step is filling in `.env` credentials when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
+The only manual step is filling in `credentials.json` when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
 
 ### Fallback: Other AI agents
 
@@ -38,7 +38,7 @@ This creates `connectors/<name>/` with:
 
 - `connector.py` — base classes to implement (copy of the canonical template)
 - `manifest.json` — unique `connection_type` identifier
-- `.env` — credentials file (gitignored)
+- `credentials.json` — database credentials (gitignored)
 - `requirements.txt` — database driver dependencies
 
 ### 2. Implement the connector classes
@@ -47,7 +47,7 @@ Edit `connectors/<name>/connector.py` and fill in the base classes:
 
 | Class                         | Purpose                                                                                                                                               |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BaseConnector`               | Connection lifecycle — `create_connection`, `create_cursor`, `execute_query`, `fetch_all_results`, `close_connection`                                 |
+| `BaseConnector`               | Connection lifecycle — `create_connection`, `create_cursor`, `execute_query`, `fetch_all_results`, `close_connection`                                  |
 | `MetadataQueryTemplates`      | Jinja templates for discovering databases, schemas, tables, and columns                                                                               |
 | `QueryLogCollectionTemplates` | Jinja template for fetching query logs                                                                                                                |
 | `CustomSQLMonitorTemplates`   | Jinja templates for custom SQL monitor operations (count wrapping, row limits)                                                                        |
@@ -82,42 +82,35 @@ docker compose build
 
 ### 4. Configure credentials
 
-Override `credential_env_vars()` in `BaseConnector` to map credential keys to environment variable names:
+Add your database credentials to `connectors/<name>/credentials.json`:
 
-```python
-def credential_env_vars(self) -> dict[str, str]:
-    return {
-        "host": "PGHOST",
-        "port": "PGPORT",
-        "database": "PGDATABASE",
-        "user": "PGUSER",
-        "password": "PGPASSWORD",
-    }
+```json
+{
+  "connect_args": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "mydb",
+    "user": "myuser",
+    "password": "mypassword"
+  }
+}
 ```
 
-Then use `self.credentials` in `create_connection()`:
+The keys in `connect_args` are whatever your `create_connection()` method expects via `self.credentials`:
 
 ```python
 def create_connection(self):
     import psycopg2
     return psycopg2.connect(
         host=self.credentials["host"],
-        port=self.credentials.get("port", "5432"),
+        port=int(self.credentials["port"]),
         database=self.credentials["database"],
         user=self.credentials["user"],
         password=self.credentials["password"],
     )
 ```
 
-Add your credentials to `connectors/<name>/.env`:
-
-```
-PGHOST=localhost
-PGPORT=5432
-PGDATABASE=mydb
-PGUSER=myuser
-PGPASSWORD=mypassword
-```
+This same JSON format is used for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) when deploying — just swap in production values.
 
 ### 5. Build the Docker image
 
@@ -183,26 +176,25 @@ Passing templates are exported to `output/<name>/templates/`.
 Once your connector passes tests and templates are exported, package everything into a custom agent image:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic
+python scripts/generate_agent_image.py
 ```
 
-This takes the public `montecarlodata/agent` image as a base and layers on your connector artifacts (templates, capabilities, connector code, and dependencies).
+This takes the public `montecarlodata/agent:latest-generic` image as a base and layers on your connector artifacts (templates, capabilities, connector code, and dependencies). The generic agent is an egress-only agent that works across all supported platforms (Docker Compose, Kubernetes, EKS, AKS, GKE). See [Generic Agent Platforms](https://docs.getmontecarlo.com/docs/generic-agent-platforms) for deployment options.
 
 **Options:**
 
-| Flag                      | Default                               | Description                                                         |
-| ------------------------- | ------------------------------------- | ------------------------------------------------------------------- |
-| `--agent-type` (required) | —                                     | One of: `aws-generic`, `aws-proxied`, `azure`, `cloudrun`, `lambda` |
-| `--version`               | `latest`                              | Agent base image version (e.g. `1.4.12`)                            |
-| `--connector`             | all with output/                      | Which connectors to include (repeatable)                            |
-| `--docker-platform`       | `linux/amd64`                         | Docker platform for the image                                       |
-| `--tag`                   | `custom-agent:{version}-{agent-type}` | Output image tag                                                    |
-| `--mode`                  | `full`                                | `full` or `hybrid` — see Modes below                                |
+| Flag                | Default                          | Description                          |
+| ------------------- | -------------------------------- | ------------------------------------ |
+| `--version`         | `latest`                         | Agent base image version             |
+| `--connector`       | all with output/                 | Which connectors to include (repeatable) |
+| `--docker-platform` | `linux/amd64`                    | Docker platform for the image        |
+| `--tag`             | `custom-agent:{version}-generic` | Output image tag                     |
+| `--mode`            | `full`                           | `full` or `hybrid` — see Modes below |
 
 Include specific connectors:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic --connector postgres --connector mysql
+python scripts/generate_agent_image.py --connector postgres --connector mysql
 ```
 
 **Modes:**
@@ -217,22 +209,22 @@ python scripts/generate_agent_image.py --agent-type aws-generic --connector post
 Full mode (default) — the agent handles metadata collection and metric monitors:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic
+python scripts/generate_agent_image.py
 ```
 
 Hybrid mode — metadata is pushed externally, the agent only needs metric monitor support:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic --mode hybrid
+python scripts/generate_agent_image.py --mode hybrid
 ```
 
 Verify the image:
 
 ```bash
-docker run --rm --entrypoint ls custom-agent:latest-aws-generic /opt/custom-connectors/
+docker run --rm --entrypoint ls custom-agent:latest-generic /opt/custom-connectors/
 ```
 
-Then push to your container registry and deploy.
+Then push to your container registry and deploy. Your `connectors/<name>/credentials.json` is already in the format needed for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) — just swap in production values.
 
 ### 10. Clean up
 
@@ -258,7 +250,7 @@ custom-connector-setup/
       __init__.py                         # Exports the base classes
     <your-database>/                      # Created by you (one directory per connector)
       connector.py                        # Your implementation (fill in stubs)
-      .env                                # Database credentials (gitignored)
+      credentials.json                    # Database credentials (gitignored)
       manifest.json                       # {"connection_type": "custom-connector-xxx", "name": "..."}
       requirements.txt                    # Database driver deps
   output/                                 # Auto-generated by --export (gitignored)
@@ -443,7 +435,7 @@ docker build -t local-agent .
 
 # Use the local build as the base for your custom image
 cd /path/to/custom-connector-setup
-python scripts/generate_agent_image.py --agent-type aws-generic --base-image local-agent
+python scripts/generate_agent_image.py --base-image local-agent
 ```
 
 This is useful for debugging agent-side behavior or verifying your connector works with in-development agent changes before they're published.
