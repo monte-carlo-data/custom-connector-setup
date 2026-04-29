@@ -1,7 +1,7 @@
 ---
 name: build-agent-image
 description: Export capabilities and build a custom agent Docker image for a connector
-argument-hint: <connector-name> [--agent-type TYPE] [--mode MODE]
+argument-hint: <connector-name> [--mode MODE]
 disable-model-invocation: true
 ---
 
@@ -11,7 +11,6 @@ disable-model-invocation: true
 
 `$ARGUMENTS` contains:
 - `connector_name` (required): e.g., `postgres`, `snowflake`
-- `--agent-type TYPE` (optional): one of `aws-generic`, `aws-proxied`, `azure`, `cloudrun`, `lambda`. Default: `aws-generic`
 - `--mode MODE` (optional): `full` or `hybrid`. Default: `full`
 
 Parse any flags from `$ARGUMENTS`. Anything not prefixed with `--` is the connector name.
@@ -53,19 +52,17 @@ Run the image generator. Use `echo y |` to auto-accept the metric warning prompt
 
 ```bash
 echo y | python scripts/generate_agent_image.py \
-  --agent-type <agent-type> \
   --connector <name> \
   --mode <mode>
 ```
 
 Where:
-- `<agent-type>` is from arguments or defaults to `aws-generic`
 - `<mode>` is from arguments or defaults to `full`
 
 ## Step 5: Report results
 
 **If the build succeeds**, report:
-- The image tag (e.g., `custom-agent:latest-aws-generic`)
+- The image tag (e.g., `custom-agent:latest-generic`)
 - Verification command: `docker run --rm --entrypoint ls <tag> /opt/custom-connectors/`
 - Push instructions:
   ```

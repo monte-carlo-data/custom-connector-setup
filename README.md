@@ -17,7 +17,7 @@ The repo includes five skills that automate the full workflow end-to-end:
 | 1    | `/create-connector <name>`                                  | Scaffold a new connector directory                                                                    |
 | 2    | `/setup-connection <name>`                                  | Install driver, implement connection methods, stub `.env` — **pauses for you to fill in credentials** |
 | 3    | `/implement-connector <name> [hybrid]`                      | Implement all template methods section by section                                                     |
-| 4    | `/build-agent-image <name> --agent-type TYPE [--mode MODE]` | Export capabilities and build deployable Docker image                                                 |
+| 4    | `/build-agent-image <name> [--mode MODE]` | Export capabilities and build deployable Docker image                                                 |
 | —    | `/export-qlbase <name>`                                     | _(Optional)_ Convert Jinja templates to monolith QLBase class                                         |
 
 The only manual step is filling in `.env` credentials when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
@@ -183,26 +183,25 @@ Passing templates are exported to `output/<name>/templates/`.
 Once your connector passes tests and templates are exported, package everything into a custom agent image:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic
+python scripts/generate_agent_image.py
 ```
 
-This takes the public `montecarlodata/agent` image as a base and layers on your connector artifacts (templates, capabilities, connector code, and dependencies).
+This takes the public `montecarlodata/agent:latest-generic` image as a base and layers on your connector artifacts (templates, capabilities, connector code, and dependencies). The generic agent is an egress-only agent that works across all supported platforms (Docker Compose, Kubernetes, EKS, AKS, GKE). See [Generic Agent Platforms](https://docs.getmontecarlo.com/docs/generic-agent-platforms) for deployment options.
 
 **Options:**
 
-| Flag                      | Default                               | Description                                                         |
-| ------------------------- | ------------------------------------- | ------------------------------------------------------------------- |
-| `--agent-type` (required) | —                                     | One of: `aws-generic`, `aws-proxied`, `azure`, `cloudrun`, `lambda` |
-| `--version`               | `latest`                              | Agent base image version (e.g. `1.4.12`)                            |
-| `--connector`             | all with output/                      | Which connectors to include (repeatable)                            |
-| `--docker-platform`       | `linux/amd64`                         | Docker platform for the image                                       |
-| `--tag`                   | `custom-agent:{version}-{agent-type}` | Output image tag                                                    |
-| `--mode`                  | `full`                                | `full` or `hybrid` — see Modes below                                |
+| Flag                | Default                          | Description                          |
+| ------------------- | -------------------------------- | ------------------------------------ |
+| `--version`         | `latest`                         | Agent base image version             |
+| `--connector`       | all with output/                 | Which connectors to include (repeatable) |
+| `--docker-platform` | `linux/amd64`                    | Docker platform for the image        |
+| `--tag`             | `custom-agent:{version}-generic` | Output image tag                     |
+| `--mode`            | `full`                           | `full` or `hybrid` — see Modes below |
 
 Include specific connectors:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic --connector postgres --connector mysql
+python scripts/generate_agent_image.py --connector postgres --connector mysql
 ```
 
 **Modes:**
@@ -217,19 +216,19 @@ python scripts/generate_agent_image.py --agent-type aws-generic --connector post
 Full mode (default) — the agent handles metadata collection and metric monitors:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic
+python scripts/generate_agent_image.py
 ```
 
 Hybrid mode — metadata is pushed externally, the agent only needs metric monitor support:
 
 ```bash
-python scripts/generate_agent_image.py --agent-type aws-generic --mode hybrid
+python scripts/generate_agent_image.py --mode hybrid
 ```
 
 Verify the image:
 
 ```bash
-docker run --rm --entrypoint ls custom-agent:latest-aws-generic /opt/custom-connectors/
+docker run --rm --entrypoint ls custom-agent:latest-generic /opt/custom-connectors/
 ```
 
 Then push to your container registry and deploy.
@@ -443,7 +442,7 @@ docker build -t local-agent .
 
 # Use the local build as the base for your custom image
 cd /path/to/custom-connector-setup
-python scripts/generate_agent_image.py --agent-type aws-generic --base-image local-agent
+python scripts/generate_agent_image.py --base-image local-agent
 ```
 
 This is useful for debugging agent-side behavior or verifying your connector works with in-development agent changes before they're published.

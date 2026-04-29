@@ -7,7 +7,7 @@ The connector workflow is driven by five Claude Code skills. Run them in order:
 | 1    | `/create-connector <name>`                                    | Scaffold a new connector directory                                        |
 | 2    | `/setup-connection <name>`                                    | Install driver, implement connection methods, verify with `-m connection` |
 | 3    | `/implement-connector <name> [hybrid]`                        | Implement all template methods section by section                         |
-| 4    | `/build-agent-image <name> [--agent-type TYPE] [--mode MODE]` | Export capabilities and build Docker image                                |
+| 4    | `/build-agent-image <name> [--mode MODE]` | Export capabilities and build Docker image                                |
 | —    | `/export-qlbase <name> [monolith-path]`                       | Convert Jinja templates to monolith QLBase class                          |
 
 Each skill file (`.claude/skills/*/SKILL.md`) contains detailed step-by-step instructions. Use `/implement-connector <name> hybrid` for connectors where metadata is pushed externally.
