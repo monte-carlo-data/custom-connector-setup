@@ -69,7 +69,7 @@ Where:
   docker tag <tag> <your-registry>/<tag>
   docker push <your-registry>/<tag>
   ```
-- The credentials template at `output/<name>/credentials_template.json` — tell the user to fill in their database credentials and use it to configure self-hosted credentials: https://docs.getmontecarlo.com/docs/self-hosted-credentials
+- Remind the user that their `connectors/<name>/credentials.json` is already in the format needed for self-hosted credentials — just swap in production values: https://docs.getmontecarlo.com/docs/self-hosted-credentials
 
 **If the build fails**, read the Docker build output and diagnose:
 - Missing base image: user may need to `docker pull` the agent base image

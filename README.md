@@ -15,12 +15,12 @@ The repo includes five skills that automate the full workflow end-to-end:
 | Step | Skill                                                       | What it does                                                                                          |
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | 1    | `/create-connector <name>`                                  | Scaffold a new connector directory                                                                    |
-| 2    | `/setup-connection <name>`                                  | Install driver, implement connection methods, stub `.env` — **pauses for you to fill in credentials** |
+| 2    | `/setup-connection <name>`                                  | Install driver, implement connection methods, stub `credentials.json` — **pauses for you to fill in credentials** |
 | 3    | `/implement-connector <name> [hybrid]`                      | Implement all template methods section by section                                                     |
 | 4    | `/build-agent-image <name> [--mode MODE]` | Export capabilities and build deployable Docker image                                                 |
 | —    | `/export-qlbase <name>`                                     | _(Optional)_ Convert Jinja templates to monolith QLBase class                                         |
 
-The only manual step is filling in `.env` credentials when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
+The only manual step is filling in `credentials.json` when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
 
 ### Fallback: Other AI agents
 
@@ -38,7 +38,7 @@ This creates `connectors/<name>/` with:
 
 - `connector.py` — base classes to implement (copy of the canonical template)
 - `manifest.json` — unique `connection_type` identifier
-- `.env` — credentials file (gitignored)
+- `credentials.json` — database credentials (gitignored)
 - `requirements.txt` — database driver dependencies
 
 ### 2. Implement the connector classes
@@ -47,7 +47,7 @@ Edit `connectors/<name>/connector.py` and fill in the base classes:
 
 | Class                         | Purpose                                                                                                                                               |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BaseConnector`               | Connection lifecycle — `create_connection`, `create_cursor`, `execute_query`, `fetch_all_results`, `close_connection`                                 |
+| `BaseConnector`               | Connection lifecycle — `create_connection`, `create_cursor`, `execute_query`, `fetch_all_results`, `close_connection`                                  |
 | `MetadataQueryTemplates`      | Jinja templates for discovering databases, schemas, tables, and columns                                                                               |
 | `QueryLogCollectionTemplates` | Jinja template for fetching query logs                                                                                                                |
 | `CustomSQLMonitorTemplates`   | Jinja templates for custom SQL monitor operations (count wrapping, row limits)                                                                        |
@@ -82,42 +82,35 @@ docker compose build
 
 ### 4. Configure credentials
 
-Override `credential_env_vars()` in `BaseConnector` to map credential keys to environment variable names:
+Add your database credentials to `connectors/<name>/credentials.json`:
 
-```python
-def credential_env_vars(self) -> dict[str, str]:
-    return {
-        "host": "PGHOST",
-        "port": "PGPORT",
-        "database": "PGDATABASE",
-        "user": "PGUSER",
-        "password": "PGPASSWORD",
-    }
+```json
+{
+  "connect_args": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "mydb",
+    "user": "myuser",
+    "password": "mypassword"
+  }
+}
 ```
 
-Then use `self.credentials` in `create_connection()`:
+The keys in `connect_args` are whatever your `create_connection()` method expects via `self.credentials`:
 
 ```python
 def create_connection(self):
     import psycopg2
     return psycopg2.connect(
         host=self.credentials["host"],
-        port=self.credentials.get("port", "5432"),
+        port=int(self.credentials["port"]),
         database=self.credentials["database"],
         user=self.credentials["user"],
         password=self.credentials["password"],
     )
 ```
 
-Add your credentials to `connectors/<name>/.env`:
-
-```
-PGHOST=localhost
-PGPORT=5432
-PGDATABASE=mydb
-PGUSER=myuser
-PGPASSWORD=mypassword
-```
+This same JSON format is used for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) when deploying — just swap in production values.
 
 ### 5. Build the Docker image
 
@@ -231,7 +224,7 @@ Verify the image:
 docker run --rm --entrypoint ls custom-agent:latest-generic /opt/custom-connectors/
 ```
 
-Then push to your container registry and deploy. The script also generates a credentials template for each connector at `output/<name>/credentials_template.json` — fill in your database credentials and use it to configure [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) in Monte Carlo.
+Then push to your container registry and deploy. Your `connectors/<name>/credentials.json` is already in the format needed for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) — just swap in production values.
 
 ### 10. Clean up
 
@@ -257,7 +250,7 @@ custom-connector-setup/
       __init__.py                         # Exports the base classes
     <your-database>/                      # Created by you (one directory per connector)
       connector.py                        # Your implementation (fill in stubs)
-      .env                                # Database credentials (gitignored)
+      credentials.json                    # Database credentials (gitignored)
       manifest.json                       # {"connection_type": "custom-connector-xxx", "name": "..."}
       requirements.txt                    # Database driver deps
   output/                                 # Auto-generated by --export (gitignored)

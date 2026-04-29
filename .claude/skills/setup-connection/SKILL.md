@@ -1,6 +1,6 @@
 ---
 name: setup-connection
-description: Research the database driver, implement connection methods, stub .env, and verify with connection tests
+description: Research the database driver, implement connection methods, stub credentials.json, and verify with connection tests
 argument-hint: <connector-name>
 disable-model-invocation: true
 ---
@@ -16,7 +16,7 @@ disable-model-invocation: true
 Read these files to understand the current state:
 1. `connectors/<name>/connector.py` — the stub file
 2. `connectors/<name>/requirements.txt` — currently empty
-3. `connectors/<name>/.env` — currently empty
+3. `connectors/<name>/credentials.json` — empty template
 
 ## Step 2: Research the database driver
 
@@ -39,34 +39,39 @@ psycopg2-binary==2.9.9
 
 ## Step 4: Implement connection methods
 
-Edit `connectors/<name>/connector.py` to implement these three methods in `BaseConnector`:
-
-### `credential_env_vars()`
-Return a dict mapping logical credential names to environment variable names. Use a consistent prefix based on the database name (e.g., `PGHOST` for Postgres, `SF_ACCOUNT` for Snowflake).
+Edit `connectors/<name>/connector.py` to implement these two methods in `BaseConnector`:
 
 ### `create_connection()`
-Import the driver at the top of the file and create a connection using `self.credentials[key]` for each credential. Follow the driver's documented connection API.
+Import the driver at the top of the file and create a connection using `self.credentials[key]` for each credential key defined in `credentials.json`'s `connect_args`. Follow the driver's documented connection API.
 
 ### `create_cursor()`
 Return a cursor from `self.connection`. Add any session-level settings if needed (e.g., date format, timezone).
 
 **Do not implement** `execute_query`, `fetch_all_results`, `close_connection`, or any template methods — those come later in `/implement-connector`.
 
-## Step 5: Stub the .env file
+## Step 5: Stub credentials.json
 
-Write `connectors/<name>/.env` with the environment variable names from `credential_env_vars()`, with empty values for the user to fill in:
+Write `connectors/<name>/credentials.json` with the credential keys your `create_connection()` method expects, using placeholder values:
 
+```json
+{
+  "connect_args": {
+    "host": "",
+    "port": 5432,
+    "database": "",
+    "user": "",
+    "password": ""
+  }
+}
 ```
-# <Database Name> credentials
-VARIABLE_NAME=
-ANOTHER_VARIABLE=
-```
+
+This is the same format used for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) in production — the user fills it in once and reuses it for deployment.
 
 ## Step 6: STOP — Wait for user to fill in credentials
 
 **You must stop here and tell the user:**
 
-> Connection code is ready. Please fill in your database credentials in `connectors/<name>/.env` and confirm when done so I can run the connection test.
+> Connection code is ready. Please fill in your database credentials in `connectors/<name>/credentials.json` and confirm when done so I can run the connection test.
 
 **Do not proceed until the user confirms.** The connection test will fail without real credentials.
 
@@ -86,8 +91,8 @@ CONNECTOR=<name> docker compose run --rm test -m connection
 
 **If tests fail:** Read the error output carefully.
 - **ImportError**: Driver not installed correctly — check `requirements.txt` spelling and rebuild
-- **Connection refused / timeout**: Credentials or network issue — ask user to verify `.env` values
+- **Connection refused / timeout**: Credentials or network issue — ask user to verify `credentials.json` values
 - **Authentication failed**: Wrong username/password — ask user to check credentials
 - **SSL/TLS error**: May need SSL parameters in `create_connection()`
 
-Fix what you can in the code, then re-run. For credential issues, ask the user to update `.env` and confirm.
+Fix what you can in the code, then re-run. For credential issues, ask the user to update `credentials.json` and confirm.

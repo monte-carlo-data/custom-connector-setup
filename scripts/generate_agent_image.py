@@ -289,10 +289,10 @@ def main():
     if args.mode == "hybrid":
         print(f"  3. Configure your external metadata pipeline to push metadata for the integrated data source")
 
-    # Point users to credentials templates for self-hosted setup
+    # Point users to credentials.json for self-hosted setup
     creds_files = []
     for name in connectors:
-        creds_path = os.path.join(OUTPUT_DIR, name, "credentials_template.json")
+        creds_path = os.path.join(CONNECTORS_DIR, name, "credentials.json")
         if os.path.isfile(creds_path):
             creds_files.append(creds_path)
 
@@ -300,7 +300,8 @@ def main():
         print()
         print("Self-hosted credentials")
         print("-----------------------")
-        print("Fill in your database credentials in the generated template(s):")
+        print("Use your credentials.json as the self-hosted credentials in Monte Carlo")
+        print("(swap in production values if you used dev/test credentials):")
         for path in creds_files:
             print(f"  {os.path.relpath(path, REPO_ROOT)}")
         print()

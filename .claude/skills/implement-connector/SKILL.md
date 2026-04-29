@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Implement Connector: Full Agent Workflow
 
-Implement all template methods and remaining `BaseConnector` methods in `connectors/<name>/connector.py`. The connection is already working — `credential_env_vars`, `create_connection`, and `create_cursor` are implemented and passing `-m connection`.
+Implement all template methods and remaining `BaseConnector` methods in `connectors/<name>/connector.py`. The connection is already working — `create_connection` and `create_cursor` are implemented and passing `-m connection`.
 
 ## Arguments
 
