@@ -8,6 +8,9 @@ Usage:
 
 Hybrid mode (metadata pushed externally — only metric monitor support required):
     python scripts/generate_agent_image.py --mode hybrid
+
+Auto mode (auto-detect per connector based on manifest capabilities):
+    python scripts/generate_agent_image.py --mode auto
 """
 import argparse
 import json
@@ -35,6 +38,25 @@ def discover_connectors():
         for name in os.listdir(OUTPUT_DIR)
         if os.path.isdir(os.path.join(OUTPUT_DIR, name)) and name != "_base"
     )
+
+
+def detect_connector_mode(name):
+    """Auto-detect whether a connector should use full or hybrid mode."""
+    manifest_path = os.path.join(OUTPUT_DIR, name, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        return "full"
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    if manifest.get("capabilities", {}).get("supports_metadata"):
+        return "full"
+    return "hybrid"
+
+
+def resolve_connector_mode(name, global_mode):
+    """Resolve the effective mode for a connector given the global --mode flag."""
+    if global_mode == "auto":
+        return detect_connector_mode(name)
+    return global_mode
 
 
 def validate_connector(name, mode="full"):
@@ -170,9 +192,9 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["full", "hybrid"],
-        default="full",
-        help="Build mode: full (default) requires metadata support; hybrid requires custom SQL monitor support only (metadata pushed externally)",
+        choices=["auto", "full", "hybrid"],
+        default="auto",
+        help="Build mode: auto (default) detects per connector from manifest; full requires metadata support; hybrid requires custom SQL monitor support only (metadata pushed externally)",
     )
     args = parser.parse_args()
 
@@ -193,17 +215,21 @@ def main():
         )
         sys.exit(1)
 
-    # Validate all connectors
+    # Resolve per-connector modes and validate
+    connector_modes = {}
+    for name in connectors:
+        connector_modes[name] = resolve_connector_mode(name, args.mode)
+
     all_errors = {}
     for name in connectors:
-        errors = validate_connector(name, mode=args.mode)
+        errors = validate_connector(name, mode=connector_modes[name])
         if errors:
             all_errors[name] = errors
 
     if all_errors:
         print("Error: Some connectors are missing required artifacts:\n", file=sys.stderr)
         for name, errors in all_errors.items():
-            print(f"  {name}:", file=sys.stderr)
+            print(f"  {name} (mode: {connector_modes[name]}):", file=sys.stderr)
             for err in errors:
                 print(err, file=sys.stderr)
         print(
@@ -261,8 +287,10 @@ def main():
         print(f"Building image '{tag}' with connectors: {', '.join(connectors)}")
         print(f"Base image: {base_image}")
         print(f"Docker platform: {args.docker_platform}")
-        if args.mode == "hybrid":
-            print(f"Mode: hybrid (metadata pushed externally)")
+        for name in connectors:
+            mode = connector_modes[name]
+            mode_label = "hybrid (metadata pushed externally)" if mode == "hybrid" else "full"
+            print(f"  {name}: {mode_label}")
         print()
 
         # Run docker build
@@ -278,16 +306,23 @@ def main():
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     print(f"\nSuccess! Image built: {tag}")
-    if args.mode == "hybrid":
-        print("Mode: hybrid (metadata pushed externally)")
+    print()
+    print("Connector modes:")
+    hybrid_connectors = []
+    for name in connectors:
+        mode = connector_modes[name]
+        mode_label = "hybrid (metadata pushed externally)" if mode == "hybrid" else "full"
+        print(f"  {name}: {mode_label}")
+        if mode == "hybrid":
+            hybrid_connectors.append(name)
     print()
     print("Next steps:")
     print(f"  1. Verify: docker run --rm --entrypoint ls {tag} /opt/custom-connectors/")
     print(f"  2. Push to your container registry:")
     print(f"     docker tag {tag} <your-registry>/{tag}")
     print(f"     docker push <your-registry>/{tag}")
-    if args.mode == "hybrid":
-        print(f"  3. Configure your external metadata pipeline to push metadata for the integrated data source")
+    if hybrid_connectors:
+        print(f"  3. Configure your external metadata pipeline to push metadata for: {', '.join(hybrid_connectors)}")
 
     # Point users to credentials.json for self-hosted setup
     creds_files = []
