@@ -10,7 +10,7 @@ An AI coding agent can implement all the template methods after you set up the d
 
 ### Recommended: Claude Code skills
 
-The repo includes five skills that automate the full workflow end-to-end:
+The repo includes four skills that automate the full workflow end-to-end:
 
 | Step | Skill                                                       | What it does                                                                                          |
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -18,7 +18,6 @@ The repo includes five skills that automate the full workflow end-to-end:
 | 2    | `/setup-connection <name>`                                  | Install driver, implement connection methods, stub `credentials.json` — **pauses for you to fill in credentials** |
 | 3    | `/implement-connector <name> [hybrid]`                      | Implement all template methods section by section                                                     |
 | 4    | `/build-agent-image <name> [--mode MODE]` | Export capabilities and build deployable Docker image                                                 |
-| —    | `/export-qlbase <name>`                                     | _(Optional)_ Convert Jinja templates to monolith QLBase class                                         |
 
 The only manual step is filling in `credentials.json` when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
 
@@ -298,7 +297,6 @@ custom-connector-setup/
       setup-connection/SKILL.md
       implement-connector/SKILL.md
       build-agent-image/SKILL.md
-      export-qlbase/SKILL.md
   AGENTS.md                               # Instructions for AI coding agents
   pytest.toml                             # Pytest configuration and markers
   requirements.txt                        # Shared Python dependencies
