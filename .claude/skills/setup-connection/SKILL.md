@@ -37,6 +37,24 @@ Write the driver package with a pinned version to `connectors/<name>/requirement
 psycopg2-binary==2.9.9
 ```
 
+## Step 3b: Add system dependencies if needed
+
+If the driver requires system-level libraries (e.g., ODBC driver, native client, C libraries), add the installation commands to `connectors/<name>/Dockerfile.extra`:
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    <packages> \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+```
+
+Then regenerate the test Dockerfile:
+
+```bash
+python scripts/generate_test_dockerfile.py
+```
+
+The same `Dockerfile.extra` is automatically used when building the agent image. `COPY` instructions are not supported — use `RUN` to download and install dependencies.
+
 ## Step 4: Implement connection methods
 
 Edit `connectors/<name>/connector.py` to implement these two methods in `BaseConnector`:

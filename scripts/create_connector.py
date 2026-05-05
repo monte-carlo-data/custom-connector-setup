@@ -12,7 +12,15 @@ import json
 import os
 import secrets
 import shutil
+import subprocess
 import sys
+
+
+def _regenerate_test_dockerfile(repo_root):
+    """Run generate_test_dockerfile.py to regenerate the root Dockerfile."""
+    script = os.path.join(repo_root, "scripts", "generate_test_dockerfile.py")
+    if os.path.isfile(script):
+        subprocess.run([sys.executable, script], check=False)
 
 
 def main():
@@ -60,15 +68,33 @@ def main():
     with open(os.path.join(target_dir, "requirements.txt"), "w") as f:
         f.write("# Add your database driver here, e.g.:\n# psycopg2-binary==2.9.9\n")
 
+    # Create empty Dockerfile.extra for system dependencies
+    with open(os.path.join(target_dir, "Dockerfile.extra"), "w") as f:
+        f.write(
+            "# Add Docker instructions for system dependencies needed by your driver.\n"
+            "# For example, to install the Microsoft ODBC driver:\n"
+            "#\n"
+            "#   RUN apt-get update && apt-get install -y --no-install-recommends \\\n"
+            "#       unixodbc-dev \\\n"
+            "#       && apt-get clean && rm -rf /var/lib/apt/lists/*\n"
+            "#\n"
+            "# After editing, regenerate the test Dockerfile:\n"
+            "#   python scripts/generate_test_dockerfile.py\n"
+        )
+
+    # Regenerate the test Dockerfile to pick up the new connector
+    _regenerate_test_dockerfile(repo_root)
+
     print(f"Created connector '{name}' at connectors/{name}/")
     print(f"  connection_type: {connection_type}")
     print()
     print("Next steps:")
-    print(f"  1. Edit connectors/{name}/connector.py      — fill in the stubs")
-    print(f"  2. Edit connectors/{name}/credentials.json — add credentials")
-    print(f"  3. Edit connectors/{name}/requirements.txt — add database driver")
-    print(f"  4. docker compose build")
-    print(f"  5. CONNECTOR={name} docker compose run test -m connection")
+    print(f"  1. Edit connectors/{name}/connector.py        — fill in the stubs")
+    print(f"  2. Edit connectors/{name}/credentials.json   — add credentials")
+    print(f"  3. Edit connectors/{name}/requirements.txt   — add database driver")
+    print(f"  4. Edit connectors/{name}/Dockerfile.extra   — add system deps (if needed)")
+    print(f"  5. docker compose build")
+    print(f"  6. CONNECTOR={name} docker compose run test -m connection")
 
 
 if __name__ == "__main__":

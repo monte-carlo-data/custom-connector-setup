@@ -12,6 +12,17 @@ The connector workflow is driven by five Claude Code skills. Run them in order:
 
 Each skill file (`.claude/skills/*/SKILL.md`) contains detailed step-by-step instructions. Use `/implement-connector <name> hybrid` for connectors where metadata is pushed externally.
 
+## System Dependencies
+
+If a connector needs system-level packages (ODBC drivers, native libraries), add them to `connectors/<name>/Dockerfile.extra` as raw Dockerfile instructions (`RUN`, `ENV`, `ARG`), then regenerate the test Dockerfile:
+
+```bash
+python scripts/generate_test_dockerfile.py
+docker compose build
+```
+
+The `Dockerfile.extra` contents are automatically included in the agent image built by `generate_agent_image.py`.
+
 ## Quick Reference: Test Commands
 
 ```bash

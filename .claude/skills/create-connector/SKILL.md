@@ -22,6 +22,7 @@ This creates `connectors/<name>/` with:
 - `manifest.json` — unique connector type identifier
 - `credentials.json` — empty credentials template
 - `requirements.txt` — empty driver file
+- `Dockerfile.extra` — system dependency instructions (empty by default)
 
 ## Step 2: Verify
 
