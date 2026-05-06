@@ -154,6 +154,76 @@ def tables(connector, templates, database, schemas) -> List[MetadataSchema]:
 
 
 #############################################
+# Column Name Contract Tests
+#############################################
+@pytest.mark.template(
+    file="fetch_tables_query.sql.j2",
+    fixture="connector",
+    func="get_tables_query_template"
+)
+@pytest.mark.capability("supports_metadata")
+def test_tables_column_names(connector, templates, database, schemas):
+    """Verify get_tables cursor.description returns lowercase column names.
+
+    The agent framework maps result columns by name (case-sensitive).
+    Databases like Oracle return UPPERCASE column names by default, which
+    silently produces empty metadata in production while tests that only
+    use positional unpacking still pass.
+    """
+    query = templates.render_template(
+        templates.get_tables_query_template,
+        database_name=database,
+        schemas=", ".join([f"'{sch}'" for sch in schemas]),
+        offset=0,
+        limit=1,
+    )
+    connector.execute_and_fetch_all(query)
+    desc = connector.cursor.description
+    assert desc is not None, "cursor.description is None after tables query"
+
+    required_columns = {"database_name", "schema_name", "table_name", "table_type"}
+    actual_columns = {col[0] for col in desc}
+    missing = required_columns - actual_columns
+    assert not missing, (
+        f"get_tables_query_template cursor.description is missing required columns: {sorted(missing)}. "
+        f"Actual columns: {sorted(actual_columns)}. "
+        f"If your database returns UPPERCASE column names (e.g. Oracle), use double-quoted "
+        f"aliases: SELECT col AS \"database_name\" to preserve lowercase."
+    )
+
+
+@pytest.mark.template(
+    file="fetch_columns_query.sql.j2",
+    fixture="connector",
+    func="get_columns_query_template"
+)
+@pytest.mark.capability("supports_schema")
+def test_columns_column_names(connector, templates, database, tables):
+    """Verify get_columns cursor.description returns lowercase column names."""
+    if not templates.get_columns_query_template():
+        pytest.skip("get_columns_query_template not implemented")
+
+    query = templates.render_template(
+        templates.get_columns_query_template,
+        tables=", ".join([f"'{table.full_table_id}'" for table in tables[:1]]),
+        database_name=database,
+    )
+    results = connector.execute_and_fetch_all(query)
+    if not results:
+        pytest.skip("No columns returned to check column names")
+
+    desc = connector.cursor.description
+    required_columns = {"full_table_id", "column_name", "column_type"}
+    actual_columns = {col[0] for col in desc}
+    missing = required_columns - actual_columns
+    assert not missing, (
+        f"get_columns_query_template cursor.description is missing required columns: {sorted(missing)}. "
+        f"Actual columns: {sorted(actual_columns)}. "
+        f"Use double-quoted aliases to preserve lowercase if your database uppercases identifiers."
+    )
+
+
+#############################################
 # Metadata Related Tests
 #############################################
 @pytest.mark.template(
@@ -283,8 +353,108 @@ def test_fetch_columns(connector, templates, database, tables):
 
 
 #############################################
+# Non-empty Value Contract Tests
+#############################################
+@pytest.mark.template(
+    file="fetch_tables_query.sql.j2",
+    fixture="connector",
+    func="get_tables_query_template"
+)
+@pytest.mark.capability("supports_metadata")
+def test_tables_required_fields_non_empty(tables):
+    """Verify required metadata fields are non-empty strings.
+
+    The existing tests check isinstance(field, str) but that also passes for
+    empty strings. In production, empty database_name/schema_name/table_name
+    renders the metadata useless.
+    """
+    for t in tables[:10]:
+        assert t.database_name, (
+            f"database_name is empty for table at position "
+            f"({t.database_name!r}, {t.schema_name!r}, {t.table_name!r}). "
+            f"Check your get_tables_query_template() SELECT column order."
+        )
+        assert t.schema_name, (
+            f"schema_name is empty for {t.database_name}.*.{t.table_name}"
+        )
+        assert t.table_name, (
+            f"table_name is empty for {t.database_name}.{t.schema_name}.*"
+        )
+        assert t.table_type, (
+            f"table_type is empty for {t.full_table_id}"
+        )
+
+
+#############################################
 # Query Log Related Tests
 #############################################
+@pytest.mark.capability("supports_query_logs", "supports_lineage", "supports_field_lineage")
+@pytest.mark.template(
+    file="fetch_query_logs_query.sql.j2",
+    fixture="connector",
+    func="get_query_logs_query_template"
+)
+def test_query_logs_column_names(connector, templates):
+    """Verify get_query_logs cursor.description returns lowercase column names."""
+    if not templates.get_query_logs_query_template():
+        pytest.xfail("Optional feature: query log collection not implemented.")
+    end_time = datetime.now(tz=UTC)
+    start_time = end_time - timedelta(hours=1)
+    query = templates.render_template(
+        templates.get_query_logs_query_template,
+        start_time=start_time,
+        end_time=end_time,
+        limit=1,
+        offset=0,
+    )
+    connector.execute_and_fetch_all(query)
+    desc = connector.cursor.description
+    assert desc is not None, "cursor.description is None after query logs query"
+
+    required_columns = {"query_id", "start_time", "end_time", "query_text"}
+    actual_columns = {col[0] for col in desc}
+    missing = required_columns - actual_columns
+    assert not missing, (
+        f"get_query_logs_query_template cursor.description is missing required columns: {sorted(missing)}. "
+        f"Actual columns: {sorted(actual_columns)}. "
+        f"Use double-quoted aliases to preserve lowercase if your database uppercases identifiers."
+    )
+
+
+@pytest.mark.capability("supports_query_logs", "supports_lineage", "supports_field_lineage")
+@pytest.mark.template(
+    file="fetch_query_logs_query.sql.j2",
+    fixture="connector",
+    func="get_query_logs_query_template"
+)
+def test_query_logs_with_string_timestamps(connector, templates):
+    """Verify the query logs template works when start_time/end_time are strings.
+
+    In production, the agent framework passes pre-formatted timestamp strings
+    (e.g. '2024-01-15 10:30:00'), not Python datetime objects. Tests that only
+    pass datetime objects miss template errors like calling .strftime() on a string.
+    """
+    if not templates.get_query_logs_query_template():
+        pytest.xfail("Optional feature: query log collection not implemented.")
+
+    # Use strings — this is what production passes
+    end_time = datetime.now(tz=UTC)
+    start_time_str = (end_time - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+    end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    query = templates.render_template(
+        templates.get_query_logs_query_template,
+        start_time=start_time_str,
+        end_time=end_time_str,
+        limit=1,
+        offset=0,
+    )
+    # If the template calls .strftime() on these strings, this will fail
+    # with "'str' object has no attribute 'strftime'"
+    results = connector.execute_and_fetch_all(query)
+    assert isinstance(results, list), "Query log query should return a list"
+
+
 @pytest.mark.capability("supports_query_logs", "supports_lineage", "supports_field_lineage")
 @pytest.mark.template(
     file="fetch_query_logs_query.sql.j2",
