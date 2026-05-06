@@ -10,7 +10,7 @@ An AI coding agent can implement all the template methods after you set up the d
 
 ### Recommended: Claude Code skills
 
-The repo includes five skills that automate the full workflow end-to-end:
+The repo includes four skills that automate the full workflow end-to-end:
 
 | Step | Skill                                                       | What it does                                                                                          |
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -18,7 +18,6 @@ The repo includes five skills that automate the full workflow end-to-end:
 | 2    | `/setup-connection <name>`                                  | Install driver, implement connection methods, stub `credentials.json` — **pauses for you to fill in credentials** |
 | 3    | `/implement-connector <name> [hybrid]`                      | Implement all template methods section by section                                                     |
 | 4    | `/build-agent-image <name> [--mode MODE]` | Export capabilities and build deployable Docker image                                                 |
-| —    | `/export-qlbase <name>`                                     | _(Optional)_ Convert Jinja templates to monolith QLBase class                                         |
 
 The only manual step is filling in `credentials.json` when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
 
@@ -40,6 +39,7 @@ This creates `connectors/<name>/` with:
 - `manifest.json` — unique `connection_type` identifier
 - `credentials.json` — database credentials (gitignored)
 - `requirements.txt` — database driver dependencies
+- `Dockerfile.extra` — system dependency instructions (empty by default)
 
 ### 2. Implement the connector classes
 
@@ -80,7 +80,27 @@ Then rebuild the Docker image:
 docker compose build
 ```
 
-### 4. Configure credentials
+### 4. Add system dependencies (optional)
+
+If your database driver requires system-level libraries (ODBC drivers, native clients, etc.), add the installation commands to `connectors/<name>/Dockerfile.extra`:
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    unixodbc-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+```
+
+Then regenerate the test Dockerfile:
+
+```bash
+python scripts/generate_test_dockerfile.py
+```
+
+The `Dockerfile.extra` contents are injected into both the test image and the deployable agent image. The `create_connector.py` script and the `/setup-connection` skill regenerate the test Dockerfile automatically — you only need to run the command above if you edit `Dockerfile.extra` manually after initial setup.
+
+`Dockerfile.extra` supports `RUN`, `ENV`, and `ARG` instructions. `COPY` is not supported because the agent image builds in a temporary directory.
+
+### 5. Configure credentials
 
 Add your database credentials to `connectors/<name>/credentials.json`:
 
@@ -112,7 +132,7 @@ def create_connection(self):
 
 This same JSON format is used for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) when deploying — just swap in production values.
 
-### 5. Build the Docker image
+### 6. Build the Docker image
 
 ```bash
 docker compose build
@@ -124,9 +144,9 @@ Some database drivers include native libraries built for a specific architecture
 docker compose build --build-arg TARGETPLATFORM=linux/amd64
 ```
 
-Rebuild whenever you change `requirements.txt` (either root or per-connector).
+Rebuild whenever you change `requirements.txt` or `Dockerfile.extra` (remember to regenerate the test Dockerfile first if you changed `Dockerfile.extra`).
 
-### 6. Verify the connection
+### 7. Verify the connection
 
 ```bash
 CONNECTOR=<name> docker compose run --rm test -m connection
@@ -140,7 +160,7 @@ If only one connector exists, you can omit `CONNECTOR=`:
 docker compose run --rm test -m connection
 ```
 
-### 7. Run the tests
+### 8. Run the tests
 
 ```bash
 # Run all tests
@@ -160,7 +180,7 @@ CONNECTOR=<name> docker compose run --rm test --export
 
 Note: `--export` requires the full test suite (no `-m` filter). Use `-m` to iterate on specific test categories, then run the full suite with `--export` when ready.
 
-### 8. Review capabilities
+### 9. Review capabilities
 
 After a full test run with `--export`, `output/<name>/manifest.json` is generated with:
 
@@ -171,7 +191,7 @@ After a full test run with `--export`, `output/<name>/manifest.json` is generate
 
 Passing templates are exported to `output/<name>/templates/`.
 
-### 9. Build a deployable agent image
+### 10. Build a deployable agent image
 
 Once your connector passes tests and templates are exported, package everything into a custom agent image:
 
@@ -189,7 +209,7 @@ This takes the public `montecarlodata/agent:latest-generic` image as a base and 
 | `--connector`       | all with output/                 | Which connectors to include (repeatable) |
 | `--docker-platform` | `linux/amd64`                    | Docker platform for the image        |
 | `--tag`             | `custom-agent:{version}-generic` | Output image tag                     |
-| `--mode`            | `full`                           | `full` or `hybrid` — see Modes below |
+| `--mode`            | `auto`                           | `auto`, `full`, or `hybrid` — see Modes below |
 
 Include specific connectors:
 
@@ -226,7 +246,7 @@ docker run --rm --entrypoint ls custom-agent:latest-generic /opt/custom-connecto
 
 Then push to your container registry and deploy. Your `connectors/<name>/credentials.json` is already in the format needed for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) — just swap in production values.
 
-### 10. Clean up
+### 11. Clean up
 
 When you're done, remove the Docker image and any stopped containers:
 
@@ -253,6 +273,7 @@ custom-connector-setup/
       credentials.json                    # Database credentials (gitignored)
       manifest.json                       # {"connection_type": "custom-connector-xxx", "name": "..."}
       requirements.txt                    # Database driver deps
+      Dockerfile.extra                    # System dependency instructions (optional)
   output/                                 # Auto-generated by --export (gitignored)
     <your-database>/
       manifest.json                       # Test results and supported features
@@ -260,6 +281,7 @@ custom-connector-setup/
   scripts/                                # Provided
     create_connector.py                   # Scaffolding helper (stdlib only)
     generate_agent_image.py               # Builds deployable custom agent Docker image
+    generate_test_dockerfile.py           # Regenerates root Dockerfile from Dockerfile.extra files
   tests/                                  # Provided — do not edit
     conftest.py                           # Test fixtures (TestConnector, Templates, QueryTestHelper)
     capabilities_plugin.py                # Pytest plugin — generates manifest.json
@@ -275,7 +297,6 @@ custom-connector-setup/
       setup-connection/SKILL.md
       implement-connector/SKILL.md
       build-agent-image/SKILL.md
-      export-qlbase/SKILL.md
   AGENTS.md                               # Instructions for AI coding agents
   pytest.toml                             # Pytest configuration and markers
   requirements.txt                        # Shared Python dependencies

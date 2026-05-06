@@ -1,6 +1,6 @@
 # Agent Instructions
 
-The connector workflow is driven by five Claude Code skills. Run them in order:
+The connector workflow is driven by four Claude Code skills. Run them in order:
 
 | Step | Skill                                                         | What it does                                                              |
 | ---- | ------------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -8,9 +8,19 @@ The connector workflow is driven by five Claude Code skills. Run them in order:
 | 2    | `/setup-connection <name>`                                    | Install driver, implement connection methods, verify with `-m connection` |
 | 3    | `/implement-connector <name> [hybrid]`                        | Implement all template methods section by section                         |
 | 4    | `/build-agent-image <name> [--mode MODE]` | Export capabilities and build Docker image                                |
-| —    | `/export-qlbase <name> [monolith-path]`                       | Convert Jinja templates to monolith QLBase class                          |
 
 Each skill file (`.claude/skills/*/SKILL.md`) contains detailed step-by-step instructions. Use `/implement-connector <name> hybrid` for connectors where metadata is pushed externally.
+
+## System Dependencies
+
+If a connector needs system-level packages (ODBC drivers, native libraries), add them to `connectors/<name>/Dockerfile.extra` as raw Dockerfile instructions (`RUN`, `ENV`, `ARG`), then regenerate the test Dockerfile:
+
+```bash
+python scripts/generate_test_dockerfile.py
+docker compose build
+```
+
+The `Dockerfile.extra` contents are automatically included in the agent image built by `generate_agent_image.py`.
 
 ## Quick Reference: Test Commands
 

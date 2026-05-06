@@ -24,6 +24,8 @@ Check that these files exist:
 
 If any are missing, stop and tell the user to run `/create-connector <name>` first.
 
+Note: If `connectors/<name>/Dockerfile.extra` exists with system dependency instructions, those are automatically included in the agent image build — no extra steps needed.
+
 ## Step 2: Check for existing export
 
 Check if `output/<name>/manifest.json` already exists:

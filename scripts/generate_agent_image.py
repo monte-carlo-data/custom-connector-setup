@@ -29,6 +29,25 @@ OUTPUT_DIR = os.path.join(REPO_ROOT, "output")
 REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
 
 
+def read_dockerfile_extra(name):
+    """Read a connector's Dockerfile.extra, returning content or None.
+
+    Returns None if the file doesn't exist or contains only comments/whitespace.
+    """
+    path = os.path.join(CONNECTORS_DIR, name, "Dockerfile.extra")
+    if not os.path.isfile(path):
+        return None
+    with open(path) as f:
+        content = f.read()
+    # Check if there are any non-comment, non-blank lines
+    has_instructions = any(
+        line.strip() and not line.strip().startswith("#") for line in content.splitlines()
+    )
+    if not has_instructions:
+        return None
+    return content.strip()
+
+
 def discover_connectors():
     """Return connector names that have output directories."""
     if not os.path.isdir(OUTPUT_DIR):
@@ -131,6 +150,9 @@ def generate_dockerfile(connectors, version, base_image=None):
 
     for name in connectors:
         lines.append(f"# Connector: {name}")
+        extra_content = read_dockerfile_extra(name)
+        if extra_content:
+            lines.append(extra_content)
         lines.append(f"COPY custom-connectors/{name}/ /opt/custom-connectors/{name}/")
         lines.append(
             f"RUN pip install --no-cache-dir -r /opt/custom-connectors/{name}/requirements.txt"
@@ -149,6 +171,11 @@ def build_context(tmp_dir, connectors):
         # Copy source files from connectors/<name>/
         for filename in REQUIRED_SOURCE_FILES:
             shutil.copy2(os.path.join(CONNECTORS_DIR, name, filename), dest)
+
+        # Copy Dockerfile.extra if present
+        extra_path = os.path.join(CONNECTORS_DIR, name, "Dockerfile.extra")
+        if os.path.isfile(extra_path):
+            shutil.copy2(extra_path, dest)
 
         # Copy manifest.json from output/<name>/
         shutil.copy2(os.path.join(OUTPUT_DIR, name, "manifest.json"), dest)
