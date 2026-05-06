@@ -22,7 +22,8 @@ def render_functional(templates, template_method, functional_ops, **extra) -> st
     """Render a functional test template with the table identity variables."""
     kwargs = table_vars(functional_ops)
     kwargs.update(extra)
-    return templates.render_template(template_method, **kwargs)
+    # database is optional context — not all databases need it in DDL
+    return templates.render_template(template_method, _optional_vars={"database"}, **kwargs)
 
 
 def collect_metadata(connector, templates, database, schemas, table_names=None) -> List[MetadataSchema]:

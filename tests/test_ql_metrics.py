@@ -63,6 +63,7 @@ def test_approx_quantiles(ql):
     data = [{"val": i} for i in range(1, 101)]
     quantile_expr = ql.render(
         ql.templates.get_approx_quantiles_func_template,
+        _optional_vars={"num_of_quantiles"},
         expression="val", num_of_quantiles=100,
     )
     result = ql.select_from_data_source(data, quantile_expr)
@@ -358,6 +359,7 @@ def test_literal_table_from_value_list(ql):
     """Render literal_table_from_value_list_template, verify non-empty."""
     result = ql.render(
         ql.templates.literal_table_from_value_list_template,
+        _optional_vars={"alias", "column_name"},
         value_list=["1", "2", "3"],
         alias="t",
         column_name="val",

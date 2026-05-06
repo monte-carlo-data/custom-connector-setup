@@ -5,6 +5,7 @@ from datetime import datetime, date
 from typing import Callable, List, Any, Optional
 
 import pytest
+from jinja2 import meta as jinja2_meta
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 pytest_plugins = ["tests.capabilities_plugin"]
@@ -140,10 +141,22 @@ def _make_templates_class(module):
             lstrip_blocks=True,
         )
 
-    def render_template(self, template_func: Callable, **kwargs) -> str:
+    def render_template(self, template_func: Callable, _optional_vars=None, **kwargs) -> str:
         query_template = template_func()
         if not query_template:
             raise Exception(f"Template {template_func.__name__} Not Implemented")
+        # Verify the template actually references all passed variables.
+        # Catches bugs where a template ignores a required filter (e.g. database_name).
+        if kwargs:
+            ast = self.env.parse(query_template)
+            referenced = jinja2_meta.find_undeclared_variables(ast)
+            unused = set(kwargs.keys()) - referenced - set(_optional_vars or ())
+            if unused:
+                raise Exception(
+                    f"Template {template_func.__name__} does not reference passed "
+                    f"variable(s): {', '.join(sorted(unused))}. "
+                    f"The template must use all variables provided by the framework."
+                )
         template = self.env.from_string(query_template)
         return template.render(kwargs)
 
@@ -158,8 +171,8 @@ class QueryTestHelper:
         self.connector = connector
         self.templates = templates
 
-    def render(self, template_method: Callable, **kwargs) -> str:
-        return self.templates.render_template(template_method, **kwargs)
+    def render(self, template_method: Callable, _optional_vars=None, **kwargs) -> str:
+        return self.templates.render_template(template_method, _optional_vars=_optional_vars, **kwargs)
 
     def execute(self, query: str) -> List[tuple]:
         return self.connector.execute_and_fetch_all(query)
