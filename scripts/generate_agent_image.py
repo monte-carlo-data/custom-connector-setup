@@ -148,6 +148,11 @@ def generate_dockerfile(connectors, version, base_image=None):
     from_image = base_image or f"montecarlodata/agent:{version}-{AGENT_TYPE}"
     lines = [f"FROM {from_image}", "", "ENV MCD_CUSTOM_CONNECTORS_ENABLED=true", ""]
 
+    # The base agent image runs as a non-root user; switch to root for
+    # package installation (apt-get, pip) then restore at the end.
+    lines.append("USER root")
+    lines.append("")
+
     for name in connectors:
         lines.append(f"# Connector: {name}")
         extra_content = read_dockerfile_extra(name)
@@ -158,6 +163,9 @@ def generate_dockerfile(connectors, version, base_image=None):
             f"RUN pip install --no-cache-dir -r /opt/custom-connectors/{name}/requirements.txt"
         )
         lines.append("")
+
+    lines.append("USER mcdagent")
+    lines.append("")
 
     return "\n".join(lines)
 
