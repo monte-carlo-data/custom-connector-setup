@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 
 import pytest
 
@@ -262,6 +263,21 @@ METHOD_TO_METRICS = {
 }
 
 
+def _get_setup_version():
+    """Return the repo version from git tags, or None if unavailable."""
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "describe", "--tags", "--always"],
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
+    except Exception:
+        return None
+
+
 def pytest_sessionfinish(session, exitstatus):
     export = session.config.getoption("--export", default=False)
     if not export:
@@ -303,6 +319,7 @@ def pytest_sessionfinish(session, exitstatus):
     output = {
         "connection_type": connection_type,
         "connection_name": connector_name,
+        "setup_version": _get_setup_version(),
         "capabilities": results["capabilities"],
         "metrics": metrics,
     }
