@@ -312,9 +312,11 @@ def test_substring(ql):
 
 @pytest.mark.template(func="literal_time_of_day_template")
 def test_literal_time_of_day(ql):
-    """Render time-of-day literal, verify non-empty."""
-    result = ql.render(ql.templates.literal_time_of_day_template, value="14:30:00")
-    assert result and len(result.strip()) > 0
+    """Execute time-of-day literal, verify it contains the expected hour and minute."""
+    time_expr = ql.render(ql.templates.literal_time_of_day_template, value="14:30:00")
+    to_str = ql.render(ql.templates.cast_to_string_func_template, expression=time_expr)
+    result = str(ql.select_expression(to_str))
+    assert "14" in result and "30" in result
 
 
 @pytest.mark.template(func="get_absolute_value_function_template")
@@ -359,8 +361,8 @@ def test_unpivot(ql):
 
 @pytest.mark.template(func="literal_table_from_value_list_template")
 def test_literal_table_from_value_list(ql):
-    """Render literal_table_from_value_list_template, verify non-empty."""
-    result = ql.render(
+    """Execute literal_table_from_value_list, verify it produces 3 rows."""
+    table_expr = ql.render(
         ql.templates.literal_table_from_value_list_template,
         _optional_vars={"alias", "column_name"},
         value_list=["1", "2", "3"],
@@ -368,4 +370,8 @@ def test_literal_table_from_value_list(ql):
         column_name="val",
         result_field_name="value",
     )
-    assert result and len(result.strip()) > 0
+    count_expr = ql.render(ql.templates.get_count_all_expression_template)
+    subquery = ql.alias_subquery(table_expr, "val_table")
+    query = f"SELECT {count_expr} FROM {subquery}"
+    result = ql.execute_scalar(query)
+    assert int(result) == 3

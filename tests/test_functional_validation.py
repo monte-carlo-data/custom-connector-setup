@@ -198,12 +198,6 @@ class TestVolumeAndFreshness:
                 f"Test table {tv['table']} not found in metadata after creation."
             )
 
-            if before_table.row_count is None:
-                pytest.skip(
-                    "row_count is None — your get_tables_query_template() does not return row counts. "
-                    "Skipping volume change test."
-                )
-
             before_count = before_table.row_count
             num_rows = 10
             connector.execute_only(render_functional(
@@ -240,12 +234,6 @@ class TestVolumeAndFreshness:
                 f"Test table {tv['table']} not found in metadata after creation."
             )
 
-            if before_table.byte_count is None:
-                pytest.skip(
-                    "byte_count is None — your get_tables_query_template() does not return byte counts. "
-                    "Skipping byte count volume change test."
-                )
-
             before_bytes = before_table.byte_count
             num_rows = 10
             connector.execute_only(render_functional(
@@ -281,12 +269,6 @@ class TestVolumeAndFreshness:
             assert before_table is not None, (
                 f"Test table {tv['table']} not found in metadata after creation."
             )
-
-            if before_table.last_update_time is None:
-                pytest.skip(
-                    "last_update_time is None — your get_tables_query_template() does not return "
-                    "freshness data. Skipping freshness change test."
-                )
 
             before_time = before_table.last_update_time
 

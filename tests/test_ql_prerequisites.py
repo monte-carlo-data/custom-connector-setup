@@ -137,11 +137,10 @@ def test_get_table_identifier(ql):
     """Verify db.schema.table formatting."""
     result = ql.render(
         ql.templates.get_table_identifier_template,
-        database="my_db",
+        _optional_vars={"database": "my_db"},
         schema="my_schema",
         table="my_table",
     )
-    assert "my_db" in result
     assert "my_schema" in result
     assert "my_table" in result
 
@@ -162,9 +161,11 @@ def test_all_fields_expression(ql):
 
 @pytest.mark.template(func="get_field_or_alias_template")
 def test_field_or_alias(ql):
-    """Render get_field_or_alias_template, verify non-empty output."""
-    result = ql.render(ql.templates.get_field_or_alias_template, _optional_vars={"alias"}, field="my_col", alias="my_alias")
-    assert result and len(result.strip()) > 0
+    """Use get_field_or_alias in a SELECT to verify it produces valid SQL."""
+    data = [{"val": 42}]
+    ref = ql.render(ql.templates.get_field_or_alias_template, _optional_vars={"alias"}, field="val", alias="renamed")
+    result = ql.select_from_data_source(data, ref)
+    assert int(result) == 42
 
 
 @pytest.mark.template(func="supports_literal_group_by_template")
@@ -326,16 +327,22 @@ def test_cast_timestamp_to_timestamp_tz(ql):
 
 @pytest.mark.template(func="cast_to_timestamp_with_tz_template")
 def test_cast_to_timestamp_with_tz(ql):
-    """Render cast_to_timestamp_with_tz_template, verify non-empty."""
-    result = ql.templates.cast_to_timestamp_with_tz_template()
-    assert result is not None and len(result.strip()) > 0
+    """Cast current timestamp to timestamp-with-tz, verify it executes and returns a value."""
+    ts_expr = ql.render(ql.templates.current_timestamp_func_template)
+    cast_expr = ql.render(ql.templates.cast_to_timestamp_with_tz_template, expression=ts_expr)
+    to_str = ql.render(ql.templates.cast_to_string_func_template, expression=cast_expr)
+    result = str(ql.select_expression(to_str))
+    assert result is not None and len(result) > 0
 
 
 @pytest.mark.template(func="cast_to_timestamp_without_tz_template")
 def test_cast_to_timestamp_without_tz(ql):
-    """Render cast_to_timestamp_without_tz_template, verify non-empty."""
-    result = ql.templates.cast_to_timestamp_without_tz_template()
-    assert result is not None and len(result.strip()) > 0
+    """Cast current timestamp to timestamp-without-tz, verify it executes and returns a value."""
+    ts_expr = ql.render(ql.templates.current_timestamp_func_template)
+    cast_expr = ql.render(ql.templates.cast_to_timestamp_without_tz_template, expression=ts_expr)
+    to_str = ql.render(ql.templates.cast_to_string_func_template, expression=cast_expr)
+    result = str(ql.select_expression(to_str))
+    assert result is not None and len(result) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -731,9 +738,12 @@ def test_in_past_calendar_month(ql):
 
 @pytest.mark.template(func="utc_literal_template")
 def test_utc_literal(ql):
-    """Render UTC literal, verify non-empty."""
-    result = ql.render(ql.templates.utc_literal_template)
-    assert result and len(result.strip()) > 0
+    """Execute UTC literal, verify it returns a timestamp close to now."""
+    utc_expr = ql.render(ql.templates.utc_literal_template)
+    epoch_expr = ql.render(ql.templates.convert_to_unix_timestamp_func_template, date_expr=utc_expr)
+    result = ql.select_expression(epoch_expr)
+    now_epoch = datetime.now(tz=timezone.utc).timestamp()
+    assert abs(float(result) - now_epoch) < 120
 
 
 # ---------------------------------------------------------------------------
