@@ -121,8 +121,9 @@ def test_escape_field_name(ql):
 
 @pytest.mark.template(func="negate_expression_template")
 def test_negate_expression(ql):
-    """NOT(TRUE) -> false."""
-    negated = ql.render(ql.templates.negate_expression_template, query="TRUE")
+    """NOT(always-true) -> false."""
+    true_expr = ql.render(ql.templates.get_arbitrary_where_clause_template)
+    negated = ql.render(ql.templates.negate_expression_template, query=true_expr)
     case_expr = ql.render(
         ql.templates.get_case_when_func_template,
         conditions_and_results=[(negated, "1")],
@@ -744,6 +745,24 @@ def test_utc_literal(ql):
     result = ql.select_expression(epoch_expr)
     now_epoch = datetime.now(tz=timezone.utc).timestamp()
     assert abs(float(result) - now_epoch) < 120
+
+
+@pytest.mark.template(func="utc_literal_template")
+def test_utc_literal_with_timestamp(ql):
+    """Execute UTC literal with an explicit timestamp, verify it runs and returns the right value."""
+    ts = datetime(2025, 6, 15, 12, 30, 0)
+    utc_expr = ql.render(
+        ql.templates.utc_literal_template,
+        _optional_vars={"timestamp"},
+        timestamp=ts,
+    )
+    # Cast to string to verify the rendered timestamp is correct and executable
+    str_expr = ql.render(
+        ql.templates.cast_to_string_func_template, expression=utc_expr
+    )
+    result = ql.select_expression(str_expr)
+    assert "2025-06-15" in result
+    assert "12:30:00" in result
 
 
 # ---------------------------------------------------------------------------
