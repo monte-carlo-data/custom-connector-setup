@@ -174,6 +174,22 @@ class QueryTestHelper:
     def render(self, template_method: Callable, _optional_vars=None, **kwargs) -> str:
         return self.templates.render_template(template_method, _optional_vars=_optional_vars, **kwargs)
 
+    def alias_subquery(self, subquery: str, alias: str) -> str:
+        """Wrap a subquery with an alias, respecting dialect flags.
+
+        Mirrors the monolith's CustomConnectorQL.alias_subquery() behavior:
+        checks supports_as_keyword_for_table_alias to decide whether to emit AS.
+        """
+        flag = getattr(self.templates, "supports_as_keyword_for_table_alias_template", None)
+        use_as = True
+        if callable(flag):
+            result = flag()
+            if result and result.strip().lower() == "false":
+                use_as = False
+        if use_as:
+            return f"({subquery}) AS {alias}"
+        return f"({subquery}) {alias}"
+
     def execute(self, query: str) -> List[tuple]:
         return self.connector.execute_and_fetch_all(query)
 

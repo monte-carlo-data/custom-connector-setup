@@ -281,7 +281,9 @@ def test_distinct_func(ql):
     count_expr = ql.render(ql.templates.get_count_all_expression_template)
     cte, alias = ql.make_data_source(data)
     from_clause = ql.render(ql.templates.add_from_clause_template, from_expression=alias)
-    query = f"{cte} SELECT {count_expr} FROM (SELECT {distinct_expr} {from_clause}) AS distinct_sub"
+    inner = f"SELECT {distinct_expr} {from_clause}"
+    subquery = ql.alias_subquery(inner, "distinct_sub")
+    query = f"{cte} SELECT {count_expr} FROM {subquery}"
     result = ql.execute_scalar(query)
     assert int(result) == 3
 
@@ -349,7 +351,8 @@ def test_unpivot(ql):
         value_column="metric_value",
     )
     count_expr = ql.render(ql.templates.get_count_all_expression_template)
-    query = f"{cte} SELECT {count_expr} FROM ({unpivot_expr}) AS unpivoted"
+    subquery = ql.alias_subquery(unpivot_expr, "unpivoted")
+    query = f"{cte} SELECT {count_expr} FROM {subquery}"
     result = ql.execute_scalar(query)
     assert int(result) == 3
 

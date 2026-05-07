@@ -183,6 +183,30 @@ def test_supports_group_by_on_subquery(ql):
     assert result.strip().lower() in ("true", "false")
 
 
+@pytest.mark.template(func="supports_as_keyword_for_table_alias_template")
+def test_supports_as_keyword_for_table_alias(ql):
+    """Boolean flag: whether database supports AS for table/subquery aliases."""
+    result = ql.templates.supports_as_keyword_for_table_alias_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")
+
+
+@pytest.mark.template(func="supports_limit_0_template")
+def test_supports_limit_0(ql):
+    """Boolean flag: whether database supports LIMIT 0 or equivalent."""
+    result = ql.templates.supports_limit_0_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")
+
+
+@pytest.mark.template(func="requires_subquery_alias_template")
+def test_requires_subquery_alias(ql):
+    """Boolean flag: whether database requires subqueries to have aliases."""
+    result = ql.templates.requires_subquery_alias_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")
+
+
 # ---------------------------------------------------------------------------
 # Type casting (prerequisites only — metric-mapped tests live in test_ql_metrics)
 # ---------------------------------------------------------------------------

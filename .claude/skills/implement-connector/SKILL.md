@@ -132,7 +132,7 @@ Implement all methods in these subsections of `QueryLanguageTemplates`:
 - **String and Literal Handling**: `escape_string_template`, `string_literal_template`, `literal_value_template`, `literal_datetime_template`, `literal_time_of_day_template`, `literal_regex_template`, `literal_table_from_value_list_template`, `date_literal_template`, `utc_literal_template`
 - **Type Casting**: all `cast_*` and `get_casting_*` methods
 - **Date/Time Functions**: all time-related methods (`current_date_func_template`, `add_days_func_template`, `time_truncate_func_template`, `truncate_to_*_template`, etc.)
-- **Dialect Capability Flags**: `supports_literal_select_template`, `supports_literal_group_by_template`, `supports_group_by_on_subquery_template`, `parses_timestamp_with_trailing_text_template`
+- **Dialect Capability Flags**: `supports_literal_select_template`, `supports_literal_group_by_template`, `supports_group_by_on_subquery_template`, `parses_timestamp_with_trailing_text_template`, `supports_as_keyword_for_table_alias_template`, `supports_limit_0_template`, `requires_subquery_alias_template`
 - **Null and NaN Handling**: `is_null_template`, `is_not_null_template`, `nan_expr_template`, `get_isnan_expression_template`
 - **Comparison Operators**: all `get_is_*_expression_template` methods
 - **Aggregation Functions**: all aggregation methods (`get_avg_function_template`, `get_stddev_function_template`, etc.)
