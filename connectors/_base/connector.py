@@ -1196,6 +1196,65 @@ class QueryLanguageTemplates:
         """
         pass
 
+    def supports_as_keyword_for_table_alias_template(self) -> str:
+        """Return "true" or "false" for whether the database supports AS for table/subquery aliases.
+
+        Most databases allow `FROM my_table AS t` and `FROM (...) AS sq`.
+        Oracle (all versions) does not support AS for table aliases.
+        Oracle 11g additionally does not support AS for subquery aliases.
+
+        When this is "false", the query builder will emit `FROM my_table t`
+        and `FROM (...) sq` instead of using AS.
+
+        Jinja variables:
+            None
+
+        Examples:
+            PostgreSQL: "true"
+            Snowflake: "true"
+            Oracle: "false"
+
+        Enables: dialect flag for AS keyword usage in aliases
+        """
+        pass
+
+    def supports_limit_0_template(self) -> str:
+        """Return "true" or "false" for whether the database supports LIMIT 0 (or equivalent).
+
+        Used to determine if the database can run a query that returns zero rows
+        efficiently (e.g., for schema discovery via `SELECT * FROM t LIMIT 0`).
+
+        Jinja variables:
+            None
+
+        Examples:
+            PostgreSQL: "true"
+            Snowflake: "true"
+            Oracle: "true"  (uses ROWNUM <= 0)
+
+        Enables: dialect flag for zero-row query support
+        """
+        pass
+
+    def requires_subquery_alias_template(self) -> str:
+        """Return "true" or "false" for whether the database requires subqueries to have aliases.
+
+        Most databases require `FROM (SELECT ...) AS sq` (or without AS).
+        Some databases like Oracle allow `FROM (SELECT ...)` with no alias.
+
+        Jinja variables:
+            None
+
+        Examples:
+            PostgreSQL: "true"
+            Snowflake: "true"
+            MySQL: "true"
+            Oracle: "false"
+
+        Enables: dialect flag for subquery alias requirements
+        """
+        pass
+
     ###################################################
     # QueryLanguage: Null and NaN Handling
     ###################################################

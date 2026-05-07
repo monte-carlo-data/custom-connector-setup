@@ -163,7 +163,7 @@ def test_all_fields_expression(ql):
 @pytest.mark.template(func="get_field_or_alias_template")
 def test_field_or_alias(ql):
     """Render get_field_or_alias_template, verify non-empty output."""
-    result = ql.render(ql.templates.get_field_or_alias_template, field="my_col", alias="my_alias")
+    result = ql.render(ql.templates.get_field_or_alias_template, _optional_vars={"alias"}, field="my_col", alias="my_alias")
     assert result and len(result.strip()) > 0
 
 
@@ -179,6 +179,30 @@ def test_supports_literal_group_by(ql):
 def test_supports_group_by_on_subquery(ql):
     """Boolean flag: renders to 'true' or 'false'."""
     result = ql.templates.supports_group_by_on_subquery_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")
+
+
+@pytest.mark.template(func="supports_as_keyword_for_table_alias_template")
+def test_supports_as_keyword_for_table_alias(ql):
+    """Boolean flag: whether database supports AS for table/subquery aliases."""
+    result = ql.templates.supports_as_keyword_for_table_alias_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")
+
+
+@pytest.mark.template(func="supports_limit_0_template")
+def test_supports_limit_0(ql):
+    """Boolean flag: whether database supports LIMIT 0 or equivalent."""
+    result = ql.templates.supports_limit_0_template()
+    assert result is not None
+    assert result.strip().lower() in ("true", "false")
+
+
+@pytest.mark.template(func="requires_subquery_alias_template")
+def test_requires_subquery_alias(ql):
+    """Boolean flag: whether database requires subqueries to have aliases."""
+    result = ql.templates.requires_subquery_alias_template()
     assert result is not None
     assert result.strip().lower() in ("true", "false")
 
@@ -668,7 +692,7 @@ def test_in_past_calendar_week(ql):
     unioned = ql.render(ql.templates.union_queries_template, queries=[sel1, sel2])
     cte = ql.render(ql.templates.build_cte_template, alias="ts_data", cte=unioned)
 
-    past_week = ql.render(ql.templates.get_in_past_calendar_week_expression_template, weeks=1).format(x="ts_val")
+    past_week = ql.render(ql.templates.get_in_past_calendar_week_expression_template, _optional_vars={"weeks"}, weeks=1).format(x="ts_val")
     count_expr = ql.render(ql.templates.get_count_all_expression_template)
     from_clause = ql.render(ql.templates.add_from_clause_template, from_expression="ts_data")
     select_clause = ql.render(ql.templates.add_select_clause_template, select_expressions=[count_expr])

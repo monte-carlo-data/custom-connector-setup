@@ -1,12 +1,12 @@
 # custom-connector-setup
 
-A validation toolkit for building custom database connectors. You implement a set of base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your connector supports.
+A validation toolkit for building custom database connectors. You implement a set of base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your connector supports. The end result is a generic agent image that you host, deploy, and then register in Monte Carlo.
 
 Supports multiple connectors side by side so you can build and test several at once.
 
 ## Using an AI Coding Agent
 
-An AI coding agent can implement all the template methods after you set up the database connection. This splits the work: you handle credentials and connectivity, the agent handles the ~100 template methods.
+An AI coding agent can handle the entire workflow — from scaffolding and driver installation to implementing all ~100 template methods, running tests, and building the deployable image. You just provide the database credentials.
 
 ### Recommended: Claude Code skills
 
@@ -23,7 +23,7 @@ The only manual step is filling in `credentials.json` when `/setup-connection` p
 
 ### Fallback: Other AI agents
 
-If you're not using Claude Code, complete steps 1–6 of Quick Start below to set up connectivity, then provide `AGENTS.md` as context to your LLM along with the connector name. The agent will implement all remaining template methods, run tests iteratively, and export capabilities. Resume at step 9 to build the deployable image.
+If you're not using Claude Code, complete steps 1–6 of Quick Start below to set up connectivity, then provide `AGENTS.md` as context to your LLM along with the connector name. The agent will implement all remaining template methods, run tests iteratively, and export capabilities. Resume at step 10 to build the deployable image.
 
 ## Quick Start
 
@@ -52,7 +52,7 @@ Edit `connectors/<name>/connector.py` and fill in the base classes:
 | `QueryLogCollectionTemplates` | Jinja template for fetching query logs                                                                                                                |
 | `CustomSQLMonitorTemplates`   | Jinja templates for custom SQL monitor operations (count wrapping, row limits)                                                                        |
 | `QueryLanguageTemplates`      | ~90 Jinja templates covering type casting, date/time functions, aggregations, comparisons, string operations, and more                                |
-| `FunctionalTestOperations`    | _(Optional)_ Jinja templates for functional validation — creating/dropping a test table, inserting rows, adding/dropping columns, and a lineage query |
+| `FunctionalTestOperations`    | _(Optional)_ Jinja templates for functional validation — DDL/DML operations (create/drop table, insert rows, add/drop columns) that let the test suite run metadata collection before and after each mutation to confirm metrics actually update. This validates that your metadata sources reflect real-time changes. See [Functional Validation Tests](#functional-validation-tests) for details. |
 
 Every template method returns a template string. Most use format-string placeholders like `{x}` (substituted later by the backend); some use Jinja `{{ variable }}` syntax. For example:
 
@@ -160,27 +160,40 @@ If only one connector exists, you can omit `CONNECTOR=`:
 docker compose run --rm test -m connection
 ```
 
-### 8. Run the tests
+### 8. Implement and test section by section
+
+Work through each section of `connector.py` incrementally. Implement the methods for one section, run its corresponding tests, fix any failures, then move on to the next section.
 
 ```bash
-# Run all tests
-CONNECTOR=<name> docker compose run --rm test
-
-# Run by section
+# Metadata collection
 CONNECTOR=<name> docker compose run --rm test -m metadata
-CONNECTOR=<name> docker compose run --rm test -m query_language
-CONNECTOR=<name> docker compose run --rm test -m ql_prerequisites
-CONNECTOR=<name> docker compose run --rm test -m ql_metrics
-CONNECTOR=<name> docker compose run --rm test -m custom_monitors
-CONNECTOR=<name> docker compose run --rm test -m functional
 
-# Export manifest.json and passing templates
+# Query language prerequisites (needed for metric monitors)
+CONNECTOR=<name> docker compose run --rm test -m ql_prerequisites
+
+# Query language metric templates
+CONNECTOR=<name> docker compose run --rm test -m ql_metrics
+
+# Custom SQL monitors
+CONNECTOR=<name> docker compose run --rm test -m custom_monitors
+
+# Functional validation (optional)
+CONNECTOR=<name> docker compose run --rm test -m functional
+```
+
+Rebuild the Docker image (`docker compose build`) after changing `connector.py` or `requirements.txt`.
+
+### 9. Run the full suite and export
+
+Once all sections pass individually, run the full test suite with `--export` to generate the manifest and passing templates:
+
+```bash
 CONNECTOR=<name> docker compose run --rm test --export
 ```
 
-Note: `--export` requires the full test suite (no `-m` filter). Use `-m` to iterate on specific test categories, then run the full suite with `--export` when ready.
+Note: `--export` requires the full test suite (no `-m` filter).
 
-### 9. Review capabilities
+### 10. Review capabilities
 
 After a full test run with `--export`, `output/<name>/manifest.json` is generated with:
 
@@ -191,7 +204,7 @@ After a full test run with `--export`, `output/<name>/manifest.json` is generate
 
 Passing templates are exported to `output/<name>/templates/`.
 
-### 10. Build a deployable agent image
+### 11. Build a deployable agent image
 
 Once your connector passes tests and templates are exported, package everything into a custom agent image:
 
@@ -199,7 +212,16 @@ Once your connector passes tests and templates are exported, package everything 
 python scripts/generate_agent_image.py
 ```
 
-This takes the public `montecarlodata/agent:latest-generic` image as a base and layers on your connector artifacts (templates, capabilities, connector code, and dependencies). The generic agent is an egress-only agent that works across all supported platforms (Docker Compose, Kubernetes, EKS, AKS, GKE). See [Generic Agent Platforms](https://docs.getmontecarlo.com/docs/generic-agent-platforms) for deployment options.
+This takes the public `montecarlodata/agent:latest-generic` image as a base and layers on your connector artifacts. The resulting custom agent image contains:
+
+- **Exported templates** (`output/<name>/templates/`) — the passing Jinja templates
+- **Manifest** (`output/<name>/manifest.json`) — capabilities and supported metrics
+- **Connector code** (`connector.py`) — your connection and execution logic
+- **Driver dependencies** (`requirements.txt`, `Dockerfile.extra`) — database drivers and system libraries
+
+**Credentials are NOT included in the image.** Your `credentials.json` stays local and is never copied into the image. Production credentials are provided at deploy time via [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials).
+
+The generic agent is an egress-only agent that works across all supported platforms (Docker Compose, Kubernetes, EKS, AKS, GKE). See [Generic Agent Platforms](https://docs.getmontecarlo.com/docs/generic-agent-platforms) for deployment options.
 
 **Options:**
 
@@ -244,9 +266,9 @@ Verify the image:
 docker run --rm --entrypoint ls custom-agent:latest-generic /opt/custom-connectors/
 ```
 
-Then push to your container registry and deploy. Your `connectors/<name>/credentials.json` is already in the format needed for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) — just swap in production values.
+Then push the agent image to your container registry and deploy. Your local `connectors/<name>/credentials.json` is already in the format needed for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) — just swap in production values and configure them at deploy time.
 
-### 11. Clean up
+### 12. Clean up
 
 When you're done, remove the Docker image and any stopped containers:
 
