@@ -171,18 +171,65 @@ def test_field_or_alias(ql):
 
 @pytest.mark.template(func="supports_literal_group_by_template")
 def test_supports_literal_group_by(ql):
-    """Boolean flag: renders to 'true' or 'false'."""
-    result = ql.templates.supports_literal_group_by_template()
-    assert result is not None
-    assert result.strip().lower() in ("true", "false")
+    """Verify supports_literal_group_by flag matches actual database behavior.
+
+    When "true", GROUP BY with a constant expression must succeed.
+    When "false", it must fail (the database rejects it).
+    """
+    flag = ql.templates.supports_literal_group_by_template()
+    assert flag is not None
+    assert flag.strip().lower() in ("true", "false")
+
+    data = [{"val": 1}, {"val": 2}]
+    cte, alias = ql.make_data_source(data)
+    from_clause = ql.render(ql.templates.add_from_clause_template, from_expression=alias)
+    escaped = ql.render(ql.templates.escape_string_template, string="literal")
+    literal = ql.render(ql.templates.string_literal_template, string=escaped)
+    bucket = ql.render(ql.templates.alias_field_template, field=literal, alias="bucket")
+    count_expr = ql.render(ql.templates.get_count_all_expression_template)
+    count_field = ql.render(ql.templates.alias_field_template, field=count_expr, alias="cnt")
+    select_clause = ql.render(ql.templates.add_select_clause_template, select_expressions=[f"{bucket}, {count_field}"])
+    query = f"{cte} {select_clause} {from_clause} GROUP BY {literal}"
+
+    if flag.strip().lower() == "true":
+        rows = ql.execute(query)
+        assert len(rows) > 0
+    else:
+        with pytest.raises(Exception):
+            ql.execute(query)
 
 
 @pytest.mark.template(func="supports_group_by_on_subquery_template")
 def test_supports_group_by_on_subquery(ql):
-    """Boolean flag: renders to 'true' or 'false'."""
-    result = ql.templates.supports_group_by_on_subquery_template()
-    assert result is not None
-    assert result.strip().lower() in ("true", "false")
+    """Verify supports_group_by_on_subquery flag matches actual database behavior.
+
+    When "true", ORDER BY inside a CTE/subquery must succeed.
+    When "false", it must fail (the database rejects bare ORDER BY in CTEs).
+    """
+    flag = ql.templates.supports_group_by_on_subquery_template()
+    assert flag is not None
+    assert flag.strip().lower() in ("true", "false")
+
+    data = [{"val": 2}, {"val": 1}, {"val": 3}]
+    cte, alias = ql.make_data_source(data)
+    from_clause = ql.render(ql.templates.add_from_clause_template, from_expression=alias)
+    all_fields = ql.render(ql.templates.all_fields_expression_template)
+    select_clause = ql.render(ql.templates.add_select_clause_template, select_expressions=[all_fields])
+    order = ql.render(ql.templates.ascending_order_template).format(x="val")
+    inner = f"{select_clause} {from_clause} ORDER BY {order}"
+    ordered_cte = ql.render(ql.templates.build_cte_template, alias="ordered", cte=inner)
+    # Chain onto existing CTE: WITH test_data AS (...), ordered AS (SELECT ... ORDER BY ...)
+    combined_cte = f"{cte}, ordered AS ({inner})"
+    outer_from = ql.render(ql.templates.add_from_clause_template, from_expression="ordered")
+    outer_select = ql.render(ql.templates.add_select_clause_template, select_expressions=[all_fields])
+    cte_query = f"{combined_cte} {outer_select} {outer_from}"
+
+    if flag.strip().lower() == "true":
+        rows = ql.execute(cte_query)
+        assert len(rows) > 0
+    else:
+        with pytest.raises(Exception):
+            ql.execute(cte_query)
 
 
 @pytest.mark.template(func="supports_as_keyword_for_table_alias_template")
