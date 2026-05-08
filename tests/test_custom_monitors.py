@@ -49,6 +49,30 @@ def test_add_row_limit(ql):
     assert len(rows) == 5
 
 
+@pytest.mark.template(func="add_row_limit_template")
+def test_add_row_limit_with_cte(ql):
+    """Add LIMIT to a query that contains a CTE.
+
+    The agent framework passes full queries (CTE + SELECT) to add_row_limit_template.
+    Implementations that wrap the query in a subquery (e.g. SELECT TOP N FROM ({{ query }}))
+    will break because SQL Server and others don't allow CTEs inside subqueries.
+    """
+    data = [{"val": i} for i in range(10)]
+    cte, alias = ql.make_data_source(data)
+    all_fields = ql.render(ql.templates.all_fields_expression_template)
+    from_clause = ql.render(ql.templates.add_from_clause_template, from_expression=alias)
+    select_clause = ql.render(ql.templates.add_select_clause_template, select_expressions=[all_fields])
+    full_query = f"{cte} {select_clause} {from_clause}"
+
+    limited_query = ql.render(
+        ql.templates.add_row_limit_template,
+        query=full_query,
+        limit=5,
+    )
+    rows = ql.execute(limited_query)
+    assert len(rows) == 5
+
+
 @pytest.mark.template(func="get_count_all_expression_template")
 def test_count_all_expression(ql):
     """COUNT(*) on CTE, verify row count."""

@@ -290,6 +290,28 @@ def test_fetch_tables_with_table_names_filter(connector, templates, database, sc
     )
 
 
+@pytest.mark.template(func="get_table_identifier_template")
+def test_table_identifier_is_queryable(connector, templates, tables):
+    """Verify that get_table_identifier_template produces an identifier the database accepts.
+
+    The agent uses this identifier in every monitor query (e.g. SELECT ... FROM <identifier>).
+    If the format is wrong (e.g. three-part naming on a database that doesn't support it),
+    every monitor will fail at runtime. This test catches that early by picking a real table
+    from metadata and executing a zero-row query against it.
+    """
+    # Pick a concrete table from metadata
+    sample = next((t for t in tables if t.table_type == "table"), tables[0])
+
+    identifier = templates.render_template(
+        templates.get_table_identifier_template,
+        _optional_vars={"database"},
+        database=sample.database_name,
+        schema=sample.schema_name,
+        table=sample.table_name,
+    )
+    connector.execute_and_fetch_all(f"SELECT * FROM {identifier} WHERE 1=0")
+
+
 @pytest.mark.capability("supports_volume_rows")
 def test_volume_rows(tables):
     supports_rows = any(

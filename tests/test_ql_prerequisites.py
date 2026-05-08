@@ -133,19 +133,6 @@ def test_negate_expression(ql):
     assert result == 0
 
 
-@pytest.mark.template(func="get_table_identifier_template")
-def test_get_table_identifier(ql):
-    """Verify db.schema.table formatting."""
-    result = ql.render(
-        ql.templates.get_table_identifier_template,
-        _optional_vars={"database": "my_db"},
-        schema="my_schema",
-        table="my_table",
-    )
-    assert "my_schema" in result
-    assert "my_table" in result
-
-
 @pytest.mark.template(func="all_fields_expression_template")
 def test_all_fields_expression(ql):
     """SELECT * returns all columns."""
@@ -868,6 +855,8 @@ def test_placeholder_templates_do_not_use_jinja_field(templates):
         if method is None:
             continue
         tpl_str = method()
+        if not tpl_str:
+            continue
         if jinja_field_re.search(tpl_str):
             violations.append(name)
     assert not violations, (
