@@ -1150,7 +1150,16 @@ class QueryLanguageTemplates:
         pass
 
     def supports_literal_group_by_template(self) -> str:
-        """Return a Jinja template string rendering "true" or "false" for literal GROUP BY support.
+        """Return "true" or "false": can GROUP BY contain constant/literal expressions?
+
+        When "true", the query builder may emit GROUP BY 'some_literal', 1, col_name.
+        When "false", the query builder omits constants from GROUP BY and only
+        groups by actual column references.
+
+        T-SQL (SQL Server, Fabric) requires at least one non-constant column in
+        every GROUP BY — grouping by a literal alone fails with:
+        "Each GROUP BY expression must contain at least one column that is not
+        an outer reference."
 
         Jinja variables:
             None
@@ -1159,13 +1168,22 @@ class QueryLanguageTemplates:
             Snowflake: "true"
             PostgreSQL: "true"
             BigQuery: "true"
+            SQL Server / Fabric: "false"
 
         Enables: dialect flag for GROUP BY with literals
         """
         pass
 
     def supports_group_by_on_subquery_template(self) -> str:
-        """Return a Jinja template string rendering "true" or "false" for GROUP BY on subquery support.
+        """Return "true" or "false": can ORDER BY appear inside subqueries and CTEs?
+
+        When "true", the query builder may emit ORDER BY inside a CTE or derived
+        table. When "false", ORDER BY is only added to the outermost query.
+
+        T-SQL forbids ORDER BY inside CTEs and subqueries unless paired with
+        TOP or OFFSET/FETCH. Bare ORDER BY inside a WITH clause fails with:
+        "The ORDER BY clause is invalid in views, inline functions, derived
+        tables, subqueries, and common table expressions."
 
         Jinja variables:
             None
@@ -1174,6 +1192,7 @@ class QueryLanguageTemplates:
             Snowflake: "true"
             PostgreSQL: "true"
             BigQuery: "true"
+            SQL Server / Fabric: "false"
 
         Enables: dialect flag for ORDER BY inside subqueries
         """
