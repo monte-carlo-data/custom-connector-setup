@@ -1,6 +1,7 @@
 services:
   test:
     build: .
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     environment:
       - CONNECTOR=${CONNECTOR:-}
     volumes:
