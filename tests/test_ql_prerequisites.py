@@ -599,10 +599,46 @@ def test_date_diff(ql):
 def test_convert_to_utc(ql):
     """Convert TZ timestamp, verify UTC result."""
     ts_expr = ql.render(ql.templates.current_timestamp_func_template)
-    utc_expr = ql.render(ql.templates.convert_to_utc_template, field=ts_expr)
+    utc_expr = ql.render(
+        ql.templates.convert_to_utc_template,
+        _optional_vars={"field_type", "timezone"},
+        field=ts_expr,
+    )
     to_str = ql.render(ql.templates.cast_to_string_func_template, expression=utc_expr)
     result = str(ql.select_expression(to_str))
     assert result is not None and len(result) > 0
+
+
+@pytest.mark.template(func="convert_to_utc_template")
+def test_convert_to_utc_with_timezone(ql):
+    """Verify convert_to_utc renders valid SQL when timezone is provided.
+
+    Only checks rendering — the timezone value accepted by AT TIME ZONE,
+    TIMEZONE(), FROM_TZ(), etc. varies by dialect (IANA names, Windows
+    names, fixed offsets) and is ultimately the customer's responsibility.
+    """
+    utc_expr = ql.render(
+        ql.templates.convert_to_utc_template,
+        _optional_vars={"field_type", "timezone"},
+        field="my_field",
+        timezone="Some/Timezone",
+    )
+    # With timezone set, the rendered SQL must differ from the no-timezone branch
+    utc_no_tz = ql.render(
+        ql.templates.convert_to_utc_template,
+        _optional_vars={"field_type", "timezone"},
+        field="my_field",
+    )
+    assert utc_expr != utc_no_tz, "timezone parameter had no effect on rendered SQL"
+    assert "Some/Timezone" in utc_expr
+
+
+@pytest.mark.template(func="to_timezone_template")
+def test_to_timezone(ql):
+    """Verify to_timezone renders valid SQL with a timezone argument."""
+    result = ql.render(ql.templates.to_timezone_template, field="my_field", timezone="Some/Timezone")
+    assert "my_field" in result
+    assert "Some/Timezone" in result
 
 
 @pytest.mark.template(func="date_literal_template")
