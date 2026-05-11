@@ -818,17 +818,48 @@ class QueryLanguageTemplates:
     # QueryLanguage: Date/Time Functions
     ###################################################
     def convert_to_utc_template(self) -> str:
-        """Return a Jinja template string for converting a timezone-aware field to UTC.
+        """Return a Jinja template string for converting a timestamp field to UTC.
+
+        When ``timezone`` is provided and the column is tz-naive, the template
+        should inline the tz-naive-to-UTC conversion (the same SQL that
+        ``to_timezone_template`` would produce). When ``timezone`` is absent,
+        the template handles tz-aware fields as before.
 
         Jinja variables:
-            field (str): Timestamp expression with timezone.
+            field (str): Timestamp expression.
+            field_type (str | None): Column data type (optional).
+            timezone (str | None): IANA timezone name or fixed UTC offset
+                (e.g. "America/New_York", "+05:30") for tz-naive columns (optional).
 
         Examples:
-            Snowflake: "CONVERT_TIMEZONE('UTC', {{ field }})"
-            PostgreSQL: "{{ field }} AT TIME ZONE 'UTC'"
-            BigQuery: "TIMESTAMP({{ field }}, 'UTC')"
+            Snowflake: "{% if timezone is defined and timezone %}CONVERT_TIMEZONE('{{ timezone }}', 'UTC', {{ field }}){% else %}CONVERT_TIMEZONE('UTC', {{ field }}){% endif %}"
+            PostgreSQL: "{% if timezone is defined and timezone %}TIMEZONE('UTC', TIMEZONE('{{ timezone }}', {{ field }})){% else %}{{ field }} AT TIME ZONE 'UTC'{% endif %}"
+            BigQuery: "{% if timezone is defined and timezone %}TIMESTAMP({{ field }}, '{{ timezone }}'){% else %}TIMESTAMP({{ field }}, 'UTC'){% endif %}"
 
         Enables: UTC normalization for time range filters
+        """
+        pass
+
+    def to_timezone_template(self) -> str:
+        """Return a Jinja template string for converting a tz-naive field to UTC
+        given a source timezone.
+
+        Interprets ``field`` as being in ``timezone`` and returns the
+        UTC-equivalent expression. The backend falls back to returning the
+        field unchanged when this template is not implemented.
+
+        Jinja variables:
+            field (str): Tz-naive timestamp expression.
+            timezone (str): IANA timezone name or fixed UTC offset
+                (e.g. "America/New_York", "+05:30").
+
+        Examples:
+            Snowflake: "CONVERT_TIMEZONE('{{ timezone }}', 'UTC', {{ field }})"
+            PostgreSQL: "TIMEZONE('UTC', TIMEZONE('{{ timezone }}', {{ field }}))"
+            BigQuery: "TIMESTAMP({{ field }}, '{{ timezone }}')"
+            Oracle: "SYS_EXTRACT_UTC(FROM_TZ(CAST({{ field }} AS TIMESTAMP), '{{ timezone }}'))"
+
+        Enables: timezone offset support for tz-naive metric monitor time fields
         """
         pass
 
