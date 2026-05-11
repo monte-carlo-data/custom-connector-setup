@@ -122,16 +122,13 @@ def test_is_empty_string(ql):
 
 @pytest.mark.template(func="get_regexp_count_expression_template")
 def test_regexp_count(ql):
-    """CTE ['123','abc','456'], COUNT WHERE matches ^[0-9]+$ -> 2."""
+    """CTE ['123','abc','456'], SUM matching ^[0-9]+$ -> 2."""
     data = [{"val": "123"}, {"val": "abc"}, {"val": "456"}]
-    count_expr = ql.render(ql.templates.get_count_all_expression_template)
-    regex_lit = ql.render(ql.templates.literal_regex_template, regex="^[0-9]+$")
     regexp_count_expr = ql.render(
         ql.templates.get_regexp_count_expression_template,
-        regexp=regex_lit, case_insensitive=True,
+        regexp="^[0-9]+$", case_insensitive=True,
     ).format(x="val")
-    gt_expr = ql.render(ql.templates.get_is_gt_expression_template).format(x=regexp_count_expr, y="0")
-    result = ql.select_from_data_source(data, count_expr, condition=gt_expr)
+    result = ql.select_from_data_source(data, regexp_count_expr)
     assert int(result) == 2
 
 
@@ -141,7 +138,6 @@ def test_regexp_count(ql):
 
 
 @pytest.mark.template(func="get_regexp_expression_template")
-@pytest.mark.template(func="literal_regex_template")
 def test_regexp_match(ql):
     """CTE emails, COUNT WHERE matches email pattern -> 2."""
     data = [
@@ -150,10 +146,9 @@ def test_regexp_match(ql):
         {"val": "admin@test.org"},
     ]
     count_expr = ql.render(ql.templates.get_count_all_expression_template)
-    regex_lit = ql.render(ql.templates.literal_regex_template, regex="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z][a-zA-Z]+")
     regexp_expr = ql.render(
         ql.templates.get_regexp_expression_template,
-        regexp=regex_lit, case_insensitive=True,
+        regexp="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z][a-zA-Z]+", case_insensitive=True,
     ).format(x="val")
     result = ql.select_from_data_source(data, count_expr, condition=regexp_expr)
     assert int(result) == 2

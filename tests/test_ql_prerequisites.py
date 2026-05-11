@@ -685,17 +685,17 @@ def test_days_of_week(ql):
 
 @pytest.mark.template(func="get_in_past_calendar_week_expression_template")
 def test_in_past_calendar_week(ql):
-    """CTE with recent + old timestamps, past calendar week -> 1."""
+    """CTE with recent + old timestamps, current calendar week -> 1."""
     now = datetime.now(tz=timezone.utc)
-    three_days_ago = now - timedelta(days=3)
+    one_hour_ago = now - timedelta(hours=1)
     sixty_days_ago = now - timedelta(days=60)
 
-    lit_3d = ql.render(ql.templates.literal_datetime_template, date_time_value=three_days_ago)
+    lit_recent = ql.render(ql.templates.literal_datetime_template, date_time_value=one_hour_ago)
     lit_60d = ql.render(ql.templates.literal_datetime_template, date_time_value=sixty_days_ago)
 
-    alias_3d = ql.render(ql.templates.alias_field_template, field=lit_3d, alias="ts_val")
+    alias_recent = ql.render(ql.templates.alias_field_template, field=lit_recent, alias="ts_val")
     alias_60d = ql.render(ql.templates.alias_field_template, field=lit_60d, alias="ts_val")
-    sel1 = ql.render(ql.templates.add_select_clause_template, select_expressions=[alias_3d])
+    sel1 = ql.render(ql.templates.add_select_clause_template, select_expressions=[alias_recent])
     sel2 = ql.render(ql.templates.add_select_clause_template, select_expressions=[alias_60d])
     unioned = ql.render(ql.templates.union_queries_template, queries=[sel1, sel2])
     cte = ql.render(ql.templates.build_cte_template, alias="ts_data", cte=unioned)
