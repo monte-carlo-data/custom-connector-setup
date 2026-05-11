@@ -1674,15 +1674,18 @@ class QueryLanguageTemplates:
     def get_regexp_expression_template(self) -> str:
         """Return a Jinja template string for regex matching expression.
 
+        The template MUST include string quoting around {{ regexp }} — the framework
+        passes the raw regex pattern, not a pre-rendered literal.
+
         Placeholder + Jinja variables:
             {x} (placeholder): Column or expression, substituted via .format(x=field_name).
-            regexp (str): Regex pattern.
+            regexp (str): Raw regex pattern (unquoted).
             case_insensitive (bool): Whether to use case-insensitive matching.
 
         Examples:
-            Snowflake: "REGEXP_LIKE({x}, {{ regexp }})"
-            PostgreSQL: "{% if case_insensitive %}{x} ~* {{ regexp }}{% else %}{x} ~ {{ regexp }}{% endif %}"
-            BigQuery: "REGEXP_CONTAINS({x}, {{ regexp }})"
+            Snowflake: "REGEXP_LIKE({x}, '{{ regexp }}')"
+            PostgreSQL: "{% if case_insensitive %}{x} ~* '{{ regexp }}'{% else %}{x} ~ '{{ regexp }}'{% endif %}"
+            BigQuery: "REGEXP_CONTAINS({x}, r'{{ regexp }}')"
 
         Enables: regex filter predicates, sampling
         """
@@ -1691,15 +1694,18 @@ class QueryLanguageTemplates:
     def get_regexp_count_expression_template(self) -> str:
         """Return a Jinja template string for counting regex matches within a string.
 
+        The template MUST include string quoting around {{ regexp }} — the framework
+        passes the raw regex pattern, not a pre-rendered literal.
+
         Placeholder + Jinja variables:
             {x} (placeholder): Column or expression, substituted via .format(x=field_name).
-            regexp (str): Regex pattern to count matches of.
+            regexp (str): Raw regex pattern (unquoted).
             case_insensitive (bool): Whether to use case-insensitive matching.
 
         Examples:
-            Snowflake: "REGEXP_COUNT({x}, {{ regexp }})"
-            PostgreSQL: "(SELECT COUNT(*) FROM REGEXP_MATCHES({x}, {{ regexp }}, '{% if case_insensitive %}gi{% else %}g{% endif %}'))"
-            BigQuery: "ARRAY_LENGTH(REGEXP_EXTRACT_ALL({x}, {{ regexp }}))"
+            Snowflake: "REGEXP_COUNT({x}, '{{ regexp }}')"
+            PostgreSQL: "(SELECT COUNT(*) FROM REGEXP_MATCHES({x}, '{{ regexp }}', '{% if case_insensitive %}gi{% else %}g{% endif %}'))"
+            BigQuery: "ARRAY_LENGTH(REGEXP_EXTRACT_ALL({x}, r'{{ regexp }}'))"
 
         Enables: text_int_count, text_number_count, text_uuid_count, text_email_address_count metrics
         """
