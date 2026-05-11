@@ -868,6 +868,8 @@ def test_placeholder_templates_do_not_use_jinja_field(templates):
         if method is None:
             continue
         tpl_str = method()
+        if not tpl_str:
+            continue
         if jinja_field_re.search(tpl_str):
             violations.append(name)
     assert not violations, (
