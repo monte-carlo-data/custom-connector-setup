@@ -154,6 +154,13 @@ def test_regexp_match(ql):
     assert int(result) == 2
 
 
+@pytest.mark.template(func="literal_regex_template")
+def test_literal_regex(ql):
+    """Render a regex literal and verify it produces a quoted string usable in SQL."""
+    regex_lit = ql.render(ql.templates.literal_regex_template, regex="^[0-9]+$")
+    assert regex_lit == "'^[0-9]+$'"
+
+
 # ---------------------------------------------------------------------------
 # Metric sampling
 # ---------------------------------------------------------------------------
