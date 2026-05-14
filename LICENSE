@@ -1,12 +1,14 @@
-# Custom Integration Public Repository License
+# Custom Connector Public Repository License
 **Copyright 2026 Monte Carlo Data, Inc.**
 
 All rights in the Software contained herein (the "Software") are retained by Monte Carlo Data, Inc. ("Licensor"). Use of the Software is permitted only by customers with an active commercial agreement with Licensor ("Licensee"), subject to the terms below and that agreement (the "Agreement").
 
 **License Grant.** Licensor grants Licensee a limited, non-exclusive, non-transferable, revocable license to: (i) access and modify the Software solely to develop Licensee's own integration code ("Licensee Contributions"); and (ii) deploy the combined Software and Licensee Contributions within Licensee's own environment solely in connection with the Agreement.
 
-**Licensee Contributions.** Licensee retains ownership of its original Licensee Contributions. Licensee grants Licensor a non-exclusive, royalty-free, irrevocable license to use Licensee Contributions solely to provide services to Licensee under the Agreement. Licensor will not use Licensee Contributions for the benefit of any other party without Licensee's written consent.
+**Licensee Contributions.**  Licensee hereby irrevocably assigns to Licensor all right, title, and interest in and to the Licensee Contributions, including all intellectual property rights therein. Subject to the terms and conditions of the Agreement, Licensor grants Licensee a non-exclusive, non-transferable, revocable right to use the Licensee Contributions solely in connection with the service provided by Licensor pursuant to the Agreement.
 
-**Restrictions.** Licensee may not: (i) distribute or sublicense the Software or any Licensor-authored derivatives to any third party; (ii) commercialize the Software or any Licensor-authored derivatives in any form; (iii) use the Software in any manner that competes with Licensor's business; or (iv) seek intellectual property rights over the Software or any Licensor-authored derivatives.
+**Restrictions.** Licensee may not: (i) distribute or sublicense the Software, Licensee Contributions, or any Licensor-authored derivatives to any third party; (ii) commercialize the Software, Licensee Contributions, or any Licensor-authored derivatives in any form; (iii) use the Software or Licensee Contributions in any manner that competes with Licensor's business; or (iv) seek intellectual property rights over the Software, Licensee Contributions, or any Licensor-authored derivatives.
+
+**Open Source Components.** To the extent any Licensee Contributions incorporate code governed by an open source software license (“OSS Components”), Licensor’s ownership of Licensee Contributions applies solely to the original portions thereof and does not extend to any OSS Components, which remain subject to their respective license terms. Licensee shall disclose to Licensor any OSS Components incorporated into Licensee Contributions prior to deployment.” Both parties agree to comply with all applicable OSS license obligations, including attribution and notice requirements.
 
 **No Other Rights.** No rights are granted except as expressly stated above.
