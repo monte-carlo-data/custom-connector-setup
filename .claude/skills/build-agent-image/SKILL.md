@@ -107,24 +107,20 @@ only the connector from `$ARGUMENTS`.
 
 ## Step 5: Build the Docker image
 
-Build the flags from the detected types (Step 1) and the user's selection in Step 4.
+Build the command from the detected types (Step 1) and the user's selection in Step 4.
 
-Each DW connector gets a `--connector` flag; each ETL connector gets an `--etl-connection` flag.
+All connector names (DW and ETL) are passed as positional arguments. The script auto-detects each connector's type from its directory.
 
 ```bash
 echo y | python scripts/generate_agent_image.py \
-  --connector <dw-name1> \
-  --connector <dw-name2> \
-  --etl-connection <etl-name1> \
+  <name1> <name2> <name3> \
   --mode <mode>
 ```
 
 Where:
-- Each DW connector gets its own `--connector` flag
-- Each ETL connector gets its own `--etl-connection` flag
+- All connector names are positional arguments (DW and ETL mixed freely)
 - `<mode>` is from arguments or defaults to `auto` (applies to DW connectors only)
-- Omit `--connector` flags if there are no DW connectors
-- Omit `--etl-connection` flags if there are no ETL connectors
+- Omit names to auto-discover all connectors
 
 ## Step 6: Report results
 

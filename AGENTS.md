@@ -79,8 +79,8 @@ CONNECTOR=<name> docker compose run --rm test -m etl_metadata
 # Run details
 CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 
-# Unit tests (no vendor API needed)
-python -m pytest tests/etl/test_models.py tests/etl/test_validators.py -v
+# All ETL tests
+CONNECTOR=<name> docker compose run --rm test -m etl_connection,etl_metadata,etl_run_details
 ```
 
 ### Combined Agent Images
@@ -88,5 +88,5 @@ python -m pytest tests/etl/test_models.py tests/etl/test_validators.py -v
 To ship a DW connector and an ETL connector in a single agent image:
 
 ```bash
-python scripts/generate_agent_image.py --connector <dw-name> --etl-connection <etl-name>
+python scripts/generate_agent_image.py <dw-name> <etl-name>
 ```

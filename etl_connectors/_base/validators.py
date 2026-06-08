@@ -32,14 +32,20 @@ def _parse_iso8601(value: str, field_name: str, event_index: str) -> list[Valida
     """Try to parse an ISO 8601 datetime string. Return errors if invalid."""
     try:
         # Handle Z suffix for Python < 3.11
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return []
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
         return [ValidationError(
             field=field_name,
             message=f"Invalid ISO 8601 datetime: {value!r}",
             event_index=event_index,
         )]
+    if dt.tzinfo is None:
+        return [ValidationError(
+            field=field_name,
+            message=f"Datetime must be timezone-aware (got naive): {value!r}",
+            event_index=event_index,
+        )]
+    return []
 
 
 def validate_run_events(events: list[dict]) -> list[ValidationError]:
@@ -72,6 +78,10 @@ def validate_run_events(events: list[dict]) -> list[ValidationError]:
         # run_source_id must be present and non-empty
         if not event.get("run_source_id"):
             errors.append(ValidationError("run_source_id", "run_source_id is required", index))
+
+        # job_source_id must be present and non-empty
+        if not event.get("job_source_id"):
+            errors.append(ValidationError("job_source_id", "job_source_id is required", index))
 
         # start_time: validate format if present
         start_time = event.get("start_time")

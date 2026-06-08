@@ -23,6 +23,7 @@ ETL_CONNECTORS_DIR = os.path.join(REPO_ROOT, "etl_connectors")
 OUTPUT_DIR = os.path.join(REPO_ROOT, "output")
 
 REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
+ETL_REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
 
 
 def read_dockerfile_extra(base_dir, name):
@@ -75,7 +76,7 @@ def validate_etl_connector(name):
     """Validate that an ETL connector has all required artifacts. Returns list of errors."""
     errors = []
 
-    for filename in REQUIRED_SOURCE_FILES:
+    for filename in ETL_REQUIRED_SOURCE_FILES:
         path = os.path.join(ETL_CONNECTORS_DIR, name, filename)
         if not os.path.isfile(path):
             errors.append(f"  - Missing etl_connectors/{name}/{filename}")

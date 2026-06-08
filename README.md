@@ -235,11 +235,10 @@ The generic agent is an egress-only agent that works across all supported platfo
 
 **Options:**
 
-| Flag                | Default                          | Description                          |
+| Argument/Flag       | Default                          | Description                          |
 | ------------------- | -------------------------------- | ------------------------------------ |
+| `names`              | auto-discover all                | Positional connector names to include (DW and/or ETL) |
 | `--version`          | `latest`                         | Agent base image version             |
-| `--connector`        | auto-discover from output/       | Which DW connectors to include (repeatable) |
-| `--etl-connection`   | auto-discover from etl_connectors/ | Which ETL connectors to include (repeatable) |
 | `--docker-platform`  | `linux/amd64`                    | Docker platform for the image        |
 | `--tag`              | `custom-agent:{version}-generic` | Output image tag                     |
 | `--mode`             | `auto`                           | `auto`, `full`, or `hybrid` — DW connectors only |
@@ -247,22 +246,22 @@ The generic agent is an egress-only agent that works across all supported platfo
 Include specific connectors:
 
 ```bash
-python scripts/generate_agent_image.py --connector postgres --connector mysql
+python scripts/generate_agent_image.py postgres mysql
 ```
 
 Include an ETL connector:
 
 ```bash
-python scripts/generate_agent_image.py --etl-connection coalesce
+python scripts/generate_agent_image.py coalesce
 ```
 
 Combined DW + ETL image:
 
 ```bash
-python scripts/generate_agent_image.py --connector postgres --etl-connection coalesce
+python scripts/generate_agent_image.py postgres coalesce
 ```
 
-When invoked without any flags, both DW connectors (from `output/`) and ETL connectors (from `etl_connectors/`) are auto-discovered.
+When invoked without any names, both DW connectors (from `output/`) and ETL connectors (from `etl_connectors/`) are auto-discovered.
 
 **Modes:**
 
@@ -440,8 +439,6 @@ custom-connector-setup/
     test_functional_validation.py         # Functional validation tests (real-time metadata accuracy)
   tests/etl/                              # ETL connector tests
     conftest.py                           # ETL-specific fixtures
-    test_models.py                        # Unit tests for pycarlo model serialization
-    test_validators.py                    # Unit tests for validators
     test_etl_connection.py                # ETL connection test
     test_etl_metadata.py                  # ETL metadata test
     test_etl_run_details.py               # ETL run details test

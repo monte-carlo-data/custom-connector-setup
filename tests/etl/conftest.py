@@ -27,11 +27,14 @@ def etl_connector(request):
     module = importlib.import_module(f"etl_connectors.{name}.connector")
 
     creds_path = os.path.join(_PROJECT_ROOT, "etl_connectors", name, "credentials.json")
-    credentials: dict = {}
-    if os.path.isfile(creds_path):
-        with open(creds_path) as f:
-            data = json.load(f)
-        credentials = data.get("connect_args", {})
+    if not os.path.isfile(creds_path):
+        pytest.fail(
+            f"Credentials file not found: {creds_path}\n"
+            f"Create etl_connectors/{name}/credentials.json with your vendor API credentials."
+        )
+    with open(creds_path) as f:
+        data = json.load(f)
+    credentials = data.get("connect_args", {})
 
     connector = module.Connector()
     connector.credentials = credentials
