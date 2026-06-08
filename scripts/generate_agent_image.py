@@ -11,6 +11,12 @@ Hybrid mode (metadata pushed externally — only metric monitor support required
 
 Auto mode (auto-detect per connector based on manifest capabilities):
     python scripts/generate_agent_image.py --mode auto
+
+ETL connectors:
+    python scripts/generate_agent_image.py --etl-connection coalesce
+
+Combined:
+    python scripts/generate_agent_image.py --connector postgres --etl-connection coalesce
 """
 import argparse
 import json
@@ -24,6 +30,7 @@ AGENT_TYPE = "generic"
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONNECTORS_DIR = os.path.join(REPO_ROOT, "connectors")
+ETL_CONNECTORS_DIR = os.path.join(REPO_ROOT, "etl_connectors")
 OUTPUT_DIR = os.path.join(REPO_ROOT, "output")
 
 REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
@@ -46,6 +53,79 @@ def read_dockerfile_extra(name):
     if not has_instructions:
         return None
     return content.strip()
+
+
+def read_etl_dockerfile_extra(name):
+    """Read an ETL connector's Dockerfile.extra, returning content or None.
+
+    Returns None if the file doesn't exist or contains only comments/whitespace.
+    """
+    path = os.path.join(ETL_CONNECTORS_DIR, name, "Dockerfile.extra")
+    if not os.path.isfile(path):
+        return None
+    with open(path) as f:
+        content = f.read()
+    # Check if there are any non-comment, non-blank lines
+    has_instructions = any(
+        line.strip() and not line.strip().startswith("#") for line in content.splitlines()
+    )
+    if not has_instructions:
+        return None
+    return content.strip()
+
+
+def discover_etl_connectors():
+    """Return ETL connector names from the etl_connectors/ directory."""
+    if not os.path.isdir(ETL_CONNECTORS_DIR):
+        return []
+    return sorted(
+        name
+        for name in os.listdir(ETL_CONNECTORS_DIR)
+        if not name.startswith("_")
+        and not name.startswith(".")
+        and os.path.isdir(os.path.join(ETL_CONNECTORS_DIR, name))
+    )
+
+
+def validate_etl_connector(name):
+    """Validate that an ETL connector has all required artifacts. Returns list of errors."""
+    errors = []
+
+    for filename in REQUIRED_SOURCE_FILES:
+        path = os.path.join(ETL_CONNECTORS_DIR, name, filename)
+        if not os.path.isfile(path):
+            errors.append(f"  - Missing etl_connectors/{name}/{filename}")
+
+    manifest_path = os.path.join(ETL_CONNECTORS_DIR, name, "manifest.json")
+    if os.path.isfile(manifest_path):
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+        connection_type = manifest.get("connection_type", "")
+        if not connection_type.startswith("custom-etl-connector-"):
+            errors.append(
+                f"  - manifest.json connection_type must match 'custom-etl-connector-*', "
+                f"got '{connection_type}'"
+            )
+        if "terminology" not in manifest:
+            errors.append(f"  - manifest.json is missing required 'terminology' key")
+
+    return errors
+
+
+def build_etl_context(tmp_dir, connectors):
+    """Copy ETL connector artifacts into the temporary build context.
+
+    Copies only the files needed for the image — credentials.json and .env
+    are explicitly excluded to prevent secrets from being baked into images.
+    """
+    _ETL_EXCLUDE = {"credentials.json", ".env"}
+    for name in connectors:
+        src = os.path.join(ETL_CONNECTORS_DIR, name)
+        dest = os.path.join(tmp_dir, "custom-etl-connectors", name)
+        shutil.copytree(
+            src, dest,
+            ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
+        )
 
 
 def discover_connectors():
@@ -143,7 +223,7 @@ def check_metric_warnings(name):
     return None
 
 
-def generate_dockerfile(connectors, version, base_image=None):
+def generate_dockerfile(connectors, version, base_image=None, etl_connectors=None):
     """Generate Dockerfile contents for the custom agent image."""
     from_image = base_image or f"montecarlodata/agent:{version}-{AGENT_TYPE}"
     lines = [f"FROM {from_image}", "", "ENV MCD_CUSTOM_CONNECTORS_ENABLED=true", ""]
@@ -161,6 +241,17 @@ def generate_dockerfile(connectors, version, base_image=None):
         lines.append(f"COPY custom-connectors/{name}/ /opt/custom-connectors/{name}/")
         lines.append(
             f"RUN pip install --no-cache-dir -r /opt/custom-connectors/{name}/requirements.txt"
+        )
+        lines.append("")
+
+    for name in (etl_connectors or []):
+        lines.append(f"# ETL Connector: {name}")
+        extra_content = read_etl_dockerfile_extra(name)
+        if extra_content:
+            lines.append(extra_content)
+        lines.append(f"COPY custom-etl-connectors/{name}/ /opt/custom-etl-connectors/{name}/")
+        lines.append(
+            f"RUN pip install --no-cache-dir -r /opt/custom-etl-connectors/{name}/requirements.txt"
         )
         lines.append("")
 
@@ -211,6 +302,12 @@ def main():
         help="Connector to include (repeatable). Defaults to all with output/",
     )
     parser.add_argument(
+        "--etl-connection",
+        action="append",
+        dest="etl_connectors",
+        help="ETL connector to include (repeatable). Defaults to auto-discover from etl_connectors/",
+    )
+    parser.add_argument(
         "--docker-platform",
         default="linux/amd64",
         help="Docker platform for the image (default: linux/amd64)",
@@ -233,15 +330,29 @@ def main():
     )
     args = parser.parse_args()
 
-    # Determine connectors to include
-    if args.connectors:
-        connectors = args.connectors
-    else:
-        connectors = discover_connectors()
+    # Determine connectors to include.
+    # When neither --connector nor --etl-connection is passed, auto-discover both.
+    # When one type is explicitly passed, only auto-discover that type.
+    explicit_dw = args.connectors is not None
+    explicit_etl = args.etl_connectors is not None
 
-    if not connectors:
+    if explicit_dw:
+        connectors = args.connectors
+    elif not explicit_etl:
+        connectors = discover_connectors()
+    else:
+        connectors = []
+
+    if explicit_etl:
+        etl_connectors = args.etl_connectors
+    elif not explicit_dw:
+        etl_connectors = discover_etl_connectors()
+    else:
+        etl_connectors = []
+
+    if not connectors and not etl_connectors:
         print(
-            "Error: No connectors found. Run tests and export first, or specify --connector.",
+            "Error: No connectors found. Run tests and export first, or specify --connector / --etl-connection.",
             file=sys.stderr,
         )
         print(
@@ -250,7 +361,7 @@ def main():
         )
         sys.exit(1)
 
-    # Resolve per-connector modes and validate
+    # Resolve per-connector modes and validate DW connectors
     connector_modes = {}
     for name in connectors:
         connector_modes[name] = resolve_connector_mode(name, args.mode)
@@ -261,10 +372,19 @@ def main():
         if errors:
             all_errors[name] = errors
 
+    # Validate ETL connectors
+    for name in etl_connectors:
+        errors = validate_etl_connector(name)
+        if errors:
+            all_errors[name] = errors
+
     if all_errors:
         print("Error: Some connectors are missing required artifacts:\n", file=sys.stderr)
         for name, errors in all_errors.items():
-            print(f"  {name} (mode: {connector_modes[name]}):", file=sys.stderr)
+            if name in connector_modes:
+                print(f"  {name} (mode: {connector_modes[name]}):", file=sys.stderr)
+            else:
+                print(f"  {name} (etl):", file=sys.stderr)
             for err in errors:
                 print(err, file=sys.stderr)
         print(
@@ -309,23 +429,38 @@ def main():
     try:
         # Generate Dockerfile
         dockerfile_content = generate_dockerfile(
-            connectors, args.version, base_image=args.base_image
+            connectors,
+            args.version,
+            base_image=args.base_image,
+            etl_connectors=etl_connectors,
         )
         dockerfile_path = os.path.join(tmp_dir, "Dockerfile")
         with open(dockerfile_path, "w") as f:
             f.write(dockerfile_content)
 
         # Copy artifacts into build context
-        build_context(tmp_dir, connectors)
+        if connectors:
+            build_context(tmp_dir, connectors)
+        if etl_connectors:
+            build_etl_context(tmp_dir, etl_connectors)
 
         base_image = args.base_image or f"montecarlodata/agent:{args.version}-{AGENT_TYPE}"
-        print(f"Building image '{tag}' with connectors: {', '.join(connectors)}")
+
+        # Build summary
+        all_connector_names = []
+        if connectors:
+            all_connector_names.extend(connectors)
+        if etl_connectors:
+            all_connector_names.extend(f"{n} (etl)" for n in etl_connectors)
+        print(f"Building image '{tag}' with connectors: {', '.join(all_connector_names)}")
         print(f"Base image: {base_image}")
         print(f"Docker platform: {args.docker_platform}")
         for name in connectors:
             mode = connector_modes[name]
             mode_label = "hybrid (metadata pushed externally)" if mode == "hybrid" else "full"
             print(f"  {name}: {mode_label}")
+        for name in etl_connectors:
+            print(f"  {name}: etl")
         print()
 
         # Run docker build
@@ -342,27 +477,46 @@ def main():
 
     print(f"\nSuccess! Image built: {tag}")
     print()
-    print("Connector modes:")
-    hybrid_connectors = []
-    for name in connectors:
-        mode = connector_modes[name]
-        mode_label = "hybrid (metadata pushed externally)" if mode == "hybrid" else "full"
-        print(f"  {name}: {mode_label}")
-        if mode == "hybrid":
-            hybrid_connectors.append(name)
-    print()
+    if connectors:
+        print("Connector modes:")
+        hybrid_connectors = []
+        for name in connectors:
+            mode = connector_modes[name]
+            mode_label = "hybrid (metadata pushed externally)" if mode == "hybrid" else "full"
+            print(f"  {name}: {mode_label}")
+            if mode == "hybrid":
+                hybrid_connectors.append(name)
+        print()
+    else:
+        hybrid_connectors = []
+    if etl_connectors:
+        print("ETL connectors:")
+        for name in etl_connectors:
+            print(f"  {name}")
+        print()
     print("Next steps:")
-    print(f"  1. Verify: docker run --rm --entrypoint ls {tag} /opt/custom-connectors/")
-    print(f"  2. Push to your container registry:")
+    step = 1
+    if connectors:
+        print(f"  {step}. Verify DW connectors: docker run --rm --entrypoint ls {tag} /opt/custom-connectors/")
+        step += 1
+    if etl_connectors:
+        print(f"  {step}. Verify ETL connectors: docker run --rm --entrypoint ls {tag} /opt/custom-etl-connectors/")
+        step += 1
+    print(f"  {step}. Push to your container registry:")
     print(f"     docker tag {tag} <your-registry>/{tag}")
     print(f"     docker push <your-registry>/{tag}")
     if hybrid_connectors:
-        print(f"  3. Configure your external metadata pipeline to push metadata for: {', '.join(hybrid_connectors)}")
+        step += 1
+        print(f"  {step}. Configure your external metadata pipeline to push metadata for: {', '.join(hybrid_connectors)}")
 
     # Point users to credentials.json for self-hosted setup
     creds_files = []
     for name in connectors:
         creds_path = os.path.join(CONNECTORS_DIR, name, "credentials.json")
+        if os.path.isfile(creds_path):
+            creds_files.append(creds_path)
+    for name in etl_connectors:
+        creds_path = os.path.join(ETL_CONNECTORS_DIR, name, "credentials.json")
         if os.path.isfile(creds_path):
             creds_files.append(creds_path)
 
