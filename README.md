@@ -320,7 +320,7 @@ ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M
 4. **Test:**
 
    ```bash
-   ETL_CONNECTOR=<name> docker compose run --rm test -m etl_connection
+   CONNECTOR=<name> docker compose run --rm test -m etl_connection
    ```
 
 5. **Build:**
@@ -384,13 +384,13 @@ The `terminology` field maps Monte Carlo's generic concepts (group, job, task) t
 
 ```bash
 # Connection test
-ETL_CONNECTOR=<name> docker compose run --rm test -m etl_connection
+CONNECTOR=<name> docker compose run --rm test -m etl_connection
 
 # Metadata test — validates fetch_metadata returns well-formed dicts
-ETL_CONNECTOR=<name> docker compose run --rm test -m etl_metadata
+CONNECTOR=<name> docker compose run --rm test -m etl_metadata
 
 # Run details test — validates fetch_run_details returns well-formed dicts
-ETL_CONNECTOR=<name> docker compose run --rm test -m etl_run_details
+CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 ```
 
 ## Requirements

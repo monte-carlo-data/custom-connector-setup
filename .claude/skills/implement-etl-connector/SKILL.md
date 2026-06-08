@@ -196,7 +196,7 @@ Tell the user:
 
 ```bash
 docker compose build
-ETL_CONNECTOR=<name> docker compose run --rm test -m etl_connection
+CONNECTOR=<name> docker compose run --rm test -m etl_connection
 ```
 
 This verifies that:
@@ -214,7 +214,7 @@ Fix and re-test before proceeding.
 ## Step 9: Test — Metadata
 
 ```bash
-ETL_CONNECTOR=<name> docker compose run --rm test -m etl_metadata
+CONNECTOR=<name> docker compose run --rm test -m etl_metadata
 ```
 
 This calls `fetch_metadata()` and validates:
@@ -232,7 +232,7 @@ Fix and re-test.
 ## Step 10: Test — Run Details
 
 ```bash
-ETL_CONNECTOR=<name> docker compose run --rm test -m etl_run_details
+CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 ```
 
 This runs two tests:

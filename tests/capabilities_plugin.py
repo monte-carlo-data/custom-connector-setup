@@ -30,7 +30,7 @@ ALL_CAPABILITIES = [
 
 def pytest_configure(config):
     # In ETL mode, capabilities tracking is not applicable
-    if getattr(config, "_etl_mode", False):
+    if getattr(config, "_connector_type", None) == "etl":
         if config.getoption("--export", default=False):
             raise pytest.UsageError(
                 "--export is not supported for ETL connectors"
@@ -288,7 +288,7 @@ def _get_setup_version():
 
 
 def pytest_sessionfinish(session, exitstatus):
-    if getattr(session.config, "_etl_mode", False):
+    if getattr(session.config, "_connector_type", None) == "etl":
         return
 
     export = session.config.getoption("--export", default=False)

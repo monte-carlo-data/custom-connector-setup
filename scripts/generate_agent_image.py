@@ -3,20 +3,9 @@
 
 Usage:
     python scripts/generate_agent_image.py
+    python scripts/generate_agent_image.py postgres coalesce
     python scripts/generate_agent_image.py --version 0.0.11
-    python scripts/generate_agent_image.py --connector postgres --connector teradata
-
-Hybrid mode (metadata pushed externally — only metric monitor support required):
-    python scripts/generate_agent_image.py --mode hybrid
-
-Auto mode (auto-detect per connector based on manifest capabilities):
-    python scripts/generate_agent_image.py --mode auto
-
-ETL connectors:
-    python scripts/generate_agent_image.py --etl-connection coalesce
-
-Combined:
-    python scripts/generate_agent_image.py --connector postgres --etl-connection coalesce
+    python scripts/generate_agent_image.py --mode hybrid postgres
 """
 import argparse
 import json
@@ -36,12 +25,12 @@ OUTPUT_DIR = os.path.join(REPO_ROOT, "output")
 REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
 
 
-def read_dockerfile_extra(name):
+def read_dockerfile_extra(base_dir, name):
     """Read a connector's Dockerfile.extra, returning content or None.
 
     Returns None if the file doesn't exist or contains only comments/whitespace.
     """
-    path = os.path.join(CONNECTORS_DIR, name, "Dockerfile.extra")
+    path = os.path.join(base_dir, name, "Dockerfile.extra")
     if not os.path.isfile(path):
         return None
     with open(path) as f:
@@ -55,23 +44,18 @@ def read_dockerfile_extra(name):
     return content.strip()
 
 
-def read_etl_dockerfile_extra(name):
-    """Read an ETL connector's Dockerfile.extra, returning content or None.
+def resolve_connector_dir(name):
+    """Return (base_dir, connector_type) for a connector name.
 
-    Returns None if the file doesn't exist or contains only comments/whitespace.
+    Checks connectors/<name>/ and etl_connectors/<name>/.
     """
-    path = os.path.join(ETL_CONNECTORS_DIR, name, "Dockerfile.extra")
-    if not os.path.isfile(path):
-        return None
-    with open(path) as f:
-        content = f.read()
-    # Check if there are any non-comment, non-blank lines
-    has_instructions = any(
-        line.strip() and not line.strip().startswith("#") for line in content.splitlines()
-    )
-    if not has_instructions:
-        return None
-    return content.strip()
+    dw_path = os.path.join(CONNECTORS_DIR, name)
+    etl_path = os.path.join(ETL_CONNECTORS_DIR, name)
+    if os.path.isdir(dw_path):
+        return CONNECTORS_DIR, "dw"
+    if os.path.isdir(etl_path):
+        return ETL_CONNECTORS_DIR, "etl"
+    return None, None
 
 
 def discover_etl_connectors():
@@ -235,7 +219,7 @@ def generate_dockerfile(connectors, version, base_image=None, etl_connectors=Non
 
     for name in connectors:
         lines.append(f"# Connector: {name}")
-        extra_content = read_dockerfile_extra(name)
+        extra_content = read_dockerfile_extra(CONNECTORS_DIR, name)
         if extra_content:
             lines.append(extra_content)
         lines.append(f"COPY custom-connectors/{name}/ /opt/custom-connectors/{name}/")
@@ -246,7 +230,7 @@ def generate_dockerfile(connectors, version, base_image=None, etl_connectors=Non
 
     for name in (etl_connectors or []):
         lines.append(f"# ETL Connector: {name}")
-        extra_content = read_etl_dockerfile_extra(name)
+        extra_content = read_dockerfile_extra(ETL_CONNECTORS_DIR, name)
         if extra_content:
             lines.append(extra_content)
         lines.append(f"COPY custom-etl-connectors/{name}/ /opt/custom-etl-connectors/{name}/")
@@ -296,16 +280,9 @@ def main():
         help="Agent base image version (default: latest)",
     )
     parser.add_argument(
-        "--connector",
-        action="append",
-        dest="connectors",
-        help="Connector to include (repeatable). Defaults to all with output/",
-    )
-    parser.add_argument(
-        "--etl-connection",
-        action="append",
-        dest="etl_connectors",
-        help="ETL connector to include (repeatable). Defaults to auto-discover from etl_connectors/",
+        "names",
+        nargs="*",
+        help="Connector names to include. Auto-discovers from connectors/ and etl_connectors/ if omitted.",
     )
     parser.add_argument(
         "--docker-platform",
@@ -331,28 +308,29 @@ def main():
     args = parser.parse_args()
 
     # Determine connectors to include.
-    # When neither --connector nor --etl-connection is passed, auto-discover both.
-    # When one type is explicitly passed, only auto-discover that type.
-    explicit_dw = args.connectors is not None
-    explicit_etl = args.etl_connectors is not None
-
-    if explicit_dw:
-        connectors = args.connectors
-    elif not explicit_etl:
-        connectors = discover_connectors()
-    else:
+    # When names are given, resolve each to its directory. Otherwise auto-discover both.
+    if args.names:
         connectors = []
-
-    if explicit_etl:
-        etl_connectors = args.etl_connectors
-    elif not explicit_dw:
-        etl_connectors = discover_etl_connectors()
-    else:
         etl_connectors = []
+        for name in args.names:
+            base_dir, connector_type = resolve_connector_dir(name)
+            if connector_type == "dw":
+                connectors.append(name)
+            elif connector_type == "etl":
+                etl_connectors.append(name)
+            else:
+                print(
+                    f"Error: '{name}' not found in connectors/ or etl_connectors/.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+    else:
+        connectors = discover_connectors()
+        etl_connectors = discover_etl_connectors()
 
     if not connectors and not etl_connectors:
         print(
-            "Error: No connectors found. Run tests and export first, or specify --connector / --etl-connection.",
+            "Error: No connectors found. Run tests and export first, or pass connector names.",
             file=sys.stderr,
         )
         print(

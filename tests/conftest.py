@@ -15,107 +15,102 @@ def pytest_addoption(parser):
     parser.addoption(
         "--connector",
         default=None,
-        help="Connector name to test (e.g. postgres, teradata)",
-    )
-    parser.addoption(
-        "--etl-connector",
-        default=None,
-        help="ETL connector name to test (e.g. coalesce)",
+        help="Connector name to test (e.g. postgres, teradata, coalesce)",
     )
 
 
-def _resolve_connector_name(config):
-    """Resolve connector name: --connector flag > CONNECTOR env var > auto-detect."""
+def _resolve_connector(config):
+    """Resolve connector name and type from flag, env var, or auto-detect.
+
+    Returns (name, connector_type) where connector_type is "dw" or "etl".
+    Returns (None, None) when no connector can be resolved.
+    """
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    connectors_dir = os.path.join(project_root, "connectors")
+    etl_dir = os.path.join(project_root, "etl_connectors")
+
+    def _classify(name):
+        """Determine whether *name* is a DW or ETL connector."""
+        if os.path.isdir(os.path.join(connectors_dir, name)):
+            return name, "dw"
+        if os.path.isdir(os.path.join(etl_dir, name)):
+            return name, "etl"
+        raise pytest.UsageError(
+            f"Connector '{name}' not found in connectors/ or etl_connectors/."
+        )
+
+    # 1. Explicit flag
     name = config.getoption("--connector", default=None)
     if name:
-        return name
+        return _classify(name)
 
+    # 2. Environment variable
     name = os.environ.get("CONNECTOR")
     if name:
-        return name
+        return _classify(name)
 
-    connectors_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connectors")
-    if not os.path.isdir(connectors_dir):
-        return None
+    # 3. Auto-detect: exactly one connector across both directories
+    all_dirs = []
+    if os.path.isdir(connectors_dir):
+        all_dirs.extend(
+            d for d in os.listdir(connectors_dir)
+            if not d.startswith("_") and not d.startswith(".")
+            and os.path.isdir(os.path.join(connectors_dir, d))
+        )
+    if os.path.isdir(etl_dir):
+        all_dirs.extend(
+            d for d in os.listdir(etl_dir)
+            if not d.startswith("_") and not d.startswith(".")
+            and os.path.isdir(os.path.join(etl_dir, d))
+        )
 
-    dirs = [
-        d for d in os.listdir(connectors_dir)
-        if not d.startswith("_") and not d.startswith(".")
-        and os.path.isdir(os.path.join(connectors_dir, d))
-    ]
-    if len(dirs) == 1:
-        return dirs[0]
-    return None
+    if len(all_dirs) == 1:
+        return _classify(all_dirs[0])
 
-
-def _resolve_etl_connector_name(config):
-    """Resolve ETL connector name: --etl-connector flag > ETL_CONNECTOR env var."""
-    name = config.getoption("--etl-connector", default=None)
-    if name:
-        return name
-    return os.environ.get("ETL_CONNECTOR") or None
+    return None, None
 
 
 def pytest_configure(config):
-    """Validate connector selection early so we fail once, not per-test.
+    name, connector_type = _resolve_connector(config)
+    config._connector_name = name
+    config._connector_type = connector_type  # "dw", "etl", or None
 
-    Three modes:
-    1. Both CONNECTOR and ETL_CONNECTOR set -> error (mutually exclusive)
-    2. ETL_CONNECTOR set -> ETL mode (skip DW validation)
-    3. CONNECTOR set (or discoverable) -> DW mode (existing behavior)
-    """
-    etl_name = _resolve_etl_connector_name(config)
-    dw_name = _resolve_connector_name(config)
-
-    # Mutual exclusivity check
-    if etl_name and dw_name:
+    if not name:
+        # Check if there were multiple connectors (ambiguous)
+        connectors_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connectors")
+        etl_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "etl_connectors")
+        all_dirs = []
+        if os.path.isdir(connectors_dir):
+            all_dirs.extend(
+                d for d in os.listdir(connectors_dir)
+                if not d.startswith("_") and not d.startswith(".")
+                and os.path.isdir(os.path.join(connectors_dir, d))
+            )
+        if os.path.isdir(etl_dir):
+            all_dirs.extend(
+                d for d in os.listdir(etl_dir)
+                if not d.startswith("_") and not d.startswith(".")
+                and os.path.isdir(os.path.join(etl_dir, d))
+            )
+        if not all_dirs:
+            raise pytest.UsageError(
+                "No connectors found. Run: python scripts/create_connector.py <name>"
+            )
         raise pytest.UsageError(
-            "CONNECTOR and ETL_CONNECTOR are mutually exclusive. "
-            "Set only one at a time."
+            f"Multiple connectors found ({', '.join(sorted(all_dirs))}). "
+            "Specify one with --connector=<name> or CONNECTOR=<name>."
         )
-
-    # ETL mode — skip all DW validation
-    if etl_name:
-        config._etl_mode = True
-        return
-
-    config._etl_mode = False
-
-    # DW mode — existing validation
-    if dw_name:
-        return
-
-    connectors_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connectors")
-    if not os.path.isdir(connectors_dir):
-        raise pytest.UsageError("No connectors/ directory found")
-
-    dirs = [
-        d for d in os.listdir(connectors_dir)
-        if not d.startswith("_") and not d.startswith(".")
-        and os.path.isdir(os.path.join(connectors_dir, d))
-    ]
-    if len(dirs) == 0:
-        raise pytest.UsageError(
-            "No connectors found. Run: python scripts/create_connector.py <name>"
-        )
-    raise pytest.UsageError(
-        f"Multiple connectors found ({', '.join(sorted(dirs))}). "
-        "Specify one with --connector=<name> or CONNECTOR=<name> env var."
-    )
 
 
 _connector_cache = {}
 
 
 def _get_connector(config):
-    """Load and cache the connector module."""
+    """Load and cache the DW connector module."""
     if "module" not in _connector_cache:
-        name = _resolve_connector_name(config)
+        name = getattr(config, "_connector_name", None)
         if not name:
             raise RuntimeError("No connector specified")
-        config._connector_name = name
-
-        connectors_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connectors")
 
         module = importlib.import_module(f"connectors.{name}.connector")
         _connector_cache["name"] = name
@@ -300,8 +295,8 @@ class QueryTestHelper:
 
 @pytest.fixture(scope="session")
 def connector(request):
-    if getattr(request.config, "_etl_mode", False):
-        pytest.skip("DW connector not available in ETL mode")
+    if getattr(request.config, "_connector_type", None) != "dw":
+        pytest.skip("Not a DW connector")
     name, module = _get_connector(request.config)
     tc = TestConnector(module, name)
     yield tc
@@ -310,8 +305,8 @@ def connector(request):
 
 @pytest.fixture(scope="session")
 def templates(request):
-    if getattr(request.config, "_etl_mode", False):
-        pytest.skip("DW templates not available in ETL mode")
+    if getattr(request.config, "_connector_type", None) != "dw":
+        pytest.skip("Not a DW connector")
     _, module = _get_connector(request.config)
     TemplatesClass = _make_templates_class(module)
     t = TemplatesClass()
@@ -327,8 +322,8 @@ def ql(connector, templates) -> QueryTestHelper:
 @pytest.fixture(scope="session")
 def functional_ops(request):
     """Load the connector's FunctionalTestOperations, or None if not implemented."""
-    if getattr(request.config, "_etl_mode", False):
-        pytest.skip("DW functional_ops not available in ETL mode")
+    if getattr(request.config, "_connector_type", None) != "dw":
+        pytest.skip("Not a DW connector")
     _, module = _get_connector(request.config)
     cls = getattr(module, "FunctionalTestOperations", None)
     if cls is None:

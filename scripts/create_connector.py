@@ -187,7 +187,7 @@ def _create_etl_connector(name, repo_root):
     print(f"  3. Edit etl_connectors/{name}/requirements.txt  — add vendor client library")
     print(f"  4. Edit etl_connectors/{name}/Dockerfile.extra  — add system deps (if needed)")
     print(f"  5. docker compose build")
-    print(f"  6. ETL_CONNECTOR={name} docker compose run test -m etl_connection")
+    print(f"  6. CONNECTOR={name} docker compose run test -m etl_connection")
 
 
 def main():

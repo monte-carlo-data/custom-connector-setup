@@ -71,19 +71,17 @@ Each skill file (`.claude/skills/*/SKILL.md`) contains detailed step-by-step ins
 
 ```bash
 # Connection
-ETL_CONNECTOR=<name> docker compose run --rm test -m etl_connection
+CONNECTOR=<name> docker compose run --rm test -m etl_connection
 
 # Metadata
-ETL_CONNECTOR=<name> docker compose run --rm test -m etl_metadata
+CONNECTOR=<name> docker compose run --rm test -m etl_metadata
 
 # Run details
-ETL_CONNECTOR=<name> docker compose run --rm test -m etl_run_details
+CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 
 # Unit tests (no vendor API needed)
 python -m pytest tests/etl/test_models.py tests/etl/test_validators.py -v
 ```
-
-> **Note:** `CONNECTOR` and `ETL_CONNECTOR` are mutually exclusive — set only one per invocation.
 
 ### Combined Agent Images
 
