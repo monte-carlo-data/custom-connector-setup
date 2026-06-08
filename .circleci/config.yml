@@ -1,0 +1,15 @@
+# No-op config — this repo uses docker compose for testing, not CircleCI.
+# This file exists to prevent CircleCI from failing on every push.
+version: 2.1
+
+jobs:
+  noop:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - run: echo "No CI configured for this repo"
+
+workflows:
+  main:
+    jobs:
+      - noop
