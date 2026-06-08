@@ -1,6 +1,6 @@
 # custom-connector-setup
 
-A validation toolkit for building custom database connectors. You implement a set of base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your connector supports. The end result is a generic agent image that you host, deploy, and then register in Monte Carlo.
+A toolkit for building custom database connectors and ETL pipeline connectors for Monte Carlo. For database (DW) connectors, you implement base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your connector supports. For ETL connectors, you implement two Python methods that return structured run events and job metadata from your pipeline orchestrator. Both produce a generic agent image that you host, deploy, and then register in Monte Carlo.
 
 Supports multiple connectors side by side so you can build and test several at once.
 
@@ -10,7 +10,9 @@ An AI coding agent can handle the entire workflow — from scaffolding and drive
 
 ### Recommended: Claude Code skills
 
-The repo includes four skills that automate the full workflow end-to-end:
+The repo includes skills that automate the full workflow end-to-end for both DW and ETL connectors.
+
+**DW connector workflow:**
 
 | Step | Skill                                                       | What it does                                                                                          |
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -19,13 +21,21 @@ The repo includes four skills that automate the full workflow end-to-end:
 | 3    | `/implement-connector <name> [hybrid]`                      | Implement all template methods section by section                                                     |
 | 4    | `/build-agent-image <name> [--mode MODE]` | Export capabilities and build deployable Docker image                                                 |
 
-The only manual step is filling in `credentials.json` when `/setup-connection` pauses. Everything else — scaffolding, driver installation, template implementation, testing, and image building — is handled by the skills.
+**ETL connector workflow:**
+
+| Step | Skill                                                       | What it does                                                                                          |
+| ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1    | `/create-connector <name> --etl`                            | Scaffold an ETL connector with interactive terminology prompts                                        |
+| 2    | `/implement-etl-connector <name>`                           | Research vendor API, implement `fetch_metadata` and `fetch_run_details`, verify with tests — **pauses for you to fill in credentials** |
+| 3    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
+
+The only manual step is filling in `credentials.json` when the implementation skill pauses. Everything else — scaffolding, API research, implementation, testing, and image building — is handled by the skills.
 
 ### Fallback: Other AI agents
 
 If you're not using Claude Code, complete steps 1–6 of Quick Start below to set up connectivity, then provide `AGENTS.md` as context to your LLM along with the connector name. The agent will implement all remaining template methods, run tests iteratively, and export capabilities. Resume at step 10 to build the deployable image.
 
-## Quick Start
+## DW Connector Quick Start
 
 ### 1. Create a connector
 
@@ -225,19 +235,33 @@ The generic agent is an egress-only agent that works across all supported platfo
 
 **Options:**
 
-| Flag                | Default                          | Description                          |
+| Argument/Flag       | Default                          | Description                          |
 | ------------------- | -------------------------------- | ------------------------------------ |
-| `--version`         | `latest`                         | Agent base image version             |
-| `--connector`       | all with output/                 | Which connectors to include (repeatable) |
-| `--docker-platform` | `linux/amd64`                    | Docker platform for the image        |
-| `--tag`             | `custom-agent:{version}-generic` | Output image tag                     |
-| `--mode`            | `auto`                           | `auto`, `full`, or `hybrid` — see Modes below |
+| `names`              | auto-discover all                | Positional connector names to include (DW and/or ETL) |
+| `--version`          | `latest`                         | Agent base image version             |
+| `--docker-platform`  | `linux/amd64`                    | Docker platform for the image        |
+| `--tag`              | `custom-agent:{version}-generic` | Output image tag                     |
+| `--mode`             | `auto`                           | `auto`, `full`, or `hybrid` — DW connectors only |
 
 Include specific connectors:
 
 ```bash
-python scripts/generate_agent_image.py --connector postgres --connector mysql
+python scripts/generate_agent_image.py postgres mysql
 ```
+
+Include an ETL connector:
+
+```bash
+python scripts/generate_agent_image.py coalesce
+```
+
+Combined DW + ETL image:
+
+```bash
+python scripts/generate_agent_image.py postgres coalesce
+```
+
+When invoked without any names, both DW connectors (from `output/`) and ETL connectors (from `etl_connectors/`) are auto-discovered.
 
 **Modes:**
 
@@ -278,6 +302,98 @@ docker compose down --rmi local
 
 Nothing is installed on your machine — everything runs inside the container.
 
+## ETL Connector Quick Start
+
+ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M, etc.) by returning structured event data. Unlike DW connectors which provide SQL templates, ETL connectors implement two Python methods that return plain dicts. The agent framework handles pushing data to Monte Carlo.
+
+1. **Create:**
+
+   ```bash
+   python scripts/create_connector.py <name> --etl
+   ```
+
+2. **Implement:** Edit `etl_connectors/<name>/connector.py` — implement `fetch_metadata()` and `fetch_run_details()`.
+
+3. **Add credentials:** Fill in `etl_connectors/<name>/credentials.json` with your vendor API credentials only.
+
+4. **Test:**
+
+   ```bash
+   CONNECTOR=<name> docker compose run --rm test -m etl_connection
+   ```
+
+5. **Build:**
+
+   ```bash
+   python scripts/generate_agent_image.py --etl-connection <name>
+   ```
+
+### Connector contract
+
+```python
+class Connector:
+    def setup_connection(self): ...          # optional — initialize API client using self.credentials
+    def close_connection(self): ...          # optional — clean up sessions
+    def fetch_metadata(self, limit, offset) -> list[dict]: ...                            # required
+    def fetch_run_details(self, run_ids?, lookback?, limit, offset) -> list[dict]: ...    # required
+```
+
+The agent sets `self.credentials` (a dict from `credentials.json`'s `connect_args`) as an attribute before calling any methods — no `__init__` needed. `setup_connection` and `close_connection` are lifecycle hooks for managing API clients or sessions. The two required methods do all the work:
+
+- `fetch_metadata(limit, offset)` — returns dicts describing jobs/tasks (pipelines, workflows, DAGs). Each dict must have `job_source_id` and `name`. This is structural metadata only — no run history. `limit` and `offset` support pagination.
+- `fetch_run_details(run_ids?, lookback?, limit, offset)` — returns dicts with status, timing, errors, and task-level details. Each dict must have `job_source_id`, `run_source_id`, `status`, and `event_time`. Operates in two modes:
+  - **Polling mode** (`lookback` provided, no `run_ids`): fetch all runs updated within the time window. Used by the agent on a schedule to discover recent activity. `limit`/`offset` paginate results.
+  - **Webhook mode** (`run_ids` provided): fetch details for specific runs by ID, regardless of time window. Used when a webhook notifies Monte Carlo about a run (e.g. a failure) and we need error details and task-level breakdown.
+
+### Dict schema reference
+
+Connectors return plain dicts. The expected keys are defined by the dataclass models in [`pycarlo.features.ingestion.etl`](https://github.com/monte-carlo-data/python-sdk/blob/main/pycarlo/features/ingestion/etl/models.py) — these serve as the canonical schema reference. The test validators check returned dicts against this schema, but connector code never imports the models directly.
+
+| Schema | Required keys | Purpose |
+| --- | --- | --- |
+| `EtlAsset` | `job_source_id`, `name` | Job/task metadata (schedule, owner, inputs/outputs) |
+| `EtlRunEvent` | `job_source_id`, `run_source_id`, `status`, `event_time` | Run state changes (start/end time, error details, task runs) |
+
+Common nested dict structures (all optional):
+
+| Structure | Keys | Used in |
+| --- | --- | --- |
+| group | `source_id` (req), `name`, `group_type`, `schedule`, `attributes` | `EtlAsset` — identifies the workspace/project |
+| task | `task_source_id` (req), `name` (req), `task_type`, `description`, `inputs`, `outputs` | `EtlAsset` tasks list |
+| error | `message`, `code`, `failure_type` | `EtlRunEvent` — required when status is failed/error |
+| schedule | `kind`, `cron_expression`, `interval_seconds`, `event_trigger` | `EtlAsset`, `EtlGroup` |
+| owner | `primary_email`, `primary_name` | `EtlAsset` |
+| asset_ref | `asset_type`, `role`, `fully_qualified_name` | `EtlAsset`/`EtlTask` inputs/outputs |
+| tag | `key`, `value` | `EtlAsset` properties |
+
+Omit `None` values and empty lists from returned dicts — the agent expects sparse dicts with only populated fields.
+
+### Manifest format
+
+```json
+{
+  "connection_type": "custom-etl-connector-{7hex}",
+  "connection_name": "coalesce",
+  "asset_class": "etl",
+  "terminology": { "group": "Workspace", "job": "Mapping", "task": "Step" }
+}
+```
+
+The `terminology` field maps Monte Carlo's generic concepts (group, job, task) to the terms your orchestrator uses.
+
+### ETL test commands
+
+```bash
+# Connection test
+CONNECTOR=<name> docker compose run --rm test -m etl_connection
+
+# Metadata test — validates fetch_metadata returns well-formed dicts
+CONNECTOR=<name> docker compose run --rm test -m etl_metadata
+
+# Run details test — validates fetch_run_details returns well-formed dicts
+CONNECTOR=<name> docker compose run --rm test -m etl_run_details
+```
+
 ## Requirements
 
 - [Docker](https://docs.docker.com/get-docker/)
@@ -293,9 +409,19 @@ custom-connector-setup/
     <your-database>/                      # Created by you (one directory per connector)
       connector.py                        # Your implementation (fill in stubs)
       credentials.json                    # Database credentials (gitignored)
-      manifest.json                       # {"connection_type": "custom-connector-xxx", "name": "..."}
+      manifest.json                       # {"connection_type": "...", "connection_name": "...", "asset_class": "warehouse"}
       requirements.txt                    # Database driver deps
       Dockerfile.extra                    # System dependency instructions (optional)
+  etl_connectors/
+    _base/                                # Provided — do not edit
+      connector.py                        # Connector template (copied into new connectors)
+      validators.py                       # Cross-field validation for returned dicts
+    <your-etl-tool>/                      # Created by you
+      connector.py                        # Your implementation
+      credentials.json                    # Vendor API credentials (gitignored)
+      manifest.json                       # connection_type, name, terminology
+      requirements.txt                    # Vendor client library deps
+      Dockerfile.extra                    # System dependencies (optional)
   output/                                 # Auto-generated by --export (gitignored)
     <your-database>/
       manifest.json                       # Test results and supported features
@@ -313,12 +439,18 @@ custom-connector-setup/
     test_ql_prerequisites.py              # Prerequisite templates for metric monitors
     test_ql_metrics.py                    # Metric-specific templates (AVG, STDDEV, LENGTH, regexp, etc.)
     test_functional_validation.py         # Functional validation tests (real-time metadata accuracy)
+  tests/etl/                              # ETL connector tests
+    conftest.py                           # ETL-specific fixtures
+    test_etl_connection.py                # ETL connection test
+    test_etl_metadata.py                  # ETL metadata test
+    test_etl_run_details.py               # ETL run details test
   .claude/
     skills/                               # Claude Code automation skills
-      create-connector/SKILL.md
-      setup-connection/SKILL.md
-      implement-connector/SKILL.md
-      build-agent-image/SKILL.md
+      create-connector/SKILL.md           # DW + ETL scaffolding
+      setup-connection/SKILL.md           # DW driver + connection
+      implement-connector/SKILL.md        # DW template implementation
+      implement-etl-connector/SKILL.md    # ETL API implementation
+      build-agent-image/SKILL.md          # DW + ETL Docker image
   AGENTS.md                               # Instructions for AI coding agents
   pytest.toml                             # Pytest configuration and markers
   requirements.txt                        # Shared Python dependencies

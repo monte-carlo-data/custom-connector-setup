@@ -9,4 +9,7 @@ markers = [
     "ql_metrics: metric-specific template tests",
     "custom_monitors: custom SQL monitor tests",
     "functional: functional validation tests that mutate the database",
+    "etl_connection: ETL connector connection tests",
+    "etl_metadata: ETL metadata collection tests",
+    "etl_run_details: ETL run details collection tests",
 ]

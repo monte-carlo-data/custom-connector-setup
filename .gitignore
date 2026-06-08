@@ -1,0 +1,17 @@
+# Credentials — never commit
+connectors/*/credentials.json
+connectors/*/.env
+etl_connectors/*/credentials.json
+etl_connectors/*/.env
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# IDE
+.idea/
+
+# Test output
+output/

@@ -1,7 +1,7 @@
 ---
 name: build-agent-image
 description: Export capabilities and build a custom agent Docker image for one or more connectors
-argument-hint: <connector-name> [--mode MODE]
+argument-hint: <connector-name> [<connector-name>...] [--mode MODE]
 disable-model-invocation: false
 ---
 
@@ -10,17 +10,28 @@ disable-model-invocation: false
 ## Arguments
 
 `$ARGUMENTS` contains:
-- `connector_name` (required): e.g., `postgres`, `snowflake`
-- `--mode MODE` (optional): `full`, `hybrid`, or `auto`. Default: `auto`
+- One or more connector names (required): e.g., `postgres`, `coalesce`, `postgres coalesce`
+- `--mode MODE` (optional): `full`, `hybrid`, or `auto`. Default: `auto` (DW only; ignored for ETL)
 
-Parse any flags from `$ARGUMENTS`. Anything not prefixed with `--` is the connector name.
+Parse any flags from `$ARGUMENTS`. Anything not prefixed with `--` is a connector name.
 
-**If no connector name is provided:** List the available connectors under `connectors/`
-(excluding `_base`) and ask the user which one to build. Do not proceed until they respond.
+**If no connector name is provided:** List the available connectors under both `connectors/`
+and `etl_connectors/` (excluding `_base`) and ask the user which one(s) to build. Do not proceed
+until they respond.
 
-## Step 1: Verify connector files exist
+## Step 1: Detect connector types and verify files
 
-Check that these files exist:
+For each connector name, **auto-detect** whether it is a DW or ETL connector by checking which
+directory it exists in:
+- `connectors/<name>/` → DW connector
+- `etl_connectors/<name>/` → ETL connector
+
+**If found in neither directory:** Stop and tell the user the connector was not found. Suggest
+running `/create-connector <name>` (DW) or `/create-connector <name> --etl` (ETL).
+
+**If found in both directories:** Ask the user which one they mean and wait for a response.
+
+**For each DW connector**, check that these files exist:
 - `connectors/<name>/connector.py`
 - `connectors/<name>/manifest.json`
 - `connectors/<name>/requirements.txt`
@@ -28,6 +39,14 @@ Check that these files exist:
 If any are missing, stop and tell the user to run `/create-connector <name>` first.
 
 Note: If `connectors/<name>/Dockerfile.extra` exists with system dependency instructions, those are automatically included in the agent image build — no extra steps needed.
+
+**For each ETL connector**, check that these files exist:
+- `etl_connectors/<name>/connector.py`
+- `etl_connectors/<name>/manifest.json`
+
+If any are missing, stop and tell the user to run `/create-connector <name> --etl` first.
+
+ETL connectors do not require an export step — skip Steps 2–4 for them and go directly to Step 5.
 
 ## Step 2: Check for existing export
 
@@ -88,33 +107,35 @@ only the connector from `$ARGUMENTS`.
 
 ## Step 5: Build the Docker image
 
-Build the `--connector` flags from the user's selection in Step 4.
+Build the command from the detected types (Step 1) and the user's selection in Step 4.
 
-Run the image generator. Use `echo y |` to auto-accept the metric warning prompt (if it appears):
+All connector names (DW and ETL) are passed as positional arguments. The script auto-detects each connector's type from its directory.
 
 ```bash
 echo y | python scripts/generate_agent_image.py \
-  --connector <name1> \
-  --connector <name2> \
+  <name1> <name2> <name3> \
   --mode <mode>
 ```
 
 Where:
-- Each selected connector gets its own `--connector` flag
-- `<mode>` is from arguments or defaults to `auto`
+- All connector names are positional arguments (DW and ETL mixed freely)
+- `<mode>` is from arguments or defaults to `auto` (applies to DW connectors only)
+- Omit names to auto-discover all connectors
 
 ## Step 6: Report results
 
 **If the build succeeds**, report:
 - The image tag (e.g., `custom-agent:latest-generic`)
-- Which connectors are included in the image and their modes
-- Verification command: `docker run --rm --entrypoint ls <tag> /opt/custom-connectors/`
+- Which connectors are included in the image (DW and/or ETL) and their modes
+- Verification commands:
+  - DW: `docker run --rm --entrypoint ls <tag> /opt/custom-connectors/`
+  - ETL: `docker run --rm --entrypoint ls <tag> /opt/custom-etl-connectors/`
 - Push instructions:
   ```
   docker tag <tag> <your-registry>/<tag>
   docker push <your-registry>/<tag>
   ```
-- Remind the user that their `connectors/<name>/credentials.json` files are already in the format needed for self-hosted credentials — just swap in production values: https://docs.getmontecarlo.com/docs/self-hosted-credentials
+- Remind the user that their credential files (`connectors/<name>/credentials.json` or `etl_connectors/<name>/credentials.json`) are already in the format needed for self-hosted credentials — just swap in production values: https://docs.getmontecarlo.com/docs/self-hosted-credentials
 
 **If the build fails**, read the Docker build output and diagnose:
 - Missing base image: user may need to `docker pull` the agent base image
