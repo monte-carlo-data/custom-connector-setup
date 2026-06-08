@@ -17,6 +17,11 @@ def pytest_addoption(parser):
         default=None,
         help="Connector name to test (e.g. postgres, teradata)",
     )
+    parser.addoption(
+        "--etl-connector",
+        default=None,
+        help="ETL connector name to test (e.g. coalesce)",
+    )
 
 
 def _resolve_connector_name(config):
@@ -43,10 +48,41 @@ def _resolve_connector_name(config):
     return None
 
 
-def pytest_configure(config):
-    """Validate connector selection early so we fail once, not per-test."""
-    name = _resolve_connector_name(config)
+def _resolve_etl_connector_name(config):
+    """Resolve ETL connector name: --etl-connector flag > ETL_CONNECTOR env var."""
+    name = config.getoption("--etl-connector", default=None)
     if name:
+        return name
+    return os.environ.get("ETL_CONNECTOR") or None
+
+
+def pytest_configure(config):
+    """Validate connector selection early so we fail once, not per-test.
+
+    Three modes:
+    1. Both CONNECTOR and ETL_CONNECTOR set -> error (mutually exclusive)
+    2. ETL_CONNECTOR set -> ETL mode (skip DW validation)
+    3. CONNECTOR set (or discoverable) -> DW mode (existing behavior)
+    """
+    etl_name = _resolve_etl_connector_name(config)
+    dw_name = _resolve_connector_name(config)
+
+    # Mutual exclusivity check
+    if etl_name and dw_name:
+        raise pytest.UsageError(
+            "CONNECTOR and ETL_CONNECTOR are mutually exclusive. "
+            "Set only one at a time."
+        )
+
+    # ETL mode — skip all DW validation
+    if etl_name:
+        config._etl_mode = True
+        return
+
+    config._etl_mode = False
+
+    # DW mode — existing validation
+    if dw_name:
         return
 
     connectors_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connectors")
@@ -264,6 +300,8 @@ class QueryTestHelper:
 
 @pytest.fixture(scope="session")
 def connector(request):
+    if getattr(request.config, "_etl_mode", False):
+        pytest.skip("DW connector not available in ETL mode")
     name, module = _get_connector(request.config)
     tc = TestConnector(module, name)
     yield tc
@@ -272,6 +310,8 @@ def connector(request):
 
 @pytest.fixture(scope="session")
 def templates(request):
+    if getattr(request.config, "_etl_mode", False):
+        pytest.skip("DW templates not available in ETL mode")
     _, module = _get_connector(request.config)
     TemplatesClass = _make_templates_class(module)
     t = TemplatesClass()
@@ -287,6 +327,8 @@ def ql(connector, templates) -> QueryTestHelper:
 @pytest.fixture(scope="session")
 def functional_ops(request):
     """Load the connector's FunctionalTestOperations, or None if not implemented."""
+    if getattr(request.config, "_etl_mode", False):
+        pytest.skip("DW functional_ops not available in ETL mode")
     _, module = _get_connector(request.config)
     cls = getattr(module, "FunctionalTestOperations", None)
     if cls is None:

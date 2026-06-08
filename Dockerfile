@@ -13,5 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 RUN find connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \;
+RUN find etl_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \;
 
 ENTRYPOINT ["pytest"]

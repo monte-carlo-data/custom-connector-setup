@@ -29,6 +29,15 @@ ALL_CAPABILITIES = [
 
 
 def pytest_configure(config):
+    # In ETL mode, capabilities tracking is not applicable
+    if getattr(config, "_etl_mode", False):
+        if config.getoption("--export", default=False):
+            raise pytest.UsageError(
+                "--export is not supported for ETL connectors"
+            )
+        config._capabilities_results = {"templates": {}, "capabilities": {}}
+        return
+
     if config.getoption("--export", default=False) and config.getoption("-m", default=""):
         raise pytest.UsageError(
             "--export requires the full test suite. Remove the -m filter and re-run."
@@ -279,6 +288,9 @@ def _get_setup_version():
 
 
 def pytest_sessionfinish(session, exitstatus):
+    if getattr(session.config, "_etl_mode", False):
+        return
+
     export = session.config.getoption("--export", default=False)
     if not export:
         return

@@ -4,5 +4,6 @@ services:
     platform: ${DOCKER_PLATFORM:-linux/amd64}
     environment:
       - CONNECTOR=${CONNECTOR:-}
+      - ETL_CONNECTOR=${ETL_CONNECTOR:-}
     volumes:
       - .:/app
