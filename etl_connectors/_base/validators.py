@@ -133,6 +133,8 @@ def validate_metadata_events(events: list[dict]) -> list[ValidationError]:
     Checks:
     - job_source_id is present and non-empty
     - name is present and non-empty
+    - group.source_id is present when group is provided
+    - tasks[].task_source_id and tasks[].name are present when tasks are provided
 
     Returns list of ValidationError. Empty list means all events are valid.
     """
@@ -141,9 +143,33 @@ def validate_metadata_events(events: list[dict]) -> list[ValidationError]:
     for i, event in enumerate(events):
         if len(errors) >= MAX_ERRORS:
             break
+        idx = str(i)
         if not event.get("job_source_id"):
-            errors.append(ValidationError("job_source_id", "job_source_id is required", str(i)))
+            errors.append(ValidationError("job_source_id", "job_source_id is required", idx))
         if not event.get("name"):
-            errors.append(ValidationError("name", "name is required", str(i)))
+            errors.append(ValidationError("name", "name is required", idx))
+
+        # group: if present, must be a dict with source_id
+        group = event.get("group")
+        if group is not None:
+            if not isinstance(group, dict):
+                errors.append(ValidationError("group", "group must be a dict", idx))
+            elif not group.get("source_id"):
+                errors.append(ValidationError("group.source_id", "group.source_id is required when group is provided", idx))
+
+        # tasks: if present, each must have task_source_id and name
+        tasks = event.get("tasks")
+        if tasks:
+            for t_idx, task in enumerate(tasks):
+                if len(errors) >= MAX_ERRORS:
+                    break
+                task_index = f"{idx}.tasks.{t_idx}"
+                if not isinstance(task, dict):
+                    errors.append(ValidationError("tasks", f"task at index {t_idx} must be a dict", idx))
+                    continue
+                if not task.get("task_source_id"):
+                    errors.append(ValidationError("task_source_id", "task_source_id is required", task_index))
+                if not task.get("name"):
+                    errors.append(ValidationError("name", "task name is required", task_index))
 
     return errors[:MAX_ERRORS]

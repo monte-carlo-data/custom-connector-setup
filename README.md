@@ -358,10 +358,12 @@ Common nested dict structures (all optional):
 
 | Structure | Keys | Used in |
 | --- | --- | --- |
+| group | `source_id` (req), `name`, `group_type`, `schedule`, `attributes` | `EtlAsset` — identifies the workspace/project |
+| task | `task_source_id` (req), `name` (req), `task_type`, `description`, `inputs`, `outputs` | `EtlAsset` tasks list |
 | error | `message`, `code`, `failure_type` | `EtlRunEvent` — required when status is failed/error |
-| schedule | `kind`, `cron_expression`, `interval_seconds` | `EtlAsset` |
+| schedule | `kind`, `cron_expression`, `interval_seconds`, `event_trigger` | `EtlAsset`, `EtlGroup` |
 | owner | `primary_email`, `primary_name` | `EtlAsset` |
-| asset_ref | `asset_type`, `role`, `fully_qualified_name` | `EtlAsset` inputs/outputs |
+| asset_ref | `asset_type`, `role`, `fully_qualified_name` | `EtlAsset`/`EtlTask` inputs/outputs |
 | tag | `key`, `value` | `EtlAsset` properties |
 
 Omit `None` values and empty lists from returned dicts — the agent expects sparse dicts with only populated fields.

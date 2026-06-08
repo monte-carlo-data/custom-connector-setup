@@ -13,5 +13,6 @@ Shared foundation for all ETL connectors. Connector implementations live in sibl
 ## Conventions
 
 - Connectors return `list[dict]`, not model objects. The dict schemas match pycarlo's `EtlAsset` and `EtlRunEvent` dataclasses.
-- Validators enforce required fields and cross-field rules (e.g. terminal statuses require `end_time`, timestamps must be timezone-aware ISO 8601). See `validators.py` docstrings for the full rule set.
+- `EtlAsset` uses a nested `group` dict (with `source_id` required) instead of flat `group_source_id`. Assets can also carry a `tasks` list (each task needs `task_source_id` and `name`).
+- Validators enforce required fields and cross-field rules (e.g. terminal statuses require `end_time`, timestamps must be timezone-aware ISO 8601, `group.source_id` required when group is present). See `validators.py` docstrings for the full rule set.
 - `_TERMINAL_STATUSES` in `validators.py` defines which status values require `end_time` and which trigger the error-object check.

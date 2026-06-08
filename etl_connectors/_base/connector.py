@@ -86,10 +86,17 @@ class Connector:
         - ``job_source_id`` (str): unique vendor identifier for the job
         - ``name`` (str): human-readable job name
 
-        Common optional fields include ``group_source_id``, ``description``,
-        ``folder``, ``schedule``, ``owner``, ``properties``, ``inputs``,
-        ``outputs``. See ``pycarlo.features.ingestion.etl`` for the full
-        schema.
+        Common optional fields include ``description``, ``folder``,
+        ``schedule``, ``owner``, ``properties``, ``inputs``, ``outputs``.
+
+        Nested structures (all optional):
+        - ``group`` — dict with ``source_id`` (required), ``name``,
+          ``group_type``, ``schedule``, ``attributes``
+        - ``tasks`` — list of dicts, each with ``task_source_id`` (required),
+          ``name`` (required), ``task_type``, ``description``, ``inputs``,
+          ``outputs``, ``upstream_task_source_ids``, ``triggered_job_source_ids``
+
+        See ``pycarlo.features.ingestion.etl`` for the full schema.
 
         Args:
             limit: Maximum number of assets to return (for pagination).
@@ -104,7 +111,7 @@ class Connector:
         #     {
         #         "job_source_id": p.id,
         #         "name": p.name,
-        #         "group_source_id": p.workspace_id,
+        #         "group": {"source_id": p.workspace_id, "name": p.workspace_name},
         #         "description": p.description,
         #     }
         #     for p in pipelines[offset:offset + limit]

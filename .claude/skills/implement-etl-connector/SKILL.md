@@ -120,9 +120,10 @@ Required dict keys per asset:
 - `name` — human-readable job name
 
 Recommended keys:
-- `group_source_id` — the workspace/project/environment this job belongs to
+- `group` — a dict with `source_id` (required), `name`, `group_type`, `schedule`, `attributes`
+- `tasks` — a list of dicts, each with `task_source_id` (required), `name` (required), `task_type`, `description`, `inputs`, `outputs`, `upstream_task_source_ids`, `triggered_job_source_ids`
 - `description`, `folder`, `job_url`, `is_paused`
-- `schedule` — a dict with `kind` and optional `cron_expression`, `interval_seconds`, etc.
+- `schedule` — a dict with `kind` (one of: cron, interval, event, upstream, manual) and optional `cron_expression`, `interval_seconds`, `event_trigger` (dict), etc.
 - `owner` — a dict with `primary_email`, `primary_name`, etc.
 - `inputs` / `outputs` — list of dicts with `asset_type`, `role`, `fully_qualified_name`
 
