@@ -290,9 +290,15 @@ Verify the image:
 docker run --rm --entrypoint ls custom-agent:latest-generic /opt/custom-connectors/
 ```
 
-Then push the agent image to your container registry and deploy. Your local `connectors/<name>/credentials.json` is already in the format needed for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) — just swap in production values and configure them at deploy time.
+### 12. Deploy, register, and connect
 
-### 12. Clean up
+Your custom agent image is ready. The remaining steps — deploying the agent to your infrastructure, registering it in Monte Carlo, and adding the connection — are handled through the Monte Carlo UI and documented here:
+
+**[Custom Connectors — Deploy the Agent](https://docs.getmontecarlo.com/docs/custom-connectors#4-deploy-the-agent)**
+
+Push the image to your container registry, deploy it to your platform, then follow the guide to register the agent and add the connection in Monte Carlo. Your local `connectors/<name>/credentials.json` is already in the format needed for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) — just swap in production values and configure them at deploy time.
+
+### 13. Clean up
 
 When you're done, remove the Docker image and any stopped containers:
 
@@ -327,6 +333,14 @@ ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M
    ```bash
    python scripts/generate_agent_image.py --etl-connection <name>
    ```
+
+6. **Deploy, register, and connect:**
+
+   Push the image to your container registry and follow the Monte Carlo documentation to deploy the agent, register it, and add the connection:
+
+   **[Custom Connectors — Deploy the Agent](https://docs.getmontecarlo.com/docs/custom-connectors#4-deploy-the-agent)**
+
+   Once the connection is registered, Monte Carlo will provide a **webhook URL**, **token ID**, and **token key** for your ETL connector. See [Webhook-Triggered Run Collection](#webhook-triggered-run-collection) below for how to use these to get near-real-time failure alerts.
 
 ### Connector contract
 
@@ -393,6 +407,30 @@ CONNECTOR=<name> docker compose run --rm test -m etl_metadata
 # Run details test — validates fetch_run_details returns well-formed dicts
 CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 ```
+
+### Webhook-Triggered Run Collection
+
+By default, Monte Carlo polls your ETL connector every 60 minutes, calling `fetch_run_details` in **polling mode** (`lookback` set to 60 minutes) to collect all recent runs. This catches failures within that window, but it means a failed run could take up to an hour to appear in Monte Carlo.
+
+For faster failure detection, you can configure your ETL tool to POST to a webhook that triggers an immediate run collection. When you register the connection in Monte Carlo, you receive:
+
+- **Webhook URL**
+- **Token ID** and **Token Key** (for authentication)
+
+When Monte Carlo receives a webhook event, it triggers a run collection job on your connector. You can optionally include query parameters to filter which runs are collected — otherwise, all recent runs are collected (the same as a normal polling cycle, just triggered immediately).
+
+**When to use it:** If your ETL tool supports failure callbacks or event notifications (e.g. posting to a URL when a pipeline fails), point it at the webhook URL. Failed runs will surface in Monte Carlo immediately instead of waiting for the next polling cycle.
+
+**Optional query parameters:** The webhook URL accepts optional query parameters to scope the collection:
+
+- `?job_run_id=<run_id>` — collect a specific run
+- `?job_source_id=<job_id>` — collect recent runs for a specific job
+
+When these are included, your connector's `fetch_run_details` is called with `run_ids` populated (webhook mode). When omitted, it runs in the normal polling mode. This is the same two-mode design built into the connector contract.
+
+The webhook ignores any request body — all parameters are passed as query strings.
+
+See the [Monte Carlo documentation](https://docs.getmontecarlo.com/docs/custom-connectors) for full webhook setup details.
 
 ## Requirements
 
