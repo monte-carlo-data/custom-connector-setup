@@ -377,10 +377,52 @@ Common nested dict structures (all optional):
 | error | `message`, `code`, `failure_type` | `EtlRunEvent` — required when status is failed/error |
 | schedule | `kind`, `cron_expression`, `interval_seconds`, `event_trigger` | `EtlAsset`, `EtlGroup` |
 | owner | `primary_email`, `primary_name` | `EtlAsset` |
-| asset_ref | `asset_type`, `role`, `fully_qualified_name` | `EtlAsset`/`EtlTask` inputs/outputs |
+| asset_ref | `asset_type`, `role`, `fully_qualified_name` | `EtlAsset`/`EtlTask`/`EtlRunEvent` inputs/outputs |
 | tag | `key`, `value` | `EtlAsset` properties |
 
 Omit `None` values and empty lists from returned dicts — the agent expects sparse dicts with only populated fields.
+
+### Lineage via inputs/outputs
+
+The `inputs` and `outputs` fields on assets, tasks, and run events let Monte Carlo connect your ETL pipelines to the warehouse tables (or views, files, etc.) it already monitors. This enables cross-domain lineage — you can see which pipelines feed which tables, and when a pipeline fails, Monte Carlo can trace the downstream impact.
+
+Each entry is an `asset_ref` dict:
+
+```python
+{
+    "asset_type": "TABLE",              # TABLE, VIEW, FILE, TOPIC, DATASET, or DASHBOARD
+    "role": "INPUT",                    # INPUT or OUTPUT — must match the list it's in
+    "fully_qualified_name": "prod.analytics.revenue"  # vendor-native identifier
+}
+```
+
+`fully_qualified_name` is the typical identifier for custom connectors (the alternative, `mcon`, is Monte Carlo's internal identifier and generally not available to connector code). At least one of the two must be provided.
+
+**Where to populate lineage:**
+
+| Level | Field | When to use |
+| --- | --- | --- |
+| `EtlAsset` | `inputs`/`outputs` | Static lineage — what the job always reads/writes |
+| `EtlTask` | `inputs`/`outputs` | Task-level lineage within a job |
+| `EtlRunEvent` | `inputs`/`outputs` | Runtime lineage — what was actually read/written in a specific run (use when lineage can vary between runs) |
+
+**Example** — a job that reads from two tables and writes to one:
+
+```python
+{
+    "job_source_id": "pipeline-123",
+    "name": "Build revenue model",
+    "inputs": [
+        {"asset_type": "TABLE", "role": "INPUT", "fully_qualified_name": "raw.billing.charges"},
+        {"asset_type": "TABLE", "role": "INPUT", "fully_qualified_name": "raw.billing.refunds"},
+    ],
+    "outputs": [
+        {"asset_type": "TABLE", "role": "OUTPUT", "fully_qualified_name": "prod.analytics.revenue"},
+    ],
+}
+```
+
+Lineage is optional — if your ETL tool doesn't expose which tables a job reads or writes, simply omit the `inputs`/`outputs` fields. The test validators will check the structure of any asset refs you do return.
 
 ### Manifest format
 

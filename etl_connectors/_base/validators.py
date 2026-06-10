@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from pycarlo.features.ingestion.etl import (
+    ASSET_REF_ASSET_TYPE_VALUES,
+    ASSET_REF_ROLE_VALUES,
+)
+
 MAX_ERRORS = 50
 
 _TERMINAL_STATUSES = frozenset(
@@ -48,6 +53,63 @@ def _parse_iso8601(value: str, field_name: str, event_index: str) -> list[Valida
     return []
 
 
+def _validate_asset_refs(
+    refs: list,
+    field_name: str,
+    expected_role: str,
+    event_index: str,
+    errors: list[ValidationError],
+) -> None:
+    """Validate a list of asset-ref dicts (inputs or outputs).
+
+    Checks:
+    - Each item is a dict
+    - ``asset_type`` is one of the allowed values
+    - ``role`` is one of the allowed values and matches the list context
+    - At least one of ``mcon`` or ``fully_qualified_name`` is present
+    """
+    for ref_idx, ref in enumerate(refs):
+        if len(errors) >= MAX_ERRORS:
+            return
+        idx = f"{event_index}.{field_name}.{ref_idx}"
+        if not isinstance(ref, dict):
+            errors.append(ValidationError(field_name, f"item at index {ref_idx} must be a dict", idx))
+            continue
+        # asset_type
+        asset_type = ref.get("asset_type")
+        if not asset_type:
+            errors.append(ValidationError("asset_type", "asset_type is required", idx))
+        elif asset_type not in ASSET_REF_ASSET_TYPE_VALUES:
+            errors.append(ValidationError(
+                "asset_type",
+                f"asset_type must be one of {sorted(ASSET_REF_ASSET_TYPE_VALUES)}; got {asset_type!r}",
+                idx,
+            ))
+        # role
+        role = ref.get("role")
+        if not role:
+            errors.append(ValidationError("role", "role is required", idx))
+        elif role not in ASSET_REF_ROLE_VALUES:
+            errors.append(ValidationError(
+                "role",
+                f"role must be one of {sorted(ASSET_REF_ROLE_VALUES)}; got {role!r}",
+                idx,
+            ))
+        elif role != expected_role:
+            errors.append(ValidationError(
+                "role",
+                f"role in {field_name} must be {expected_role!r}; got {role!r}",
+                idx,
+            ))
+        # identifier — at least one of mcon or fully_qualified_name
+        if not ref.get("mcon") and not ref.get("fully_qualified_name"):
+            errors.append(ValidationError(
+                "fully_qualified_name",
+                "at least one of mcon or fully_qualified_name is required",
+                idx,
+            ))
+
+
 def validate_run_events(events: list[dict]) -> list[ValidationError]:
     """Validate a list of run-event dicts for cross-field consistency.
 
@@ -57,6 +119,7 @@ def validate_run_events(events: list[dict]) -> list[ValidationError]:
     - end_time is valid ISO 8601 when present
     - Terminal statuses require end_time
     - failed/error statuses require an error object
+    - inputs/outputs asset refs have valid asset_type, role, and identifier
     - Recursively validates nested task_runs
 
     Returns list of ValidationError. Empty list means all events are valid.
@@ -111,6 +174,14 @@ def validate_run_events(events: list[dict]) -> list[ValidationError]:
                 index,
             ))
 
+        # Validate inputs/outputs asset refs
+        inputs = event.get("inputs", [])
+        if inputs:
+            _validate_asset_refs(inputs, "inputs", "INPUT", index, errors)
+        outputs = event.get("outputs", [])
+        if outputs:
+            _validate_asset_refs(outputs, "outputs", "OUTPUT", index, errors)
+
         # Recursively validate task_runs
         task_runs = event.get("task_runs", [])
         if task_runs:
@@ -135,6 +206,8 @@ def validate_metadata_events(events: list[dict]) -> list[ValidationError]:
     - name is present and non-empty
     - group.source_id is present when group is provided
     - tasks[].task_source_id and tasks[].name are present when tasks are provided
+    - inputs/outputs asset refs have valid asset_type, role, and identifier
+      (checked on the asset itself and on each task)
 
     Returns list of ValidationError. Empty list means all events are valid.
     """
@@ -171,5 +244,20 @@ def validate_metadata_events(events: list[dict]) -> list[ValidationError]:
                     errors.append(ValidationError("task_source_id", "task_source_id is required", task_index))
                 if not task.get("name"):
                     errors.append(ValidationError("name", "task name is required", task_index))
+                # Validate task-level inputs/outputs
+                task_inputs = task.get("inputs", [])
+                if task_inputs:
+                    _validate_asset_refs(task_inputs, "inputs", "INPUT", task_index, errors)
+                task_outputs = task.get("outputs", [])
+                if task_outputs:
+                    _validate_asset_refs(task_outputs, "outputs", "OUTPUT", task_index, errors)
+
+        # Validate job-level inputs/outputs
+        inputs = event.get("inputs", [])
+        if inputs:
+            _validate_asset_refs(inputs, "inputs", "INPUT", idx, errors)
+        outputs = event.get("outputs", [])
+        if outputs:
+            _validate_asset_refs(outputs, "outputs", "OUTPUT", idx, errors)
 
     return errors[:MAX_ERRORS]
