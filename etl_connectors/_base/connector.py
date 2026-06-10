@@ -96,6 +96,16 @@ class Connector:
           ``name`` (required), ``task_type``, ``description``, ``inputs``,
           ``outputs``, ``upstream_task_source_ids``, ``triggered_job_source_ids``
 
+        **Lineage (optional):** ``inputs`` and ``outputs`` are lists of
+        asset-ref dicts that describe which data assets (tables, views,
+        files, etc.) a job or task reads/writes. This enables cross-domain
+        lineage in Monte Carlo. Each dict needs:
+
+        - ``asset_type``: TABLE, VIEW, FILE, TOPIC, DATASET, or DASHBOARD
+        - ``role``: INPUT or OUTPUT (must match the list it's in)
+        - ``fully_qualified_name``: vendor-native asset identifier
+          (e.g. ``"db.schema.table"``)
+
         See ``pycarlo.features.ingestion.etl`` for the full schema.
 
         Args:
@@ -113,6 +123,15 @@ class Connector:
         #         "name": p.name,
         #         "group": {"source_id": p.workspace_id, "name": p.workspace_name},
         #         "description": p.description,
+        #         # Optional lineage — omit if vendor doesn't expose it:
+        #         "inputs": [
+        #             {"asset_type": "TABLE", "role": "INPUT", "fully_qualified_name": t}
+        #             for t in p.input_tables
+        #         ],
+        #         "outputs": [
+        #             {"asset_type": "TABLE", "role": "OUTPUT", "fully_qualified_name": t}
+        #             for t in p.output_tables
+        #         ],
         #     }
         #     for p in pipelines[offset:offset + limit]
         # ]
@@ -156,8 +175,14 @@ class Connector:
         - ``event_time`` (str): ISO 8601 timestamp of the event
 
         Common optional fields include ``start_time``, ``end_time``,
-        ``trigger``, ``error``, ``task_runs``, ``run_url``. See
-        ``pycarlo.features.ingestion.etl`` for the full schema.
+        ``trigger``, ``error``, ``task_runs``, ``run_url``,
+        ``inputs``, ``outputs``.
+
+        **Runtime lineage (optional):** ``inputs`` and ``outputs`` follow
+        the same asset-ref format as ``fetch_metadata`` but represent what
+        was actually read/written during this specific run. Use these when
+        lineage can vary between runs. See ``pycarlo.features.ingestion.etl``
+        for the full schema.
 
         Args:
             run_ids: Vendor-native run identifiers to fetch. When provided,

@@ -125,7 +125,11 @@ Recommended keys:
 - `description`, `folder`, `job_url`, `is_paused`
 - `schedule` — a dict with `kind` (one of: cron, interval, event, upstream, manual) and optional `cron_expression`, `interval_seconds`, `event_trigger` (dict), etc.
 - `owner` — a dict with `primary_email`, `primary_name`, etc.
-- `inputs` / `outputs` — list of dicts with `asset_type`, `role`, `fully_qualified_name`
+- `inputs` / `outputs` — list of asset-ref dicts for lineage (connects ETL pipelines to monitored warehouse assets in Monte Carlo). Each dict needs:
+  - `asset_type` — one of: `TABLE`, `VIEW`, `FILE`, `TOPIC`, `DATASET`, `DASHBOARD`
+  - `role` — `INPUT` for items in the `inputs` list, `OUTPUT` for items in the `outputs` list
+  - `fully_qualified_name` — vendor-native asset identifier (e.g. `"db.schema.table"`)
+  - Omit `inputs`/`outputs` entirely if the vendor API doesn't expose which assets a job reads/writes. The validators will check the structure of any asset refs you do return.
 
 Parameters:
 - `limit` and `offset` support pagination — return at most `limit` assets starting from `offset`.
@@ -167,7 +171,7 @@ Recommended keys:
 - `run_url` — link to the run in the vendor's UI
 - `task_runs` — nested run event dicts for task-level detail
 - `error` — a dict with error details for failed runs
-- `inputs` / `outputs` — list of dicts for run-level lineage
+- `inputs` / `outputs` — list of asset-ref dicts for run-level lineage (same format as `fetch_metadata` — `asset_type`, `role`, `fully_qualified_name`). Use these when lineage can vary between runs; for static lineage, populate them on the asset in `fetch_metadata` instead.
 
 **Omit None values and empty lists** from returned dicts — the agent expects sparse dicts with only populated fields. A simple helper: `{k: v for k, v in d.items() if v is not None and v != []}`.
 
