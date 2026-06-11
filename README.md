@@ -389,11 +389,17 @@ Omit `None` values and empty lists from returned dicts — the agent expects spa
   "connection_type": "custom-etl-connector-{7hex}",
   "connection_name": "coalesce",
   "asset_class": "etl",
-  "terminology": { "group": "Workspace", "job": "Mapping", "task": "Step" }
+  "terminology": { "group": "Workspace", "job": "Mapping", "task": "Step" },
+  "icon_url": "https://example.com/vendor-icon.png"
 }
 ```
 
-The `terminology` field maps Monte Carlo's generic concepts (group, job, task) to the terms your orchestrator uses.
+| Field | Description |
+| --- | --- |
+| `connection_type` | Auto-generated unique identifier |
+| `connection_name` | Connector directory name |
+| `terminology` | Maps Monte Carlo's generic concepts (group, job, task) to the vendor's terms — used in the MC UI |
+| `icon_url` | _(optional)_ URL to the vendor's icon — displayed alongside the connection in the Monte Carlo UI |
 
 ### ETL test commands
 
