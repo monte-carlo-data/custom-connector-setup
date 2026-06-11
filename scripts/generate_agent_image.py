@@ -93,6 +93,12 @@ def validate_etl_connector(name):
             )
         if "terminology" not in manifest:
             errors.append(f"  - manifest.json is missing required 'terminology' key")
+        creds_schema = manifest.get("credentials_schema")
+        if creds_schema is not None and not isinstance(creds_schema, dict):
+            errors.append(
+                f"  - manifest.json 'credentials_schema' must be a dict, "
+                f"got {type(creds_schema).__name__}"
+            )
 
     return errors
 
@@ -168,6 +174,12 @@ def validate_connector(name, mode="full"):
                 errors.append(
                     f"  - Metadata collection has not been implemented — this is a requirement."
                 )
+        creds_schema = manifest.get("credentials_schema")
+        if creds_schema is not None and not isinstance(creds_schema, dict):
+            errors.append(
+                f"  - manifest.json 'credentials_schema' must be a dict, "
+                f"got {type(creds_schema).__name__}"
+            )
 
     templates_dir = os.path.join(OUTPUT_DIR, name, "templates")
     if not os.path.isdir(templates_dir) or not os.listdir(templates_dir):
