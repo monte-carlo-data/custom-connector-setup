@@ -57,7 +57,7 @@ def _create_db_connector(name, repo_root):
 
     # Generate manifest.json with unique connector type
     connection_type = f"custom-connector-{secrets.token_hex(4)[:7]}"
-    manifest = {"connection_type": connection_type, "connection_name": name, "asset_class": "warehouse"}
+    manifest = {"connection_type": connection_type, "connection_name": name, "asset_class": "warehouse", "credentials_schema": {}}
     with open(os.path.join(target_dir, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=2)
         f.write("\n")
@@ -95,10 +95,11 @@ def _create_db_connector(name, repo_root):
     print("Next steps:")
     print(f"  1. Edit connectors/{name}/connector.py        — fill in the stubs")
     print(f"  2. Edit connectors/{name}/credentials.json   — add credentials")
-    print(f"  3. Edit connectors/{name}/requirements.txt   — add database driver")
-    print(f"  4. Edit connectors/{name}/Dockerfile.extra   — add system deps (if needed)")
-    print(f"  5. docker compose build")
-    print(f"  6. CONNECTOR={name} docker compose run test -m connection")
+    print(f"  3. Edit connectors/{name}/manifest.json      — add credentials_schema (optional, cerberus format)")
+    print(f"  4. Edit connectors/{name}/requirements.txt   — add database driver")
+    print(f"  5. Edit connectors/{name}/Dockerfile.extra   — add system deps (if needed)")
+    print(f"  6. docker compose build")
+    print(f"  7. CONNECTOR={name} docker compose run test -m connection")
 
 
 def _create_etl_connector(name, repo_root):
@@ -144,6 +145,7 @@ def _create_etl_connector(name, repo_root):
             "task": task_label,
         },
     }
+    manifest["credentials_schema"] = {}
     if icon_url:
         manifest["icon_url"] = icon_url
     with open(os.path.join(target_dir, "manifest.json"), "w") as f:
@@ -184,10 +186,11 @@ def _create_etl_connector(name, repo_root):
     print("Next steps:")
     print(f"  1. Edit etl_connectors/{name}/connector.py      — implement fetch_metadata & fetch_run_details")
     print(f"  2. Edit etl_connectors/{name}/credentials.json  — add vendor API credentials")
-    print(f"  3. Edit etl_connectors/{name}/requirements.txt  — add vendor client library")
-    print(f"  4. Edit etl_connectors/{name}/Dockerfile.extra  — add system deps (if needed)")
-    print(f"  5. docker compose build")
-    print(f"  6. CONNECTOR={name} docker compose run test -m etl_connection")
+    print(f"  3. Edit etl_connectors/{name}/manifest.json     — add credentials_schema (optional, cerberus format)")
+    print(f"  4. Edit etl_connectors/{name}/requirements.txt  — add vendor client library")
+    print(f"  5. Edit etl_connectors/{name}/Dockerfile.extra  — add system deps (if needed)")
+    print(f"  6. docker compose build")
+    print(f"  7. CONNECTOR={name} docker compose run test -m etl_connection")
 
 
 def main():
