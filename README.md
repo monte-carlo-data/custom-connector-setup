@@ -142,6 +142,48 @@ def create_connection(self):
 
 This same JSON format is used for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) when deploying — just swap in production values.
 
+### 5b. Add a credentials schema (optional)
+
+You can add a `credentials_schema` to your `manifest.json` to enable server-side validation of self-hosted credentials. When present, the agent validates credentials against this schema at setup time — catching missing fields, wrong types, and typos before they surface at query time.
+
+The schema uses [cerberus](https://docs.python-cerberus.org/) format. Add it as a top-level key in `manifest.json`:
+
+```json
+{
+  "connection_type": "custom-connector-abc1234",
+  "connection_name": "my-warehouse",
+  "asset_class": "warehouse",
+  "credentials_schema": {
+    "connect_args": {
+      "type": "dict",
+      "required": true,
+      "schema": {
+        "host": { "type": "string", "required": true },
+        "port": { "type": "integer", "required": true },
+        "database": { "type": "string", "required": true },
+        "user": { "type": "string", "required": true },
+        "password": { "type": "string", "required": true }
+      }
+    }
+  }
+}
+```
+
+The schema should mirror what your `create_connection()` method expects from `self.credentials`. Common cerberus rules:
+
+| Rule | Example | Meaning |
+|------|---------|---------|
+| `type` | `"string"`, `"integer"`, `"boolean"`, `"dict"` | Value type |
+| `required` | `true` | Field must be present |
+| `allowed` | `["oauth", "basic"]` | Value must be one of these |
+| `schema` | `{ "key": { ... } }` | Nested dict validation |
+
+If `credentials_schema` is absent or empty (`{}`), no validation is performed — credentials are accepted as-is (the current behavior). This keeps the field fully backwards compatible.
+
+ETL connectors use the same format — add `credentials_schema` to `etl_connectors/<name>/manifest.json`.
+
+See the [cerberus documentation](https://docs.python-cerberus.org/) for the full rule set.
+
 ### 6. Build the Docker image
 
 ```bash
