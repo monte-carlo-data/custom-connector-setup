@@ -11,6 +11,8 @@ The connector workflow is driven by four Claude Code skills. Run them in order:
 
 Each skill file (`.claude/skills/*/SKILL.md`) contains detailed step-by-step instructions. Use `/implement-connector <name> hybrid` for connectors where metadata is pushed externally.
 
+**Credentials validation:** The scaffolded `manifest.json` includes an optional `credentials_schema` field (cerberus format) that enables server-side validation of self-hosted credentials. See [README section 5b](README.md#5b-add-a-credentials-schema-optional) for format details.
+
 ## System Dependencies
 
 If a connector needs system-level packages (ODBC drivers, native libraries), add them to `connectors/<name>/Dockerfile.extra` as raw Dockerfile instructions (`RUN`, `ENV`, `ARG`), then regenerate the test Dockerfile:

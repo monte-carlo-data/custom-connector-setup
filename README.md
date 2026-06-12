@@ -142,6 +142,48 @@ def create_connection(self):
 
 This same JSON format is used for [self-hosted credentials](https://docs.getmontecarlo.com/docs/self-hosted-credentials) when deploying — just swap in production values.
 
+### 5b. Add a credentials schema (optional)
+
+You can add a `credentials_schema` to your `manifest.json` to enable server-side validation of self-hosted credentials. When present, the agent validates credentials against this schema at setup time — catching missing fields, wrong types, and typos before they surface at query time.
+
+The schema uses [cerberus](https://docs.python-cerberus.org/) format. Add it as a top-level key in `manifest.json`:
+
+```json
+{
+  "connection_type": "custom-connector-abc1234",
+  "connection_name": "my-warehouse",
+  "asset_class": "warehouse",
+  "credentials_schema": {
+    "connect_args": {
+      "type": "dict",
+      "required": true,
+      "schema": {
+        "host": { "type": "string", "required": true },
+        "port": { "type": "integer", "required": true },
+        "database": { "type": "string", "required": true },
+        "user": { "type": "string", "required": true },
+        "password": { "type": "string", "required": true }
+      }
+    }
+  }
+}
+```
+
+The schema should mirror what your `create_connection()` method expects from `self.credentials`. Common cerberus rules:
+
+| Rule | Example | Meaning |
+|------|---------|---------|
+| `type` | `"string"`, `"integer"`, `"boolean"`, `"dict"` | Value type |
+| `required` | `true` | Field must be present |
+| `allowed` | `["oauth", "basic"]` | Value must be one of these |
+| `schema` | `{ "key": { ... } }` | Nested dict validation |
+
+If `credentials_schema` is absent or empty (`{}`), no validation is performed — credentials are accepted as-is (the current behavior). This keeps the field fully backwards compatible.
+
+ETL connectors use the same format — add `credentials_schema` to `etl_connectors/<name>/manifest.json`.
+
+See the [cerberus documentation](https://docs.python-cerberus.org/) for the full rule set.
+
 ### 6. Build the Docker image
 
 ```bash
@@ -211,6 +253,7 @@ After a full test run with `--export`, `output/<name>/manifest.json` is generate
 - **connection_name** — connector directory name
 - **capabilities** — which features your connector supports (metadata collection, query logs, custom SQL monitors, metric monitors, etc.)
 - **metrics** — which metrics your connector supports, derived from template results and the metrics mapping
+- **credentials_schema** — cerberus validation schema for self-hosted credentials (if defined in source manifest)
 
 Passing templates are exported to `output/<name>/templates/`.
 
@@ -466,11 +509,12 @@ Query tagging complements `inputs`/`outputs`: asset refs describe what the vendo
   "connection_name": "coalesce",
   "asset_class": "etl",
   "terminology": { "group": "Workspace", "job": "Mapping", "task": "Step" },
+  "credentials_schema": {},
   "icon_url": "https://example.com/vendor-icon.svg"
 }
 ```
 
-The `terminology` field maps Monte Carlo's generic concepts (group, job, task) to the terms your orchestrator uses.
+The `terminology` field maps Monte Carlo's generic concepts (group, job, task) to the terms your orchestrator uses. The optional `credentials_schema` field enables server-side credential validation — see [step 5b](#5b-add-a-credentials-schema-optional) for details.
 
 `icon_url` is optional — a publicly reachable image URL (SVG/PNG) used as the integration's icon in the Monte Carlo UI. The scaffold script prompts for it; it can also be added to `manifest.json` later (rebuild and redeploy the agent image for the change to take effect).
 
@@ -526,7 +570,7 @@ custom-connector-setup/
     <your-database>/                      # Created by you (one directory per connector)
       connector.py                        # Your implementation (fill in stubs)
       credentials.json                    # Database credentials (gitignored)
-      manifest.json                       # {"connection_type": "...", "connection_name": "...", "asset_class": "warehouse"}
+      manifest.json                       # connection_type, connection_name, asset_class, credentials_schema
       requirements.txt                    # Database driver deps
       Dockerfile.extra                    # System dependency instructions (optional)
   etl_connectors/
@@ -536,7 +580,7 @@ custom-connector-setup/
     <your-etl-tool>/                      # Created by you
       connector.py                        # Your implementation
       credentials.json                    # Vendor API credentials (gitignored)
-      manifest.json                       # connection_type, name, terminology
+      manifest.json                       # connection_type, name, terminology, credentials_schema
       requirements.txt                    # Vendor client library deps
       Dockerfile.extra                    # System dependencies (optional)
   output/                                 # Auto-generated by --export (gitignored)
