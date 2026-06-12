@@ -61,7 +61,7 @@ The ETL workflow has its own Claude Code skills:
 
 | Step | Skill                                                                                           | What it does                                                  |
 | ---- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| 1    | `/create-connector <name> --etl`                                                                | Scaffold ETL connector with interactive terminology prompts   |
+| 1    | `/create-connector <name> --etl`                                                                | Scaffold ETL connector with prompts for terminology and optional icon URL   |
 | 2    | `/implement-etl-connector <name>`                                                               | Research vendor API, implement connector methods, verify with tests |
 | 3    | `/build-agent-image <name>`                                                                     | Build deployable agent image (auto-detects connector type)    |
 

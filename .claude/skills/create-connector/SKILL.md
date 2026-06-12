@@ -39,7 +39,12 @@ This creates `connectors/<name>/` with:
 python scripts/create_connector.py <connector-name> --etl
 ```
 
-This is interactive — it prompts for terminology mappings (group/job/task labels and an icon URL). Answer each prompt based on the vendor's terminology (e.g., for Coalesce: group=Environment, job=Job, task=Node).
+This is interactive — it prompts for terminology mappings (group/job/task labels) and an optional icon URL. **Before running the script, ask the user** for both:
+
+1. **Terminology** — propose a mapping based on the vendor's terms (e.g., for Coalesce: group=Environment, job=Job, task=Node; for Azure Data Factory: group=Data Factory, job=Pipeline, task=Activity) and let the user confirm or adjust.
+2. **Icon URL** — ask if they want a custom icon for the integration (shown in the Monte Carlo UI). Must be a publicly reachable image URL (SVG/PNG). Verify it returns HTTP 200 before using. Skip if they don't want one — it can be added later as the `icon_url` key in `manifest.json` (requires rebuilding the agent image).
+
+Then answer the script's prompts with those values (pipe via stdin if running non-interactively).
 
 This creates `etl_connectors/<name>/` with:
 - `connector.py` — `Connector` class with `fetch_metadata` and `fetch_run_details` stubs
