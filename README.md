@@ -25,7 +25,7 @@ The repo includes skills that automate the full workflow end-to-end for both DW 
 
 | Step | Skill                                                       | What it does                                                                                          |
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 1    | `/create-connector <name> --etl`                            | Scaffold an ETL connector with interactive terminology prompts                                        |
+| 1    | `/create-connector <name> --etl`                            | Scaffold an ETL connector with interactive prompts for terminology and an optional icon URL           |
 | 2    | `/implement-etl-connector <name>`                           | Research vendor API, implement `fetch_metadata` and `fetch_run_details`, verify with tests — **pauses for you to fill in credentials** |
 | 3    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
 
@@ -424,6 +424,40 @@ Each entry is an `asset_ref` dict:
 
 Lineage is optional — if your ETL tool doesn't expose which tables a job reads or writes, simply omit the `inputs`/`outputs` fields. The test validators will check the structure of any asset refs you do return.
 
+### Alternative: lineage via SQL query tagging
+
+When a connector can't determine lineage from the vendor API — for example, a pipeline executes free-form SQL (script activities, stored procedures, dynamic queries) — Monte Carlo also supports **tagging the SQL queries themselves with pipeline identifiers**. Monte Carlo ingests the tags through its standard query-log collection on the monitored warehouse and matches them back to the ETL pipeline, creating table ↔ pipeline lineage edges without any connector involvement.
+
+The tag is a JSON comment embedded in the query (or a native query tag where the warehouse strips comments, e.g. Snowflake's `QUERY_TAG`):
+
+```sql
+-- {"adf_pipeline_name": "my-pipeline", "adf_activity_name": "my-activity"}
+INSERT INTO PUBLIC.MY_TABLE ...;
+```
+
+This works for **all Monte Carlo ETL integrations** (including custom ETL connectors) — only the tag keys differ per integration. Requirements: the warehouse running the SQL is monitored by Monte Carlo (query logs enabled), and the ETL connection is registered. Vendor-specific docs with warehouse-specific syntax:
+
+- [Azure Data Factory in lineage](https://docs.getmontecarlo.com/docs/adf-in-lineage)
+- [Airflow in lineage](https://docs.getmontecarlo.com/docs/airflow-in-lineage)
+
+Recognized tag keys (each accepts the listed aliases; uppercase variants of the first alias also work):
+
+| Integration | Identifier | Accepted tag keys |
+| --- | --- | --- |
+| Airflow | DAG | `dag_id` (recommended), `dag`, `dag_name`, `airflow_dag`, `airflow_dag_id` |
+| Airflow | Task | `task_id` (recommended), `task`, `task_name`, `airflow_task`, `airflow_task_id` |
+| ADF | Pipeline | `adf_pipeline_name` |
+| ADF | Activity | `adf_activity_name` |
+| dbt | Invocation | `dbt_invocation_id`, `invocation_id` |
+| dbt | Node | `dbt_node_id`, `model_id`, `node_id` |
+| dbt | Node name | `dbt_model`, `dbt_model_name`, `model_name`, `node_name` |
+| dbt | Target | `dbt_target`, `dbt_target_name`, `target_name` |
+| dbt Cloud | Job / Run | `dbt_cloud_job_id`, `dbt_cloud_run_id` |
+
+When multiple connections of the same integration type exist (e.g. two ADF or Airflow connections with overlapping pipeline names), add a tag naming the connection — `mc_integration_name` for ADF, `airflow_env` for Airflow — so Monte Carlo resolves the right one.
+
+Query tagging complements `inputs`/`outputs`: asset refs describe what the vendor API knows statically, while tags capture lineage from SQL the API can't see. Use both where appropriate.
+
 ### Manifest format
 
 ```json
@@ -431,11 +465,14 @@ Lineage is optional — if your ETL tool doesn't expose which tables a job reads
   "connection_type": "custom-etl-connector-{7hex}",
   "connection_name": "coalesce",
   "asset_class": "etl",
-  "terminology": { "group": "Workspace", "job": "Mapping", "task": "Step" }
+  "terminology": { "group": "Workspace", "job": "Mapping", "task": "Step" },
+  "icon_url": "https://example.com/vendor-icon.svg"
 }
 ```
 
 The `terminology` field maps Monte Carlo's generic concepts (group, job, task) to the terms your orchestrator uses.
+
+`icon_url` is optional — a publicly reachable image URL (SVG/PNG) used as the integration's icon in the Monte Carlo UI. The scaffold script prompts for it; it can also be added to `manifest.json` later (rebuild and redeploy the agent image for the change to take effect).
 
 ### ETL test commands
 
