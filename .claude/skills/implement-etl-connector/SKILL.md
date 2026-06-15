@@ -176,26 +176,26 @@ Recommended keys:
 
 **Omit None values and empty lists** from returned dicts — the agent expects sparse dicts with only populated fields. A simple helper: `{k: v for k, v in d.items() if v is not None and v != []}`.
 
-**Mapping vendor statuses:** The vendor's status values probably don't match `ETL_RUN_STATUS_VALUES` exactly. Declare the mapping in `manifest.json` under `run_status_mapping` — do **not** hardcode a `STATUS_MAP` dict in `connector.py`. The connector should return the **raw vendor status** from `fetch_run_details()`; the agent normalizes it using the manifest mapping at collection time.
+**Mapping vendor statuses:** The vendor's status values probably don't match `ETL_RUN_STATUS_VALUES` exactly. Override the `run_status_mapping` property on your `Connector` class to declare the mapping. The connector should return the **raw vendor status** from `fetch_run_details()`; the agent normalizes it using the mapping at collection time. The mapping is automatically merged into `manifest.json` at image build time.
 
-```json
-{
-  "run_status_mapping": {
-    "Succeeded": "success",
-    "Failed": "failed",
-    "InProgress": "in_progress",
-    "Queued": "queued",
-    "Cancelled": "cancelled",
-    "TimedOut": "timed_out"
-  }
-}
+```python
+@property
+def run_status_mapping(self) -> dict[str, str]:
+    return {
+        "Succeeded": "success",
+        "Failed": "failed",
+        "InProgress": "in_progress",
+        "Queued": "queued",
+        "Cancelled": "cancelled",
+        "TimedOut": "timed_out",
+    }
 ```
 
 Keys are vendor-native status strings (case-insensitive matching). Values must be members of `ETL_RUN_STATUS_VALUES`. Unmapped statuses normalize to `"unknown"` — the test framework will warn about any vendor statuses not covered by the mapping so you can fill gaps.
 
-If the vendor uses **different statuses for tasks vs jobs**, add `task_run_status_mapping` as well. When absent, task runs use `run_status_mapping` as a fallback.
+If the vendor uses **different statuses for tasks vs jobs**, also override `task_run_status_mapping`. When not overridden, task runs use `run_status_mapping` as a fallback.
 
-The test framework (`validate_run_events`) uses the manifest mapping to normalize statuses before checking cross-field rules (terminal status → `end_time`, failed → `error`). This means your connector can return raw vendor statuses and the validators will still work correctly.
+The test framework (`validate_run_events`) reads the mapping from the connector instance and normalizes statuses before checking cross-field rules (terminal status → `end_time`, failed → `error`). This means your connector can return raw vendor statuses and the validators will still work correctly.
 
 ## Step 7: STOP — Wait for credentials
 

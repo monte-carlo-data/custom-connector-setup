@@ -37,6 +37,45 @@ class Connector:
     credentials: dict
 
     ########################################
+    # Status Mapping
+    ########################################
+
+    @property
+    def run_status_mapping(self) -> dict[str, str] | None:
+        """Mapping of vendor run statuses to Monte Carlo canonical statuses.
+
+        Override this property to declare how the vendor's job-run status
+        values map to ``ETL_RUN_STATUS_VALUES``. Keys are vendor-native
+        status strings (case-insensitive matching at runtime). Values must
+        be members of ``ETL_RUN_STATUS_VALUES``.
+
+        Example::
+
+            @property
+            def run_status_mapping(self) -> dict[str, str]:
+                return {
+                    "Succeeded": "success",
+                    "Failed": "failed",
+                    "InProgress": "in_progress",
+                    "Queued": "queued",
+                }
+
+        Return ``None`` (the default) if the connector already returns
+        canonical status values directly.
+        """
+        return None
+
+    @property
+    def task_run_status_mapping(self) -> dict[str, str] | None:
+        """Mapping of vendor task-run statuses to Monte Carlo canonical statuses.
+
+        Override this when the vendor uses different status values for tasks
+        than for jobs. When ``None`` (the default), falls back to
+        ``run_status_mapping``.
+        """
+        return None
+
+    ########################################
     # Connection Related Methods
     ########################################
 
@@ -199,9 +238,7 @@ class Connector:
             ValueError: If neither ``run_ids`` nor ``lookback`` is provided.
         """
         if run_ids is None and lookback is None:
-            raise ValueError(
-                "At least one of run_ids or lookback must be provided"
-            )
+            raise ValueError("At least one of run_ids or lookback must be provided")
 
         # TODO: query your vendor API and return run event dicts, e.g.:
         #

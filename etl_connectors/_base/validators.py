@@ -279,7 +279,7 @@ def validate_run_events(
                 f"  - {status!r} (seen {count} time{'s' if count != 1 else ''})"
             )
         lines.append(
-            "Add these to run_status_mapping in manifest.json to map them to a canonical status."
+            "Add these to the run_status_mapping property on your Connector class."
         )
         warnings.warn("\n".join(lines), stacklevel=2)
 

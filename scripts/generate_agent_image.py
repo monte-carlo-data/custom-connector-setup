@@ -74,17 +74,16 @@ def discover_etl_connectors():
     )
 
 
-def _validate_status_mapping(manifest, field_name, errors, name):
-    """Validate a run_status_mapping or task_run_status_mapping field in an ETL manifest."""
+def _validate_status_mapping(mapping, field_name, errors, name):
+    """Validate a run_status_mapping or task_run_status_mapping from a connector class."""
     from pycarlo.features.ingestion.etl import ETL_RUN_STATUS_VALUES
 
-    mapping = manifest.get(field_name)
     if mapping is None:
-        return  # Optional field — absence is fine
+        return
 
     if not isinstance(mapping, dict):
         errors.append(
-            f"  - manifest.json '{field_name}' must be a dict, "
+            f"  - {name} Connector.{field_name} must return a dict or None, "
             f"got {type(mapping).__name__}"
         )
         return
@@ -93,28 +92,36 @@ def _validate_status_mapping(manifest, field_name, errors, name):
     for key, value in mapping.items():
         if not isinstance(key, str) or not key:
             errors.append(
-                f"  - manifest.json '{field_name}' has an empty or non-string key"
+                f"  - {name} Connector.{field_name} has an empty or non-string key"
             )
             continue
         if not isinstance(value, str):
             errors.append(
-                f"  - manifest.json '{field_name}' value for key '{key}' must be a string, "
+                f"  - {name} Connector.{field_name} value for key '{key}' must be a string, "
                 f"got {type(value).__name__}"
             )
             continue
         if value.lower() not in ETL_RUN_STATUS_VALUES:
             errors.append(
-                f"  - manifest.json '{field_name}' value '{value}' for key '{key}' "
+                f"  - {name} Connector.{field_name} value '{value}' for key '{key}' "
                 f"is not a valid ETL run status"
             )
         lower_key = key.lower()
         if lower_key in seen_lower_keys:
             errors.append(
-                f"  - manifest.json '{field_name}' has case-insensitive duplicate keys: "
+                f"  - {name} Connector.{field_name} has case-insensitive duplicate keys: "
                 f"'{seen_lower_keys[lower_key]}' and '{key}'"
             )
         else:
             seen_lower_keys[lower_key] = key
+
+
+def _load_connector_class(name):
+    """Import and return the Connector class for an ETL connector by name."""
+    import importlib
+
+    module = importlib.import_module(f"etl_connectors.{name}.connector")
+    return module.Connector()
 
 
 def validate_etl_connector(name):
@@ -144,8 +151,18 @@ def validate_etl_connector(name):
                 f"  - manifest.json 'credentials_schema' must be a dict, "
                 f"got {type(creds_schema).__name__}"
             )
-        _validate_status_mapping(manifest, "run_status_mapping", errors, name)
-        _validate_status_mapping(manifest, "task_run_status_mapping", errors, name)
+
+    # Validate status mappings declared on the Connector class
+    try:
+        connector = _load_connector_class(name)
+        _validate_status_mapping(
+            connector.run_status_mapping, "run_status_mapping", errors, name
+        )
+        _validate_status_mapping(
+            connector.task_run_status_mapping, "task_run_status_mapping", errors, name
+        )
+    except Exception as e:
+        errors.append(f"  - Could not import {name} Connector class: {e}")
 
     return errors
 
@@ -155,6 +172,10 @@ def build_etl_context(tmp_dir, connectors):
 
     Copies only the files needed for the image — credentials.json and .env
     are explicitly excluded to prevent secrets from being baked into images.
+
+    Merges code-declared run_status_mapping / task_run_status_mapping from
+    the Connector class into manifest.json so the monolith can extract
+    the mapping from the registered manifest.
     """
     _ETL_EXCLUDE = {"credentials.json", ".env"}
     for name in connectors:
@@ -165,6 +186,26 @@ def build_etl_context(tmp_dir, connectors):
             dest,
             ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
         )
+        # Merge status mappings from Connector class into manifest.json
+        manifest_path = os.path.join(dest, "manifest.json")
+        if os.path.isfile(manifest_path):
+            try:
+                connector = _load_connector_class(name)
+            except Exception:
+                continue  # Validation already caught import errors
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            changed = False
+            if connector.run_status_mapping is not None:
+                manifest["run_status_mapping"] = connector.run_status_mapping
+                changed = True
+            if connector.task_run_status_mapping is not None:
+                manifest["task_run_status_mapping"] = connector.task_run_status_mapping
+                changed = True
+            if changed:
+                with open(manifest_path, "w") as f:
+                    json.dump(manifest, f, indent=2)
+                    f.write("\n")
 
 
 def discover_connectors():

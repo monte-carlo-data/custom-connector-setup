@@ -166,7 +166,6 @@ def _create_etl_connector(name, repo_root):
             "task": task_label,
         },
     }
-    manifest["run_status_mapping"] = {}
     manifest["credentials_schema"] = {}
     if icon_url:
         manifest["icon_url"] = icon_url
