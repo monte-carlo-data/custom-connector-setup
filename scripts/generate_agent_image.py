@@ -74,48 +74,6 @@ def discover_etl_connectors():
     )
 
 
-def _validate_status_mapping(mapping, field_name, errors, name):
-    """Validate a run_status_mapping or task_run_status_mapping from a connector class."""
-    from pycarlo.features.ingestion.etl import ETL_RUN_STATUS_VALUES
-
-    if mapping is None:
-        return
-
-    if not isinstance(mapping, dict):
-        errors.append(
-            f"  - {name} Connector.{field_name} must return a dict or None, "
-            f"got {type(mapping).__name__}"
-        )
-        return
-
-    seen_lower_keys = {}
-    for key, value in mapping.items():
-        if not isinstance(key, str) or not key:
-            errors.append(
-                f"  - {name} Connector.{field_name} has an empty or non-string key"
-            )
-            continue
-        if not isinstance(value, str):
-            errors.append(
-                f"  - {name} Connector.{field_name} value for key '{key}' must be a string, "
-                f"got {type(value).__name__}"
-            )
-            continue
-        if value.lower() not in ETL_RUN_STATUS_VALUES:
-            errors.append(
-                f"  - {name} Connector.{field_name} value '{value}' for key '{key}' "
-                f"is not a valid ETL run status"
-            )
-        lower_key = key.lower()
-        if lower_key in seen_lower_keys:
-            errors.append(
-                f"  - {name} Connector.{field_name} has case-insensitive duplicate keys: "
-                f"'{seen_lower_keys[lower_key]}' and '{key}'"
-            )
-        else:
-            seen_lower_keys[lower_key] = key
-
-
 def _load_connector_class(name):
     """Import and return the Connector class for an ETL connector by name.
 
@@ -183,9 +141,9 @@ def build_etl_context(tmp_dir, connectors):
             dest,
             ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
         )
-        # Validate and merge status mappings from Connector class into manifest.json.
-        # This runs inside Docker where pycarlo and vendor deps are available —
-        # validate_etl_connector (pre-build) can't import connector modules.
+        # Merge status mappings from the Connector class into manifest.json
+        # so the monolith can extract the mapping from the registered manifest.
+        # Validation happens in tests (test_etl_status_mapping.py), not here.
         manifest_path = os.path.join(dest, "manifest.json")
         if os.path.isfile(manifest_path):
             try:
@@ -193,21 +151,6 @@ def build_etl_context(tmp_dir, connectors):
             except Exception as e:
                 print(f"  Warning: could not import {name} Connector class: {e}")
                 continue
-            errors: list[str] = []
-            _validate_status_mapping(
-                connector.run_status_mapping, "run_status_mapping", errors, name
-            )
-            _validate_status_mapping(
-                connector.task_run_status_mapping,
-                "task_run_status_mapping",
-                errors,
-                name,
-            )
-            if errors:
-                raise ValueError(
-                    f"Status mapping validation failed for {name}:\n"
-                    + "\n".join(errors)
-                )
             with open(manifest_path) as f:
                 manifest = json.load(f)
             changed = False
