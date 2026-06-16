@@ -308,19 +308,17 @@ def _export_etl_manifest(session):
     module = importlib.import_module(f"etl_connectors.{connector_name}.connector")
     connector = module.Connector()
 
-    changed = False
     if connector.run_status_mapping is not None:
         manifest["run_status_mapping"] = connector.run_status_mapping
-        changed = True
     if connector.task_run_status_mapping is not None:
         manifest["task_run_status_mapping"] = connector.task_run_status_mapping
-        changed = True
 
-    # Write back to the source manifest — it's the single source of truth.
-    if changed:
-        with open(manifest_path, "w") as f:
-            json.dump(manifest, f, indent=2)
-            f.write("\n")
+    # Mark the manifest as exported so the build script can verify --export was run.
+    manifest["_exported"] = True
+
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+        f.write("\n")
 
 
 def pytest_sessionfinish(session, exitstatus):
