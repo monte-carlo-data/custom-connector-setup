@@ -287,4 +287,7 @@ Print a summary of what was implemented:
 
 Then suggest:
 
-> ETL connector `<name>` is implemented and all tests pass. Next step: run `/build-agent-image <name>` to build the deployable Docker image.
+> ETL connector `<name>` is implemented and all tests pass. Next steps:
+>
+> 1. Run `CONNECTOR=<name> docker compose run --rm test --export` to produce the build artifacts (`output/<name>/manifest.json` with status mappings merged)
+> 2. Run `/build-agent-image <name>` to build the deployable Docker image

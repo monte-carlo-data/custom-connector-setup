@@ -27,7 +27,8 @@ The repo includes skills that automate the full workflow end-to-end for both DW 
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | 1    | `/create-connector <name> --etl`                            | Scaffold an ETL connector with interactive prompts for terminology and an optional icon URL           |
 | 2    | `/implement-etl-connector <name>`                           | Research vendor API, implement `fetch_metadata` and `fetch_run_details`, verify with tests — **pauses for you to fill in credentials** |
-| 3    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
+| 3    | Export: `CONNECTOR=<name> docker compose run --rm test --export` | Produce `output/<name>/manifest.json` with status mappings merged                                    |
+| 4    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
 
 The only manual step is filling in `credentials.json` when the implementation skill pauses. Everything else — scaffolding, API research, implementation, testing, and image building — is handled by the skills.
 
@@ -371,13 +372,21 @@ ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M
    CONNECTOR=<name> docker compose run --rm test -m etl_connection
    ```
 
-5. **Build:**
+5. **Export:**
+
+   ```bash
+   CONNECTOR=<name> docker compose run --rm test --export
+   ```
+
+   This produces `output/<name>/manifest.json` with status mappings merged from the `Connector` class.
+
+6. **Build:**
 
    ```bash
    python scripts/generate_agent_image.py --etl-connection <name>
    ```
 
-6. **Deploy, register, and connect:**
+7. **Deploy, register, and connect:**
 
    Push the image to your container registry and follow the Monte Carlo documentation to deploy the agent, register it, and add the connection:
 
