@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
@@ -240,19 +239,19 @@ def validate_run_events(
             break
         _validate_run(event, str(i), run_status_mapping)
 
-    # Emit a clear summary of unmapped vendor statuses
+    # Report unmapped vendor statuses as validation errors
     if unmapped_statuses:
-        lines = [
-            'Unmapped vendor statuses detected (will normalize to "unknown" in production):'
-        ]
         for status, count in sorted(unmapped_statuses.items()):
-            lines.append(
-                f"  - {status!r} (seen {count} time{'s' if count != 1 else ''})"
+            errors.append(
+                ValidationError(
+                    field="status",
+                    message=(
+                        f"Unmapped vendor status {status!r} (seen {count} time{'s' if count != 1 else ''}). "
+                        f"Add it to run_status_mapping in manifest.json."
+                    ),
+                    event_index="summary",
+                )
             )
-        lines.append(
-            "Add these to the run_status_mapping property on your Connector class."
-        )
-        warnings.warn("\n".join(lines), stacklevel=2)
 
     return errors[:MAX_ERRORS]
 
