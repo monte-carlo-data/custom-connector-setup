@@ -102,6 +102,15 @@ def validate_etl_connector(name):
                 f"got {type(creds_schema).__name__}"
             )
 
+    # Require exported manifest (produced by --export)
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    exported_manifest = os.path.join(repo_root, "output", name, "manifest.json")
+    if not os.path.isfile(exported_manifest):
+        errors.append(
+            f"  - Exported manifest not found at output/{name}/manifest.json. "
+            f"Run: CONNECTOR={name} docker compose run --rm test --export"
+        )
+
     return errors
 
 
@@ -113,7 +122,7 @@ def build_etl_context(tmp_dir, connectors):
 
     Uses the exported manifest from ``output/<name>/manifest.json`` (produced
     by ``--export``) which includes status mappings merged from the Connector
-    class. Falls back to the source manifest if no export exists.
+    class.
     """
     _ETL_EXCLUDE = {"credentials.json", ".env"}
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -125,10 +134,9 @@ def build_etl_context(tmp_dir, connectors):
             dest,
             ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
         )
-        # Use the exported manifest (with status mappings merged) if available.
+        # Replace source manifest with the exported one (has status mappings merged).
         exported_manifest = os.path.join(repo_root, "output", name, "manifest.json")
-        if os.path.isfile(exported_manifest):
-            shutil.copy2(exported_manifest, os.path.join(dest, "manifest.json"))
+        shutil.copy2(exported_manifest, os.path.join(dest, "manifest.json"))
 
 
 def discover_connectors():
