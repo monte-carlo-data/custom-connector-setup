@@ -29,16 +29,15 @@ ALL_CAPABILITIES = [
 
 
 def pytest_configure(config):
-    # In ETL mode, capabilities tracking is not applicable
+    # In ETL mode, capabilities tracking is not applicable — but --export is
+    # supported to write manifest.json with status mappings merged in.
     if getattr(config, "_connector_type", None) == "etl":
-        if config.getoption("--export", default=False):
-            raise pytest.UsageError(
-                "--export is not supported for ETL connectors"
-            )
         config._capabilities_results = {"templates": {}, "capabilities": {}}
         return
 
-    if config.getoption("--export", default=False) and config.getoption("-m", default=""):
+    if config.getoption("--export", default=False) and config.getoption(
+        "-m", default=""
+    ):
         raise pytest.UsageError(
             "--export requires the full test suite. Remove the -m filter and re-run."
         )
@@ -287,12 +286,48 @@ def _get_setup_version():
         return None
 
 
-def pytest_sessionfinish(session, exitstatus):
-    if getattr(session.config, "_connector_type", None) == "etl":
+def _export_etl_manifest(session):
+    """Export ETL connector manifest with status mappings merged in."""
+    connector_name = getattr(session.config, "_connector_name", None)
+    if not connector_name:
         return
 
+    root = os.path.dirname(os.path.dirname(__file__))
+    manifest_path = os.path.join(
+        root, "etl_connectors", connector_name, "manifest.json"
+    )
+    if not os.path.exists(manifest_path):
+        return
+
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    # Read status mappings from the connector instance (already imported by test fixtures)
+    import importlib
+
+    module = importlib.import_module(f"etl_connectors.{connector_name}.connector")
+    connector = module.Connector()
+
+    if connector.run_status_mapping is not None:
+        manifest["run_status_mapping"] = connector.run_status_mapping
+    if connector.task_run_status_mapping is not None:
+        manifest["task_run_status_mapping"] = connector.task_run_status_mapping
+
+    output_dir = os.path.join(root, "output", connector_name)
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "manifest.json")
+    with open(output_path, "w") as f:
+        json.dump(manifest, f, indent=4, sort_keys=True)
+        f.write("\n")
+
+
+def pytest_sessionfinish(session, exitstatus):
     export = session.config.getoption("--export", default=False)
     if not export:
+        return
+
+    if getattr(session.config, "_connector_type", None) == "etl":
+        _export_etl_manifest(session)
         return
 
     results = session.config._capabilities_results
@@ -305,7 +340,9 @@ def pytest_sessionfinish(session, exitstatus):
     connection_type = None
     source_credentials_schema = None
     if connector_name:
-        manifest_path = os.path.join(root, "connectors", connector_name, "manifest.json")
+        manifest_path = os.path.join(
+            root, "connectors", connector_name, "manifest.json"
+        )
         if os.path.exists(manifest_path):
             with open(manifest_path) as f:
                 manifest = json.load(f)

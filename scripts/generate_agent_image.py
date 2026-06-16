@@ -74,23 +74,6 @@ def discover_etl_connectors():
     )
 
 
-def _load_connector_class(name):
-    """Import and return the Connector class for an ETL connector by name.
-
-    Adds the repo root to sys.path so ``etl_connectors`` is importable
-    when the script runs outside of a pip-installed environment.
-    """
-    import importlib
-    import sys
-
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
-
-    module = importlib.import_module(f"etl_connectors.{name}.connector")
-    return module.Connector()
-
-
 def validate_etl_connector(name):
     """Validate that an ETL connector has all required artifacts. Returns list of errors."""
     errors = []
@@ -128,11 +111,12 @@ def build_etl_context(tmp_dir, connectors):
     Copies only the files needed for the image — credentials.json and .env
     are explicitly excluded to prevent secrets from being baked into images.
 
-    Merges code-declared run_status_mapping / task_run_status_mapping from
-    the Connector class into manifest.json so the monolith can extract
-    the mapping from the registered manifest.
+    Uses the exported manifest from ``output/<name>/manifest.json`` (produced
+    by ``--export``) which includes status mappings merged from the Connector
+    class. Falls back to the source manifest if no export exists.
     """
     _ETL_EXCLUDE = {"credentials.json", ".env"}
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     for name in connectors:
         src = os.path.join(ETL_CONNECTORS_DIR, name)
         dest = os.path.join(tmp_dir, "custom-etl-connectors", name)
@@ -141,29 +125,10 @@ def build_etl_context(tmp_dir, connectors):
             dest,
             ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
         )
-        # Merge status mappings from the Connector class into manifest.json
-        # so the monolith can extract the mapping from the registered manifest.
-        # Validation happens in tests (test_etl_status_mapping.py), not here.
-        manifest_path = os.path.join(dest, "manifest.json")
-        if os.path.isfile(manifest_path):
-            try:
-                connector = _load_connector_class(name)
-            except Exception as e:
-                print(f"  Warning: could not import {name} Connector class: {e}")
-                continue
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-            changed = False
-            if connector.run_status_mapping is not None:
-                manifest["run_status_mapping"] = connector.run_status_mapping
-                changed = True
-            if connector.task_run_status_mapping is not None:
-                manifest["task_run_status_mapping"] = connector.task_run_status_mapping
-                changed = True
-            if changed:
-                with open(manifest_path, "w") as f:
-                    json.dump(manifest, f, indent=2)
-                    f.write("\n")
+        # Use the exported manifest (with status mappings merged) if available.
+        exported_manifest = os.path.join(repo_root, "output", name, "manifest.json")
+        if os.path.isfile(exported_manifest):
+            shutil.copy2(exported_manifest, os.path.join(dest, "manifest.json"))
 
 
 def discover_connectors():
