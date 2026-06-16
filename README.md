@@ -520,7 +520,7 @@ The `terminology` field maps Monte Carlo's generic concepts (group, job, task) t
 
 `icon_url` is optional — a publicly reachable image URL (SVG/PNG) used as the integration's icon in the Monte Carlo UI. The scaffold script prompts for it; it can also be added to `manifest.json` later (rebuild and redeploy the agent image for the change to take effect).
 
-`run_status_mapping` and `task_run_status_mapping` are optional. They map vendor-native run/task status strings to Monte Carlo canonical statuses (e.g. `success`, `failed`, `in_progress`, `queued`). Keys are vendor-native status strings (case-insensitive matching at runtime). Values must be members of `ETL_RUN_STATUS_VALUES` from pycarlo. The scaffold stubs an empty `run_status_mapping` — populate it as you discover the vendor's status vocabulary during implementation. The test framework validates the mapping values and warns about any vendor statuses not covered.
+`run_status_mapping` is **required**. It maps vendor-native run status strings to Monte Carlo canonical statuses (e.g. `success`, `failed`, `in_progress`, `queued`). Keys are vendor-native status strings (case-insensitive matching at runtime). Values must be members of `ETL_RUN_STATUS_VALUES` from pycarlo. The scaffold stubs an empty `run_status_mapping` — populate it as you discover the vendor's status vocabulary during implementation. The test framework validates the mapping values and warns about any vendor statuses not covered. `task_run_status_mapping` is optional — when absent, task runs use `run_status_mapping` as a fallback.
 
 ### ETL test commands
 
