@@ -518,6 +518,8 @@ The `terminology` field maps Monte Carlo's generic concepts (group, job, task) t
 
 `icon_url` is optional — a publicly reachable image URL (SVG/PNG) used as the integration's icon in the Monte Carlo UI. The scaffold script prompts for it; it can also be added to `manifest.json` later (rebuild and redeploy the agent image for the change to take effect).
 
+> By providing an image URL, you confirm you have the right to use and display this image in connection with Monte Carlo's services.
+
 ### ETL test commands
 
 ```bash
