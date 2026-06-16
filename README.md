@@ -510,13 +510,17 @@ Query tagging complements `inputs`/`outputs`: asset refs describe what the vendo
   "asset_class": "etl",
   "terminology": { "group": "Workspace", "job": "Mapping", "task": "Step" },
   "credentials_schema": {},
-  "icon_url": "https://example.com/vendor-icon.svg"
+  "icon_url": "https://example.com/vendor-icon.svg",
+  "run_status_mapping": { "Succeeded": "success", "Failed": "failed" },
+  "task_run_status_mapping": { "Done": "success", "Error": "error" }
 }
 ```
 
 The `terminology` field maps Monte Carlo's generic concepts (group, job, task) to the terms your orchestrator uses. The optional `credentials_schema` field enables server-side credential validation — see [step 5b](#5b-add-a-credentials-schema-optional) for details.
 
 `icon_url` is optional — a publicly reachable image URL (SVG/PNG) used as the integration's icon in the Monte Carlo UI. The scaffold script prompts for it; it can also be added to `manifest.json` later (rebuild and redeploy the agent image for the change to take effect).
+
+`run_status_mapping` and `task_run_status_mapping` are optional. They map vendor-native run/task status strings to Monte Carlo canonical statuses (e.g. `success`, `failed`, `in_progress`, `queued`). These fields are **not authored in the manifest directly** — they are populated at build time by `generate_agent_image.py` from the `run_status_mapping` / `task_run_status_mapping` properties declared on the `Connector` class. If the connector returns canonical statuses natively, the properties can be left as `None` (the default) and the fields will be absent from the manifest.
 
 ### ETL test commands
 
