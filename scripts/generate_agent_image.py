@@ -152,18 +152,6 @@ def validate_etl_connector(name):
                 f"got {type(creds_schema).__name__}"
             )
 
-    # Validate status mappings declared on the Connector class
-    try:
-        connector = _load_connector_class(name)
-        _validate_status_mapping(
-            connector.run_status_mapping, "run_status_mapping", errors, name
-        )
-        _validate_status_mapping(
-            connector.task_run_status_mapping, "task_run_status_mapping", errors, name
-        )
-    except Exception as e:
-        errors.append(f"  - Could not import {name} Connector class: {e}")
-
     return errors
 
 
@@ -186,13 +174,31 @@ def build_etl_context(tmp_dir, connectors):
             dest,
             ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
         )
-        # Merge status mappings from Connector class into manifest.json
+        # Validate and merge status mappings from Connector class into manifest.json.
+        # This runs inside Docker where pycarlo and vendor deps are available —
+        # validate_etl_connector (pre-build) can't import connector modules.
         manifest_path = os.path.join(dest, "manifest.json")
         if os.path.isfile(manifest_path):
             try:
                 connector = _load_connector_class(name)
-            except Exception:
-                continue  # Validation already caught import errors
+            except Exception as e:
+                print(f"  Warning: could not import {name} Connector class: {e}")
+                continue
+            errors: list[str] = []
+            _validate_status_mapping(
+                connector.run_status_mapping, "run_status_mapping", errors, name
+            )
+            _validate_status_mapping(
+                connector.task_run_status_mapping,
+                "task_run_status_mapping",
+                errors,
+                name,
+            )
+            if errors:
+                raise ValueError(
+                    f"Status mapping validation failed for {name}:\n"
+                    + "\n".join(errors)
+                )
             with open(manifest_path) as f:
                 manifest = json.load(f)
             changed = False
