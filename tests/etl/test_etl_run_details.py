@@ -8,7 +8,9 @@ from etl_connectors._base.validators import validate_run_events
 
 
 @pytest.mark.etl_run_details
-def test_fetch_run_details_polling(etl_connector, lookback):
+def test_fetch_run_details_polling(
+    etl_connector, lookback, run_status_mapping, task_run_status_mapping
+):
     """fetch_run_details in polling mode must return valid run event dicts."""
     run_events = etl_connector.fetch_run_details(lookback=lookback, limit=100, offset=0)
 
@@ -22,7 +24,11 @@ def test_fetch_run_details_polling(etl_connector, lookback):
             f"Item at index {i} is {type(event).__name__}, expected dict"
         )
 
-    errors = validate_run_events(run_events)
+    errors = validate_run_events(
+        run_events,
+        run_status_mapping=run_status_mapping,
+        task_run_status_mapping=task_run_status_mapping,
+    )
     assert errors == [], (
         f"Run event validation produced {len(errors)} error(s): "
         + "; ".join(f"[{e.field}] {e.message}" for e in errors)
@@ -30,7 +36,9 @@ def test_fetch_run_details_polling(etl_connector, lookback):
 
 
 @pytest.mark.etl_run_details
-def test_fetch_run_details_by_id(etl_connector, lookback):
+def test_fetch_run_details_by_id(
+    etl_connector, lookback, run_status_mapping, task_run_status_mapping
+):
     """fetch_run_details in webhook mode must return events for specific run IDs."""
     # First discover some run IDs via polling
     run_events = etl_connector.fetch_run_details(lookback=lookback, limit=10, offset=0)
@@ -61,7 +69,11 @@ def test_fetch_run_details_by_id(etl_connector, lookback):
         f"Webhook mode returned unexpected run IDs: {returned_ids - set(run_ids)}"
     )
 
-    errors = validate_run_events(detail_events)
+    errors = validate_run_events(
+        detail_events,
+        run_status_mapping=run_status_mapping,
+        task_run_status_mapping=task_run_status_mapping,
+    )
     assert errors == [], (
         f"Run event validation produced {len(errors)} error(s): "
         + "; ".join(f"[{e.field}] {e.message}" for e in errors)

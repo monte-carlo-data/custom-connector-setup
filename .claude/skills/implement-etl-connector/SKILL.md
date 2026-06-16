@@ -158,7 +158,7 @@ def fetch_run_details(
 Required dict keys per event:
 - `job_source_id` — which job this run belongs to
 - `run_source_id` — unique run identifier
-- `status` — one of the values in `ETL_RUN_STATUS_VALUES` (see `pycarlo.features.ingestion.etl`)
+- `status` — the vendor's raw status string (normalized via `run_status_mapping` in manifest.json)
 - `event_time` — ISO 8601 timestamp
 
 Important constraints (enforced by validators):
@@ -176,7 +176,26 @@ Recommended keys:
 
 **Omit None values and empty lists** from returned dicts — the agent expects sparse dicts with only populated fields. A simple helper: `{k: v for k, v in d.items() if v is not None and v != []}`.
 
-**Mapping vendor statuses:** The vendor's status values probably don't match `ETL_RUN_STATUS_VALUES` exactly. Create a mapping from vendor statuses to the allowed values. When in doubt, use `"unknown"`.
+**Mapping vendor statuses:** The vendor's status values probably don't match `ETL_RUN_STATUS_VALUES` exactly. Add the mapping to `manifest.json` under `run_status_mapping`. The connector should return the **raw vendor status** from `fetch_run_details()`; the agent normalizes it using the manifest mapping at collection time.
+
+```json
+{
+  "run_status_mapping": {
+    "Succeeded": "success",
+    "Failed": "failed",
+    "InProgress": "in_progress",
+    "Queued": "queued",
+    "Cancelled": "cancelled",
+    "TimedOut": "timed_out"
+  }
+}
+```
+
+Keys are vendor-native status strings (case-insensitive matching). Values must be members of `ETL_RUN_STATUS_VALUES`. Unmapped statuses normalize to `"unknown"` — the test framework will fail if any vendor statuses returned during testing are not covered by the mapping.
+
+If the vendor uses **different statuses for tasks vs jobs**, add `task_run_status_mapping` as well. When absent, task runs use `run_status_mapping` as a fallback.
+
+The test framework (`validate_run_events`) reads the mapping from `manifest.json` and normalizes statuses before checking cross-field rules (terminal status → `end_time`, failed → `error`). This means your connector can return raw vendor statuses and the validators will still work correctly.
 
 ## Step 7: STOP — Wait for credentials
 

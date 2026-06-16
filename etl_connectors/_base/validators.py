@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -23,6 +24,22 @@ _TERMINAL_STATUSES = frozenset(
         "partial_success",
     }
 )
+
+
+def _normalize_status(vendor_status: str, mapping: dict[str, str] | None) -> str:
+    """Normalize a vendor status using the provided mapping.
+
+    Case-insensitive key lookup. Unmapped statuses normalize to ``"unknown"``.
+    When no mapping is provided (None), returns the status lowercased (backward compat).
+    """
+    if mapping is None:
+        return vendor_status.lower()
+    # Build case-insensitive lookup
+    lowered = vendor_status.lower()
+    for key, value in mapping.items():
+        if key.lower() == lowered:
+            return value.lower()
+    return "unknown"
 
 
 @dataclass
@@ -110,7 +127,11 @@ def _validate_asset_refs(
             ))
 
 
-def validate_run_events(events: list[dict]) -> list[ValidationError]:
+def validate_run_events(
+    events: list[dict],
+    run_status_mapping: dict[str, str] | None = None,
+    task_run_status_mapping: dict[str, str] | None = None,
+) -> list[ValidationError]:
     """Validate a list of run-event dicts for cross-field consistency.
 
     Checks:
@@ -122,12 +143,26 @@ def validate_run_events(events: list[dict]) -> list[ValidationError]:
     - inputs/outputs asset refs have valid asset_type, role, and identifier
     - Recursively validates nested task_runs
 
+    When ``run_status_mapping`` is provided, vendor statuses are normalized
+    before cross-field checks. Unmapped vendor statuses normalize to
+    ``"unknown"`` and are reported as validation errors listing each
+    unmapped status and its occurrence count.
+
+    ``task_run_status_mapping`` is used for nested task_runs; falls back
+    to ``run_status_mapping`` when not provided.
+
     Returns list of ValidationError. Empty list means all events are valid.
     Stops collecting after MAX_ERRORS to avoid unbounded output.
     """
     errors: list[ValidationError] = []
+    unmapped_statuses: Counter[str] = Counter()
+    effective_task_mapping = (
+        task_run_status_mapping
+        if task_run_status_mapping is not None
+        else run_status_mapping
+    )
 
-    def _validate_run(event: dict, index: str) -> None:
+    def _validate_run(event: dict, index: str, mapping: dict[str, str] | None) -> None:
         if len(errors) >= MAX_ERRORS:
             return
 
@@ -156,13 +191,22 @@ def validate_run_events(events: list[dict]) -> list[ValidationError]:
         if end_time:
             errors.extend(_parse_iso8601(end_time, "end_time", index))
 
+        # Normalize status via mapping before cross-field checks
+        raw_status = event.get("status", "")
+        status_lower = _normalize_status(raw_status, mapping)
+
+        # Track unmapped statuses when a mapping is active
+        if mapping is not None and status_lower == "unknown":
+            # Check if "unknown" is genuinely unmapped (not explicitly mapped)
+            lowered_keys = {k.lower() for k in mapping}
+            if raw_status.lower() not in lowered_keys:
+                unmapped_statuses[raw_status] += 1
+
         # Terminal status requires end_time
-        status = event.get("status", "")
-        status_lower = status.lower()
         if status_lower in _TERMINAL_STATUSES and not end_time:
             errors.append(ValidationError(
                 "end_time",
-                f"Terminal status '{status}' requires end_time",
+                f"Terminal status '{raw_status}' requires end_time",
                 index,
             ))
 
@@ -170,7 +214,7 @@ def validate_run_events(events: list[dict]) -> list[ValidationError]:
         if status_lower in ("failed", "error") and event.get("error") is None:
             errors.append(ValidationError(
                 "error",
-                f"Status '{status}' requires an error object",
+                f"Status '{raw_status}' requires an error object",
                 index,
             ))
 
@@ -182,18 +226,32 @@ def validate_run_events(events: list[dict]) -> list[ValidationError]:
         if outputs:
             _validate_asset_refs(outputs, "outputs", "OUTPUT", index, errors)
 
-        # Recursively validate task_runs
+        # Recursively validate task_runs using the task-tier mapping
         task_runs = event.get("task_runs", [])
         if task_runs:
             for task_idx, task_run in enumerate(task_runs):
                 if len(errors) >= MAX_ERRORS:
                     break
-                _validate_run(task_run, f"{index}.{task_idx}")
+                _validate_run(task_run, f"{index}.{task_idx}", effective_task_mapping)
 
     for i, event in enumerate(events):
         if len(errors) >= MAX_ERRORS:
             break
-        _validate_run(event, str(i))
+        _validate_run(event, str(i), run_status_mapping)
+
+    # Report unmapped vendor statuses as validation errors
+    if unmapped_statuses:
+        for status, count in sorted(unmapped_statuses.items()):
+            errors.append(
+                ValidationError(
+                    field="status",
+                    message=(
+                        f"Unmapped vendor status {status!r} (seen {count} time{'s' if count != 1 else ''}). "
+                        f"Add it to run_status_mapping in manifest.json."
+                    ),
+                    event_index="summary",
+                )
+            )
 
     return errors[:MAX_ERRORS]
 
