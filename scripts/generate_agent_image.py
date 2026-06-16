@@ -117,8 +117,17 @@ def _validate_status_mapping(mapping, field_name, errors, name):
 
 
 def _load_connector_class(name):
-    """Import and return the Connector class for an ETL connector by name."""
+    """Import and return the Connector class for an ETL connector by name.
+
+    Adds the repo root to sys.path so ``etl_connectors`` is importable
+    when the script runs outside of a pip-installed environment.
+    """
     import importlib
+    import sys
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
 
     module = importlib.import_module(f"etl_connectors.{name}.connector")
     return module.Connector()
