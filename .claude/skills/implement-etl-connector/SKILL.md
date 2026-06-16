@@ -158,7 +158,7 @@ def fetch_run_details(
 Required dict keys per event:
 - `job_source_id` — which job this run belongs to
 - `run_source_id` — unique run identifier
-- `status` — the vendor's raw status string (normalized via `run_status_mapping` in manifest.json), or one of `ETL_RUN_STATUS_VALUES` directly if no mapping is declared
+- `status` — the vendor's raw status string (normalized via `run_status_mapping` in manifest.json)
 - `event_time` — ISO 8601 timestamp
 
 Important constraints (enforced by validators):
@@ -191,7 +191,7 @@ Recommended keys:
 }
 ```
 
-Keys are vendor-native status strings (case-insensitive matching). Values must be members of `ETL_RUN_STATUS_VALUES`. Unmapped statuses normalize to `"unknown"` — the test framework will warn about any vendor statuses not covered by the mapping so you can fill gaps.
+Keys are vendor-native status strings (case-insensitive matching). Values must be members of `ETL_RUN_STATUS_VALUES`. Unmapped statuses normalize to `"unknown"` — the test framework will fail if any vendor statuses returned during testing are not covered by the mapping.
 
 If the vendor uses **different statuses for tasks vs jobs**, add `task_run_status_mapping` as well. When absent, task runs use `run_status_mapping` as a fallback.
 

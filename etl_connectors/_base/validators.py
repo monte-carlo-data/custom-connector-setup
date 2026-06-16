@@ -145,8 +145,8 @@ def validate_run_events(
 
     When ``run_status_mapping`` is provided, vendor statuses are normalized
     before cross-field checks. Unmapped vendor statuses normalize to
-    ``"unknown"`` and are tracked — a summary warning is emitted after
-    validation listing each unmapped status and its occurrence count.
+    ``"unknown"`` and are reported as validation errors listing each
+    unmapped status and its occurrence count.
 
     ``task_run_status_mapping`` is used for nested task_runs; falls back
     to ``run_status_mapping`` when not provided.

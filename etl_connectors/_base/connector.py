@@ -171,7 +171,8 @@ class Connector:
 
         - ``job_source_id`` (str): the job this run belongs to
         - ``run_source_id`` (str): unique vendor identifier for the run
-        - ``status`` (str): run status (e.g. "success", "failed", "in_progress")
+        - ``status`` (str): the vendor's raw status string (normalized via
+          ``run_status_mapping`` in manifest.json)
         - ``event_time`` (str): ISO 8601 timestamp of the event
 
         Common optional fields include ``start_time``, ``end_time``,
@@ -212,7 +213,7 @@ class Connector:
         #       {
         #           "job_source_id": r.pipeline_id,
         #           "run_source_id": r.run_id,
-        #           "status": map_status(r.status),
+        #           "status": r.status,  # raw vendor status — mapped via manifest.json
         #           "event_time": r.updated_at.isoformat(),
         #           "start_time": r.started_at.isoformat(),
         #           "end_time": r.finished_at.isoformat() if r.finished_at else None,

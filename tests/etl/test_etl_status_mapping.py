@@ -47,8 +47,8 @@ def _validate_mapping(mapping: dict[str, str] | None, field_name: str) -> list[s
 @pytest.mark.etl_connection
 def test_run_status_mapping_is_present(run_status_mapping):
     """run_status_mapping must be declared in manifest.json."""
-    assert run_status_mapping is not None, (
-        "run_status_mapping is required in manifest.json. "
+    assert run_status_mapping, (
+        "run_status_mapping is required and must be non-empty in manifest.json. "
         "Add a mapping from vendor status strings to ETL_RUN_STATUS_VALUES."
     )
 
