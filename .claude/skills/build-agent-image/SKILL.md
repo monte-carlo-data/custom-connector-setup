@@ -46,7 +46,7 @@ Note: If `connectors/<name>/Dockerfile.extra` exists with system dependency inst
 
 If any are missing, stop and tell the user to run `/create-connector <name> --etl` first.
 
-ETL connectors **do** require an export step (`CONNECTOR=<name> docker compose run --rm test --export`), which merges status mappings from the `Connector` class into the source `manifest.json` in place. Unlike DW connectors, ETL connectors do not use the `output/` directory — the source `manifest.json` is the single artifact. Skip Steps 2–4 (which check `output/`) and go directly to Step 5.
+ETL connectors do not require an export step — the `manifest.json` in `etl_connectors/<name>/` is the single source of truth (status mappings are authored there directly). Skip Steps 2–4 and go directly to Step 5.
 
 ## Step 2: Check for existing export
 

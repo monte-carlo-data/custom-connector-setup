@@ -29,9 +29,10 @@ ALL_CAPABILITIES = [
 
 
 def pytest_configure(config):
-    # In ETL mode, capabilities tracking is not applicable — but --export is
-    # supported to write manifest.json with status mappings merged in.
+    # In ETL mode, capabilities tracking is not applicable
     if getattr(config, "_connector_type", None) == "etl":
+        if config.getoption("--export", default=False):
+            raise pytest.UsageError("--export is not supported for ETL connectors")
         config._capabilities_results = {"templates": {}, "capabilities": {}}
         return
 
@@ -286,48 +287,12 @@ def _get_setup_version():
         return None
 
 
-def _export_etl_manifest(session):
-    """Export ETL connector manifest with status mappings merged in."""
-    connector_name = getattr(session.config, "_connector_name", None)
-    if not connector_name:
-        return
-
-    root = os.path.dirname(os.path.dirname(__file__))
-    manifest_path = os.path.join(
-        root, "etl_connectors", connector_name, "manifest.json"
-    )
-    if not os.path.exists(manifest_path):
-        return
-
-    with open(manifest_path) as f:
-        manifest = json.load(f)
-
-    # Read status mappings from the connector instance (already imported by test fixtures)
-    import importlib
-
-    module = importlib.import_module(f"etl_connectors.{connector_name}.connector")
-    connector = module.Connector()
-
-    if connector.run_status_mapping is not None:
-        manifest["run_status_mapping"] = connector.run_status_mapping
-    if connector.task_run_status_mapping is not None:
-        manifest["task_run_status_mapping"] = connector.task_run_status_mapping
-
-    # Mark the manifest as exported so the build script can verify --export was run.
-    manifest["_exported"] = True
-
-    with open(manifest_path, "w") as f:
-        json.dump(manifest, f, indent=2)
-        f.write("\n")
-
-
 def pytest_sessionfinish(session, exitstatus):
+    if getattr(session.config, "_connector_type", None) == "etl":
+        return
+
     export = session.config.getoption("--export", default=False)
     if not export:
-        return
-
-    if getattr(session.config, "_connector_type", None) == "etl":
-        _export_etl_manifest(session)
         return
 
     results = session.config._capabilities_results

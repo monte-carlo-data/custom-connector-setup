@@ -1,4 +1,4 @@
-"""Integration test: validate run_status_mapping declared on the Connector class."""
+"""Integration test: validate run_status_mapping declared in manifest.json."""
 
 from __future__ import annotations
 

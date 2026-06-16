@@ -27,8 +27,7 @@ The repo includes skills that automate the full workflow end-to-end for both DW 
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | 1    | `/create-connector <name> --etl`                            | Scaffold an ETL connector with interactive prompts for terminology and an optional icon URL           |
 | 2    | `/implement-etl-connector <name>`                           | Research vendor API, implement `fetch_metadata` and `fetch_run_details`, verify with tests — **pauses for you to fill in credentials** |
-| 3    | Export: `CONNECTOR=<name> docker compose run --rm test --export` | Merge status mappings from the Connector class into `manifest.json`                                  |
-| 4    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
+| 3    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
 
 The only manual step is filling in `credentials.json` when the implementation skill pauses. Everything else — scaffolding, API research, implementation, testing, and image building — is handled by the skills.
 
@@ -372,21 +371,13 @@ ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M
    CONNECTOR=<name> docker compose run --rm test -m etl_connection
    ```
 
-5. **Export:**
-
-   ```bash
-   CONNECTOR=<name> docker compose run --rm test --export
-   ```
-
-   This merges `run_status_mapping` / `task_run_status_mapping` from the `Connector` class into the source `manifest.json`.
-
-6. **Build:**
+5. **Build:**
 
    ```bash
    python scripts/generate_agent_image.py --etl-connection <name>
    ```
 
-7. **Deploy, register, and connect:**
+6. **Deploy, register, and connect:**
 
    Push the image to your container registry and follow the Monte Carlo documentation to deploy the agent, register it, and add the connection:
 
@@ -529,7 +520,7 @@ The `terminology` field maps Monte Carlo's generic concepts (group, job, task) t
 
 `icon_url` is optional — a publicly reachable image URL (SVG/PNG) used as the integration's icon in the Monte Carlo UI. The scaffold script prompts for it; it can also be added to `manifest.json` later (rebuild and redeploy the agent image for the change to take effect).
 
-`run_status_mapping` and `task_run_status_mapping` are optional. They map vendor-native run/task status strings to Monte Carlo canonical statuses (e.g. `success`, `failed`, `in_progress`, `queued`). These fields are **not authored in the manifest directly** — they are merged into `manifest.json` by `--export` from the `run_status_mapping` / `task_run_status_mapping` properties declared on the `Connector` class. If the connector returns canonical statuses natively, the properties can be left as `None` (the default) and the fields will be absent from the manifest.
+`run_status_mapping` and `task_run_status_mapping` are optional. They map vendor-native run/task status strings to Monte Carlo canonical statuses (e.g. `success`, `failed`, `in_progress`, `queued`). Keys are vendor-native status strings (case-insensitive matching at runtime). Values must be members of `ETL_RUN_STATUS_VALUES` from pycarlo. The scaffold stubs an empty `run_status_mapping` — populate it as you discover the vendor's status vocabulary during implementation. The test framework validates the mapping values and warns about any vendor statuses not covered.
 
 ### ETL test commands
 

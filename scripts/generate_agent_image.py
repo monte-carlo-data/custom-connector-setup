@@ -101,12 +101,6 @@ def validate_etl_connector(name):
                 f"  - manifest.json 'credentials_schema' must be a dict, "
                 f"got {type(creds_schema).__name__}"
             )
-        if not manifest.get("_exported"):
-            errors.append(
-                f"  - manifest.json has not been exported. "
-                f"Run: CONNECTOR={name} docker compose run --rm test --export"
-            )
-
     return errors
 
 
@@ -115,10 +109,6 @@ def build_etl_context(tmp_dir, connectors):
 
     Copies only the files needed for the image — credentials.json and .env
     are explicitly excluded to prevent secrets from being baked into images.
-
-    The source ``manifest.json`` is the single source of truth — ``--export``
-    merges status mappings into it in place, so no separate output directory
-    is needed for ETL connectors.
     """
     _ETL_EXCLUDE = {"credentials.json", ".env"}
     for name in connectors:
@@ -129,15 +119,6 @@ def build_etl_context(tmp_dir, connectors):
             dest,
             ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
         )
-        # Strip the internal _exported marker before baking into the image.
-        manifest_path = os.path.join(dest, "manifest.json")
-        if os.path.isfile(manifest_path):
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-            manifest.pop("_exported", None)
-            with open(manifest_path, "w") as f:
-                json.dump(manifest, f, indent=2)
-                f.write("\n")
 
 
 def discover_connectors():

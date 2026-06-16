@@ -65,8 +65,7 @@ The ETL workflow has its own Claude Code skills:
 | ---- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | 1    | `/create-connector <name> --etl`                                                                | Scaffold ETL connector with prompts for terminology and optional icon URL   |
 | 2    | `/implement-etl-connector <name>`                                                               | Research vendor API, implement connector methods, verify with tests |
-| 3    | `CONNECTOR=<name> docker compose run --rm test --export`                                        | Merge status mappings from the Connector class into `manifest.json` |
-| 4    | `/build-agent-image <name>`                                                                     | Build deployable agent image (auto-detects connector type)    |
+| 3    | `/build-agent-image <name>`                                                                     | Build deployable agent image (auto-detects connector type)    |
 
 Each skill file (`.claude/skills/*/SKILL.md`) contains detailed step-by-step instructions.
 

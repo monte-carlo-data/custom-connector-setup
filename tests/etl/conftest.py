@@ -46,16 +46,31 @@ def etl_connector(request):
 
 
 @pytest.fixture(scope="session")
-def run_status_mapping(etl_connector) -> dict[str, str] | None:
-    """run_status_mapping from the connector class, or None."""
-    return getattr(etl_connector, "run_status_mapping", None)
+def etl_manifest(request) -> dict:
+    """Session-scoped ETL connector manifest.json contents."""
+    if getattr(request.config, "_connector_type", None) != "etl":
+        pytest.skip("Not an ETL connector")
+
+    name = request.config._connector_name
+    manifest_path = os.path.join(_PROJECT_ROOT, "etl_connectors", name, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        pytest.fail(f"Manifest file not found: {manifest_path}")
+    with open(manifest_path) as f:
+        return json.load(f)
 
 
 @pytest.fixture(scope="session")
-def task_run_status_mapping(etl_connector, run_status_mapping) -> dict[str, str] | None:
-    """task_run_status_mapping from the connector class, falling back to run_status_mapping."""
-    mapping = getattr(etl_connector, "task_run_status_mapping", None)
-    if mapping is not None:
+def run_status_mapping(etl_manifest) -> dict[str, str] | None:
+    """run_status_mapping from the connector's manifest, or None."""
+    mapping = etl_manifest.get("run_status_mapping")
+    return mapping if isinstance(mapping, dict) else None
+
+
+@pytest.fixture(scope="session")
+def task_run_status_mapping(etl_manifest, run_status_mapping) -> dict[str, str] | None:
+    """task_run_status_mapping from the connector's manifest, falling back to run_status_mapping."""
+    mapping = etl_manifest.get("task_run_status_mapping")
+    if isinstance(mapping, dict):
         return mapping
     return run_status_mapping
 
