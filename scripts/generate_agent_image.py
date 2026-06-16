@@ -7,7 +7,6 @@ Usage:
     python scripts/generate_agent_image.py --version 0.0.11
     python scripts/generate_agent_image.py --mode hybrid postgres
 """
-
 import argparse
 import json
 import os
@@ -39,8 +38,7 @@ def read_dockerfile_extra(base_dir, name):
         content = f.read()
     # Check if there are any non-comment, non-blank lines
     has_instructions = any(
-        line.strip() and not line.strip().startswith("#")
-        for line in content.splitlines()
+        line.strip() and not line.strip().startswith("#") for line in content.splitlines()
     )
     if not has_instructions:
         return None
@@ -94,13 +92,14 @@ def validate_etl_connector(name):
                 f"got '{connection_type}'"
             )
         if "terminology" not in manifest:
-            errors.append("  - manifest.json is missing required 'terminology' key")
+            errors.append(f"  - manifest.json is missing required 'terminology' key")
         creds_schema = manifest.get("credentials_schema")
         if creds_schema is not None and not isinstance(creds_schema, dict):
             errors.append(
                 f"  - manifest.json 'credentials_schema' must be a dict, "
                 f"got {type(creds_schema).__name__}"
             )
+
     return errors
 
 
@@ -115,8 +114,7 @@ def build_etl_context(tmp_dir, connectors):
         src = os.path.join(ETL_CONNECTORS_DIR, name)
         dest = os.path.join(tmp_dir, "custom-etl-connectors", name)
         shutil.copytree(
-            src,
-            dest,
+            src, dest,
             ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
         )
 
@@ -164,17 +162,17 @@ def validate_connector(name, mode="full"):
         if mode == "hybrid":
             if not manifest.get("capabilities", {}).get("supports_custom_sql_monitor"):
                 errors.append(
-                    "  - Custom SQL monitor support has not been implemented — this is a requirement for hybrid mode."
+                    f"  - Custom SQL monitor support has not been implemented — this is a requirement for hybrid mode."
                 )
             if manifest.get("capabilities", {}).get("supports_metadata"):
                 errors.append(
-                    "  - Metadata is implemented but hybrid mode requires metadata to be pushed externally."
-                    " Use --mode full instead, or remove MetadataQueryTemplates."
+                    f"  - Metadata is implemented but hybrid mode requires metadata to be pushed externally."
+                    f" Use --mode full instead, or remove MetadataQueryTemplates."
                 )
         else:
             if not manifest.get("capabilities", {}).get("supports_metadata"):
                 errors.append(
-                    "  - Metadata collection has not been implemented — this is a requirement."
+                    f"  - Metadata collection has not been implemented — this is a requirement."
                 )
         creds_schema = manifest.get("credentials_schema")
         if creds_schema is not None and not isinstance(creds_schema, dict):
@@ -204,26 +202,20 @@ def check_metric_warnings(name):
     with open(manifest_path) as f:
         manifest = json.load(f)
 
-    supports_ql = manifest.get("capabilities", {}).get(
-        "supports_full_query_language", False
-    )
+    supports_ql = manifest.get("capabilities", {}).get("supports_full_query_language", False)
     metrics = manifest.get("metrics", {})
     passing_metrics = sorted(m for m, v in metrics.items() if v is True)
 
     if not supports_ql and passing_metrics:
         lines = [
             f"  {name}:",
-            "    supports_full_query_language = false",
+            f"    supports_full_query_language = false",
             f"    {len(passing_metrics)} metric(s) have passing templates:",
         ]
         for metric in passing_metrics:
             lines.append(f"      - {metric}")
-        lines.append(
-            "    Re-run tests to see which prerequisite templates are failing:"
-        )
-        lines.append(
-            f"      CONNECTOR={name} docker compose run --rm test -m ql_prerequisites"
-        )
+        lines.append(f"    Re-run tests to see which prerequisite templates are failing:")
+        lines.append(f"      CONNECTOR={name} docker compose run --rm test -m ql_prerequisites")
         return "\n".join(lines)
     return None
 
@@ -249,14 +241,12 @@ def generate_dockerfile(connectors, version, base_image=None, etl_connectors=Non
         )
         lines.append("")
 
-    for name in etl_connectors or []:
+    for name in (etl_connectors or []):
         lines.append(f"# ETL Connector: {name}")
         extra_content = read_dockerfile_extra(ETL_CONNECTORS_DIR, name)
         if extra_content:
             lines.append(extra_content)
-        lines.append(
-            f"COPY custom-etl-connectors/{name}/ /opt/custom-etl-connectors/{name}/"
-        )
+        lines.append(f"COPY custom-etl-connectors/{name}/ /opt/custom-etl-connectors/{name}/")
         lines.append(
             f"RUN pip install --no-cache-dir -r /opt/custom-etl-connectors/{name}/requirements.txt"
         )
@@ -380,9 +370,7 @@ def main():
             all_errors[name] = errors
 
     if all_errors:
-        print(
-            "Error: Some connectors are missing required artifacts:\n", file=sys.stderr
-        )
+        print("Error: Some connectors are missing required artifacts:\n", file=sys.stderr)
         for name, errors in all_errors.items():
             if name in connector_modes:
                 print(f"  {name} (mode: {connector_modes[name]}):", file=sys.stderr)
@@ -447,9 +435,7 @@ def main():
         if etl_connectors:
             build_etl_context(tmp_dir, etl_connectors)
 
-        base_image = (
-            args.base_image or f"montecarlodata/agent:{args.version}-{AGENT_TYPE}"
-        )
+        base_image = args.base_image or f"montecarlodata/agent:{args.version}-{AGENT_TYPE}"
 
         # Build summary
         all_connector_names = []
@@ -457,16 +443,12 @@ def main():
             all_connector_names.extend(connectors)
         if etl_connectors:
             all_connector_names.extend(f"{n} (etl)" for n in etl_connectors)
-        print(
-            f"Building image '{tag}' with connectors: {', '.join(all_connector_names)}"
-        )
+        print(f"Building image '{tag}' with connectors: {', '.join(all_connector_names)}")
         print(f"Base image: {base_image}")
         print(f"Docker platform: {args.docker_platform}")
         for name in connectors:
             mode = connector_modes[name]
-            mode_label = (
-                "hybrid (metadata pushed externally)" if mode == "hybrid" else "full"
-            )
+            mode_label = "hybrid (metadata pushed externally)" if mode == "hybrid" else "full"
             print(f"  {name}: {mode_label}")
         for name in etl_connectors:
             print(f"  {name}: etl")
@@ -491,9 +473,7 @@ def main():
         hybrid_connectors = []
         for name in connectors:
             mode = connector_modes[name]
-            mode_label = (
-                "hybrid (metadata pushed externally)" if mode == "hybrid" else "full"
-            )
+            mode_label = "hybrid (metadata pushed externally)" if mode == "hybrid" else "full"
             print(f"  {name}: {mode_label}")
             if mode == "hybrid":
                 hybrid_connectors.append(name)
@@ -508,23 +488,17 @@ def main():
     print("Next steps:")
     step = 1
     if connectors:
-        print(
-            f"  {step}. Verify DW connectors: docker run --rm --entrypoint ls {tag} /opt/custom-connectors/"
-        )
+        print(f"  {step}. Verify DW connectors: docker run --rm --entrypoint ls {tag} /opt/custom-connectors/")
         step += 1
     if etl_connectors:
-        print(
-            f"  {step}. Verify ETL connectors: docker run --rm --entrypoint ls {tag} /opt/custom-etl-connectors/"
-        )
+        print(f"  {step}. Verify ETL connectors: docker run --rm --entrypoint ls {tag} /opt/custom-etl-connectors/")
         step += 1
     print(f"  {step}. Push to your container registry:")
     print(f"     docker tag {tag} <your-registry>/{tag}")
     print(f"     docker push <your-registry>/{tag}")
     if hybrid_connectors:
         step += 1
-        print(
-            f"  {step}. Configure your external metadata pipeline to push metadata for: {', '.join(hybrid_connectors)}"
-        )
+        print(f"  {step}. Configure your external metadata pipeline to push metadata for: {', '.join(hybrid_connectors)}")
 
     # Point users to credentials.json for self-hosted setup
     creds_files = []

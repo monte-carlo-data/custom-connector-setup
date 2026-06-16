@@ -46,35 +46,28 @@ def _normalize_status(vendor_status: str, mapping: dict[str, str] | None) -> str
 @dataclass
 class ValidationError:
     """A single validation error found in an event."""
-
     field: str
     message: str
     event_index: str
 
 
-def _parse_iso8601(
-    value: str, field_name: str, event_index: str
-) -> list[ValidationError]:
+def _parse_iso8601(value: str, field_name: str, event_index: str) -> list[ValidationError]:
     """Try to parse an ISO 8601 datetime string. Return errors if invalid."""
     try:
         # Handle Z suffix for Python < 3.11
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
-        return [
-            ValidationError(
-                field=field_name,
-                message=f"Invalid ISO 8601 datetime: {value!r}",
-                event_index=event_index,
-            )
-        ]
+        return [ValidationError(
+            field=field_name,
+            message=f"Invalid ISO 8601 datetime: {value!r}",
+            event_index=event_index,
+        )]
     if dt.tzinfo is None:
-        return [
-            ValidationError(
-                field=field_name,
-                message=f"Datetime must be timezone-aware (got naive): {value!r}",
-                event_index=event_index,
-            )
-        ]
+        return [ValidationError(
+            field=field_name,
+            message=f"Datetime must be timezone-aware (got naive): {value!r}",
+            event_index=event_index,
+        )]
     return []
 
 
@@ -98,53 +91,41 @@ def _validate_asset_refs(
             return
         idx = f"{event_index}.{field_name}.{ref_idx}"
         if not isinstance(ref, dict):
-            errors.append(
-                ValidationError(
-                    field_name, f"item at index {ref_idx} must be a dict", idx
-                )
-            )
+            errors.append(ValidationError(field_name, f"item at index {ref_idx} must be a dict", idx))
             continue
         # asset_type
         asset_type = ref.get("asset_type")
         if not asset_type:
             errors.append(ValidationError("asset_type", "asset_type is required", idx))
         elif asset_type not in ASSET_REF_ASSET_TYPE_VALUES:
-            errors.append(
-                ValidationError(
-                    "asset_type",
-                    f"asset_type must be one of {sorted(ASSET_REF_ASSET_TYPE_VALUES)}; got {asset_type!r}",
-                    idx,
-                )
-            )
+            errors.append(ValidationError(
+                "asset_type",
+                f"asset_type must be one of {sorted(ASSET_REF_ASSET_TYPE_VALUES)}; got {asset_type!r}",
+                idx,
+            ))
         # role
         role = ref.get("role")
         if not role:
             errors.append(ValidationError("role", "role is required", idx))
         elif role not in ASSET_REF_ROLE_VALUES:
-            errors.append(
-                ValidationError(
-                    "role",
-                    f"role must be one of {sorted(ASSET_REF_ROLE_VALUES)}; got {role!r}",
-                    idx,
-                )
-            )
+            errors.append(ValidationError(
+                "role",
+                f"role must be one of {sorted(ASSET_REF_ROLE_VALUES)}; got {role!r}",
+                idx,
+            ))
         elif role != expected_role:
-            errors.append(
-                ValidationError(
-                    "role",
-                    f"role in {field_name} must be {expected_role!r}; got {role!r}",
-                    idx,
-                )
-            )
+            errors.append(ValidationError(
+                "role",
+                f"role in {field_name} must be {expected_role!r}; got {role!r}",
+                idx,
+            ))
         # identifier — at least one of mcon or fully_qualified_name
         if not ref.get("mcon") and not ref.get("fully_qualified_name"):
-            errors.append(
-                ValidationError(
-                    "fully_qualified_name",
-                    "at least one of mcon or fully_qualified_name is required",
-                    idx,
-                )
-            )
+            errors.append(ValidationError(
+                "fully_qualified_name",
+                "at least one of mcon or fully_qualified_name is required",
+                idx,
+            ))
 
 
 def validate_run_events(
@@ -191,21 +172,15 @@ def validate_run_events(
         if event_time:
             errors.extend(_parse_iso8601(event_time, "event_time", index))
         else:
-            errors.append(
-                ValidationError("event_time", "event_time is required", index)
-            )
+            errors.append(ValidationError("event_time", "event_time is required", index))
 
         # run_source_id must be present and non-empty
         if not event.get("run_source_id"):
-            errors.append(
-                ValidationError("run_source_id", "run_source_id is required", index)
-            )
+            errors.append(ValidationError("run_source_id", "run_source_id is required", index))
 
         # job_source_id must be present and non-empty
         if not event.get("job_source_id"):
-            errors.append(
-                ValidationError("job_source_id", "job_source_id is required", index)
-            )
+            errors.append(ValidationError("job_source_id", "job_source_id is required", index))
 
         # start_time: validate format if present
         start_time = event.get("start_time")
@@ -230,23 +205,19 @@ def validate_run_events(
 
         # Terminal status requires end_time
         if status_lower in _TERMINAL_STATUSES and not end_time:
-            errors.append(
-                ValidationError(
-                    "end_time",
-                    f"Terminal status '{raw_status}' requires end_time",
-                    index,
-                )
-            )
+            errors.append(ValidationError(
+                "end_time",
+                f"Terminal status '{raw_status}' requires end_time",
+                index,
+            ))
 
         # failed/error status requires error object
         if status_lower in ("failed", "error") and event.get("error") is None:
-            errors.append(
-                ValidationError(
-                    "error",
-                    f"Status '{raw_status}' requires an error object",
-                    index,
-                )
-            )
+            errors.append(ValidationError(
+                "error",
+                f"Status '{raw_status}' requires an error object",
+                index,
+            ))
 
         # Validate inputs/outputs asset refs
         inputs = event.get("inputs", [])
@@ -306,9 +277,7 @@ def validate_metadata_events(events: list[dict]) -> list[ValidationError]:
             break
         idx = str(i)
         if not event.get("job_source_id"):
-            errors.append(
-                ValidationError("job_source_id", "job_source_id is required", idx)
-            )
+            errors.append(ValidationError("job_source_id", "job_source_id is required", idx))
         if not event.get("name"):
             errors.append(ValidationError("name", "name is required", idx))
 
@@ -318,13 +287,7 @@ def validate_metadata_events(events: list[dict]) -> list[ValidationError]:
             if not isinstance(group, dict):
                 errors.append(ValidationError("group", "group must be a dict", idx))
             elif not group.get("source_id"):
-                errors.append(
-                    ValidationError(
-                        "group.source_id",
-                        "group.source_id is required when group is provided",
-                        idx,
-                    )
-                )
+                errors.append(ValidationError("group.source_id", "group.source_id is required when group is provided", idx))
 
         # tasks: if present, each must have task_source_id and name
         tasks = event.get("tasks")
@@ -334,33 +297,19 @@ def validate_metadata_events(events: list[dict]) -> list[ValidationError]:
                     break
                 task_index = f"{idx}.tasks.{t_idx}"
                 if not isinstance(task, dict):
-                    errors.append(
-                        ValidationError(
-                            "tasks", f"task at index {t_idx} must be a dict", idx
-                        )
-                    )
+                    errors.append(ValidationError("tasks", f"task at index {t_idx} must be a dict", idx))
                     continue
                 if not task.get("task_source_id"):
-                    errors.append(
-                        ValidationError(
-                            "task_source_id", "task_source_id is required", task_index
-                        )
-                    )
+                    errors.append(ValidationError("task_source_id", "task_source_id is required", task_index))
                 if not task.get("name"):
-                    errors.append(
-                        ValidationError("name", "task name is required", task_index)
-                    )
+                    errors.append(ValidationError("name", "task name is required", task_index))
                 # Validate task-level inputs/outputs
                 task_inputs = task.get("inputs", [])
                 if task_inputs:
-                    _validate_asset_refs(
-                        task_inputs, "inputs", "INPUT", task_index, errors
-                    )
+                    _validate_asset_refs(task_inputs, "inputs", "INPUT", task_index, errors)
                 task_outputs = task.get("outputs", [])
                 if task_outputs:
-                    _validate_asset_refs(
-                        task_outputs, "outputs", "OUTPUT", task_index, errors
-                    )
+                    _validate_asset_refs(task_outputs, "outputs", "OUTPUT", task_index, errors)
 
         # Validate job-level inputs/outputs
         inputs = event.get("inputs", [])

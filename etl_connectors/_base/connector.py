@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import timedelta
 from typing import List
 
@@ -201,7 +199,9 @@ class Connector:
             ValueError: If neither ``run_ids`` nor ``lookback`` is provided.
         """
         if run_ids is None and lookback is None:
-            raise ValueError("At least one of run_ids or lookback must be provided")
+            raise ValueError(
+                "At least one of run_ids or lookback must be provided"
+            )
 
         # TODO: query your vendor API and return run event dicts, e.g.:
         #

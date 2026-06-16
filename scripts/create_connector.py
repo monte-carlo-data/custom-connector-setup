@@ -9,7 +9,6 @@ Example:
     python scripts/create_connector.py postgres
     python scripts/create_connector.py coalesce --etl
 """
-
 import argparse
 import json
 import os
@@ -41,16 +40,11 @@ def _create_db_connector(name, repo_root):
     target_dir = os.path.join(connectors_dir, name)
 
     if os.path.exists(target_dir):
-        print(
-            f"Error: connector '{name}' already exists at {target_dir}", file=sys.stderr
-        )
+        print(f"Error: connector '{name}' already exists at {target_dir}", file=sys.stderr)
         sys.exit(1)
 
     if not os.path.exists(os.path.join(base_dir, "connector.py")):
-        print(
-            f"Error: base template not found at {base_dir}/connector.py",
-            file=sys.stderr,
-        )
+        print(f"Error: base template not found at {base_dir}/connector.py", file=sys.stderr)
         sys.exit(1)
 
     os.makedirs(target_dir)
@@ -63,12 +57,7 @@ def _create_db_connector(name, repo_root):
 
     # Generate manifest.json with unique connector type
     connection_type = f"custom-connector-{secrets.token_hex(4)[:7]}"
-    manifest = {
-        "connection_type": connection_type,
-        "connection_name": name,
-        "asset_class": "warehouse",
-        "credentials_schema": {},
-    }
+    manifest = {"connection_type": connection_type, "connection_name": name, "asset_class": "warehouse", "credentials_schema": {}}
     with open(os.path.join(target_dir, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=2)
         f.write("\n")
@@ -106,14 +95,10 @@ def _create_db_connector(name, repo_root):
     print("Next steps:")
     print(f"  1. Edit connectors/{name}/connector.py        — fill in the stubs")
     print(f"  2. Edit connectors/{name}/credentials.json   — add credentials")
-    print(
-        f"  3. Edit connectors/{name}/manifest.json      — add credentials_schema (optional, cerberus format)"
-    )
+    print(f"  3. Edit connectors/{name}/manifest.json      — add credentials_schema (optional, cerberus format)")
     print(f"  4. Edit connectors/{name}/requirements.txt   — add database driver")
-    print(
-        f"  5. Edit connectors/{name}/Dockerfile.extra   — add system deps (if needed)"
-    )
-    print("  6. docker compose build")
+    print(f"  5. Edit connectors/{name}/Dockerfile.extra   — add system deps (if needed)")
+    print(f"  6. docker compose build")
     print(f"  7. CONNECTOR={name} docker compose run test -m connection")
 
 
@@ -123,10 +108,7 @@ def _create_etl_connector(name, repo_root):
     target_dir = os.path.join(etl_dir, name)
 
     if os.path.exists(target_dir):
-        print(
-            f"Error: ETL connector '{name}' already exists at {target_dir}",
-            file=sys.stderr,
-        )
+        print(f"Error: ETL connector '{name}' already exists at {target_dir}", file=sys.stderr)
         sys.exit(1)
 
     # Interactive terminology prompts
@@ -140,10 +122,7 @@ def _create_etl_connector(name, repo_root):
 
     base_dir = os.path.join(etl_dir, "_base")
     if not os.path.exists(os.path.join(base_dir, "connector.py")):
-        print(
-            f"Error: base template not found at {base_dir}/connector.py",
-            file=sys.stderr,
-        )
+        print(f"Error: base template not found at {base_dir}/connector.py", file=sys.stderr)
         sys.exit(1)
 
     os.makedirs(target_dir)
@@ -187,9 +166,7 @@ def _create_etl_connector(name, repo_root):
 
     # Create empty requirements.txt
     with open(os.path.join(target_dir, "requirements.txt"), "w") as f:
-        f.write(
-            "# Add your vendor API client library here, e.g.:\n# coalesce-sdk==1.0.0\n"
-        )
+        f.write("# Add your vendor API client library here, e.g.:\n# coalesce-sdk==1.0.0\n")
 
     # Create empty Dockerfile.extra for system dependencies
     with open(os.path.join(target_dir, "Dockerfile.extra"), "w") as f:
@@ -208,22 +185,12 @@ def _create_etl_connector(name, repo_root):
     print(f"  terminology: group={group_label}, job={job_label}, task={task_label}")
     print()
     print("Next steps:")
-    print(
-        f"  1. Edit etl_connectors/{name}/connector.py      — implement fetch_metadata & fetch_run_details"
-    )
-    print(
-        f"  2. Edit etl_connectors/{name}/credentials.json  — add vendor API credentials"
-    )
-    print(
-        f"  3. Edit etl_connectors/{name}/manifest.json     — add credentials_schema (optional, cerberus format)"
-    )
-    print(
-        f"  4. Edit etl_connectors/{name}/requirements.txt  — add vendor client library"
-    )
-    print(
-        f"  5. Edit etl_connectors/{name}/Dockerfile.extra  — add system deps (if needed)"
-    )
-    print("  6. docker compose build")
+    print(f"  1. Edit etl_connectors/{name}/connector.py      — implement fetch_metadata & fetch_run_details")
+    print(f"  2. Edit etl_connectors/{name}/credentials.json  — add vendor API credentials")
+    print(f"  3. Edit etl_connectors/{name}/manifest.json     — add credentials_schema (optional, cerberus format)")
+    print(f"  4. Edit etl_connectors/{name}/requirements.txt  — add vendor client library")
+    print(f"  5. Edit etl_connectors/{name}/Dockerfile.extra  — add system deps (if needed)")
+    print(f"  6. docker compose build")
     print(f"  7. CONNECTOR={name} docker compose run test -m etl_connection")
 
 

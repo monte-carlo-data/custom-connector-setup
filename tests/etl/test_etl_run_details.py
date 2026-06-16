@@ -48,13 +48,11 @@ def test_fetch_run_details_by_id(
     run_ids = [e.get("run_source_id") for e in run_events[:3]]
     run_ids = [rid for rid in run_ids if rid]
     if not run_ids:
-        pytest.skip(
-            "No run_source_id found in polling results — cannot test webhook mode"
-        )
+        pytest.skip("No run_source_id found in polling results — cannot test webhook mode")
     detail_events = etl_connector.fetch_run_details(run_ids=run_ids)
 
-    assert len(detail_events) > 0, "No run events returned for run_ids: " + ", ".join(
-        run_ids
+    assert len(detail_events) > 0, (
+        "No run events returned for run_ids: " + ", ".join(run_ids)
     )
 
     for i, event in enumerate(detail_events):
@@ -62,11 +60,11 @@ def test_fetch_run_details_by_id(
             f"Item at index {i} is {type(event).__name__}, expected dict"
         )
 
-    returned_ids = {
-        e.get("run_source_id") for e in detail_events if e.get("run_source_id")
-    }
+    returned_ids = {e.get("run_source_id") for e in detail_events if e.get("run_source_id")}
     for rid in run_ids:
-        assert rid in returned_ids, f"Run ID {rid} was requested but not returned"
+        assert rid in returned_ids, (
+            f"Run ID {rid} was requested but not returned"
+        )
     assert returned_ids.issubset(set(run_ids)), (
         f"Webhook mode returned unexpected run IDs: {returned_ids - set(run_ids)}"
     )

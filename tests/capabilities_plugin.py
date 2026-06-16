@@ -32,13 +32,13 @@ def pytest_configure(config):
     # In ETL mode, capabilities tracking is not applicable
     if getattr(config, "_connector_type", None) == "etl":
         if config.getoption("--export", default=False):
-            raise pytest.UsageError("--export is not supported for ETL connectors")
+            raise pytest.UsageError(
+                "--export is not supported for ETL connectors"
+            )
         config._capabilities_results = {"templates": {}, "capabilities": {}}
         return
 
-    if config.getoption("--export", default=False) and config.getoption(
-        "-m", default=""
-    ):
+    if config.getoption("--export", default=False) and config.getoption("-m", default=""):
         raise pytest.UsageError(
             "--export requires the full test suite. Remove the -m filter and re-run."
         )
@@ -305,9 +305,7 @@ def pytest_sessionfinish(session, exitstatus):
     connection_type = None
     source_credentials_schema = None
     if connector_name:
-        manifest_path = os.path.join(
-            root, "connectors", connector_name, "manifest.json"
-        )
+        manifest_path = os.path.join(root, "connectors", connector_name, "manifest.json")
         if os.path.exists(manifest_path):
             with open(manifest_path) as f:
                 manifest = json.load(f)
