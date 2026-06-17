@@ -179,14 +179,14 @@ class Connector:
         ``trigger``, ``error``, ``task_runs``, ``run_url``,
         ``inputs``, ``outputs``, ``group``.
 
-        **Per-placement runs (optional):** ``group`` is a nested dict in the
-        same shape as ``EtlAsset.group`` (``source_id`` required; ``name``,
-        ``group_type``, etc. optional). Supplying it attributes a run to a
-        specific placement (group-instance) — needed when one job lives in
-        multiple groups under one container. Omit it and Monte Carlo resolves
-        the placement automatically (single-placement jobs need nothing). Pass
-        the group's ``source_id``; the backend mints the internal group id
-        from it (connectors never supply that id themselves)::
+        **``group`` (optional):** a nested dict in the same shape as
+        ``EtlAsset.group`` (``source_id`` required; ``name``, ``group_type``,
+        etc. optional). Set it when the same job exists in multiple groups
+        under one container and a run belongs to just one of them — it says
+        which group. Omit it and Monte Carlo picks the group automatically
+        (a job that lives in a single group needs nothing). Pass the group's
+        ``source_id``; the backend resolves the rest (connectors never supply
+        an internal group id)::
 
             {
                 "job_source_id": "pipeline-123",
