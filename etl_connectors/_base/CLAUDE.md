@@ -14,6 +14,7 @@ Shared foundation for all ETL connectors. Connector implementations live in sibl
 
 - Connectors return `list[dict]`, not model objects. The dict schemas match pycarlo's `EtlAsset` and `EtlRunEvent` dataclasses.
 - `EtlAsset` uses a nested `group` dict (with `source_id` required) instead of flat `group_source_id`. Assets can also carry a `tasks` list (each task needs `task_source_id` and `name`).
+- `EtlRunEvent` accepts the same optional nested `group` dict (`source_id` required) to say which group a run belongs to, when the same job exists in multiple groups under one container. Backend resolves the rest from `source_id`; connectors never supply an internal group id. Available since pycarlo 0.12.514.
 - Validators enforce required fields and cross-field rules (e.g. terminal statuses require `end_time`, timestamps must be timezone-aware ISO 8601, `group.source_id` required when group is present, `inputs`/`outputs` asset refs have valid `asset_type`, `role`, and at least one identifier). See `validators.py` docstrings for the full rule set.
 - `_TERMINAL_STATUSES` in `validators.py` defines which status values require `end_time` and which trigger the error-object check.
 - **Status mapping:** `run_status_mapping` in `manifest.json` maps vendor-native status strings to Monte Carlo canonical statuses (`ETL_RUN_STATUS_VALUES`). It is required — the scaffold stubs it empty, and the test framework fails if it's missing or empty. `task_run_status_mapping` is optional; when absent, task-run validation falls back to `run_status_mapping`.

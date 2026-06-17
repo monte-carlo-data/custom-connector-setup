@@ -415,7 +415,7 @@ Common nested dict structures (all optional):
 
 | Structure | Keys | Used in |
 | --- | --- | --- |
-| group | `source_id` (req), `name`, `group_type`, `schedule`, `attributes` | `EtlAsset` — identifies the workspace/project |
+| group | `source_id` (req), `name`, `group_type`, `schedule`, `attributes` | `EtlAsset` — identifies the workspace/project; `EtlRunEvent` — which group a run belongs to (see below) |
 | task | `task_source_id` (req), `name` (req), `task_type`, `description`, `inputs`, `outputs` | `EtlAsset` tasks list |
 | error | `message`, `code`, `failure_type` | `EtlRunEvent` — required when status is failed/error |
 | schedule | `kind`, `cron_expression`, `interval_seconds`, `event_trigger` | `EtlAsset`, `EtlGroup` |
@@ -424,6 +424,8 @@ Common nested dict structures (all optional):
 | tag | `key`, `value` | `EtlAsset` properties |
 
 Omit `None` values and empty lists from returned dicts — the agent expects sparse dicts with only populated fields.
+
+**`group` on a run (optional).** When the same job exists in multiple groups under one container (e.g. the same mapping in both a `dev` and a `prod` workspace), a run belongs to just one of those groups. Set the same nested `group` dict used on `EtlAsset` (`source_id` required; `name`, `group_type`, etc. optional) on the run event to say which one. Omit it and Monte Carlo picks the group automatically, so a job that lives in a single group needs nothing. Supply the group's `source_id`; Monte Carlo resolves the rest — connectors never supply an internal group id.
 
 ### Lineage via inputs/outputs
 
