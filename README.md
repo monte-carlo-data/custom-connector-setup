@@ -504,6 +504,8 @@ Recognized tag keys (each accepts the listed aliases; uppercase variants of the 
 
 When multiple connections of the same integration type exist (e.g. two custom ETL, ADF, or Airflow connections with overlapping job names), add a tag naming the connection so Monte Carlo resolves the right one — `mcd_resource_id` (the connection's resource UUID) for custom ETL, `mc_integration_name` for ADF, `airflow_env` for Airflow.
 
+> **Note:** the `mcd_resource_id` resource UUID is assigned by Monte Carlo when the integration is registered — you won't have it until you've finished building the agent image, registering it, and adding the integration. It's only needed for disambiguation, so skip it until then (and omit it entirely if the job's `source_id` is unique across your connections).
+
 Query tagging complements `inputs`/`outputs`: asset refs describe what the vendor API knows statically, while tags capture lineage from SQL the API can't see. Use both where appropriate.
 
 ### Manifest format
