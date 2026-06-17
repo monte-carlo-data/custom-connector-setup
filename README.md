@@ -471,14 +471,16 @@ Lineage is optional — if your ETL tool doesn't expose which tables a job reads
 
 When a connector can't determine lineage from the vendor API — for example, a pipeline executes free-form SQL (script activities, stored procedures, dynamic queries) — Monte Carlo also supports **tagging the SQL queries themselves with pipeline identifiers**. Monte Carlo ingests the tags through its standard query-log collection on the monitored warehouse and matches them back to the ETL pipeline, creating table ↔ pipeline lineage edges without any connector involvement.
 
-The tag is a JSON comment embedded in the query (or a native query tag where the warehouse strips comments, e.g. Snowflake's `QUERY_TAG`):
+The tag is a JSON comment embedded in the query (or a native query tag where the warehouse strips comments, e.g. Snowflake's `QUERY_TAG`). For a **custom ETL connector** (this repo), tag the SQL with the same `source_id`s your connector reports — `mcd_job_id` carries the asset's `job_source_id` and `mcd_task_id` carries a task's `task_source_id`:
 
 ```sql
--- {"adf_pipeline_name": "my-pipeline", "adf_activity_name": "my-activity"}
+-- {"mcd_job_id": "my-pipeline", "mcd_task_id": "my-task"}
 INSERT INTO PUBLIC.MY_TABLE ...;
 ```
 
-This works for **all Monte Carlo ETL integrations** (including custom ETL connectors) — only the tag keys differ per integration. Requirements: the warehouse running the SQL is monitored by Monte Carlo (query logs enabled), and the ETL connection is registered. Vendor-specific docs with warehouse-specific syntax:
+Monte Carlo resolves those `source_id`s to the job/task your connector ingested and attaches the table ↔ pipeline edges to the same nodes — no `inputs`/`outputs` and no extra connector code required. `mcd_task_id` is optional but requires `mcd_job_id` (a task is resolved relative to its job).
+
+This works for **all Monte Carlo ETL integrations** — only the tag keys differ per integration. Requirements: the warehouse running the SQL is monitored by Monte Carlo (query logs enabled), and the ETL connection is registered. Vendor-specific docs with warehouse-specific syntax:
 
 - [Azure Data Factory in lineage](https://docs.getmontecarlo.com/docs/adf-in-lineage)
 - [Airflow in lineage](https://docs.getmontecarlo.com/docs/airflow-in-lineage)
@@ -487,6 +489,9 @@ Recognized tag keys (each accepts the listed aliases; uppercase variants of the 
 
 | Integration | Identifier | Accepted tag keys |
 | --- | --- | --- |
+| Custom ETL (and other unified integrations) | Job | `mcd_job_id` — the asset's `job_source_id` |
+| Custom ETL | Task | `mcd_task_id` — a task's `task_source_id` (requires `mcd_job_id`) |
+| Custom ETL | Connection | `mcd_resource_id` — the registered ETL connection's resource UUID (disambiguation only) |
 | Airflow | DAG | `dag_id` (recommended), `dag`, `dag_name`, `airflow_dag`, `airflow_dag_id` |
 | Airflow | Task | `task_id` (recommended), `task`, `task_name`, `airflow_task`, `airflow_task_id` |
 | ADF | Pipeline | `adf_pipeline_name` |
@@ -497,7 +502,9 @@ Recognized tag keys (each accepts the listed aliases; uppercase variants of the 
 | dbt | Target | `dbt_target`, `dbt_target_name`, `target_name` |
 | dbt Cloud | Job / Run | `dbt_cloud_job_id`, `dbt_cloud_run_id` |
 
-When multiple connections of the same integration type exist (e.g. two ADF or Airflow connections with overlapping pipeline names), add a tag naming the connection — `mc_integration_name` for ADF, `airflow_env` for Airflow — so Monte Carlo resolves the right one.
+When multiple connections of the same integration type exist (e.g. two custom ETL, ADF, or Airflow connections with overlapping job names), add a tag naming the connection so Monte Carlo resolves the right one — `mcd_resource_id` (the connection's resource UUID) for custom ETL, `mc_integration_name` for ADF, `airflow_env` for Airflow.
+
+> **Note:** the `mcd_resource_id` resource UUID is assigned by Monte Carlo when the integration is registered — you won't have it until you've finished building the agent image, registering it, and adding the integration. It's only needed for disambiguation, so skip it until then (and omit it entirely if the job's `source_id` is unique across your connections).
 
 Query tagging complements `inputs`/`outputs`: asset refs describe what the vendor API knows statically, while tags capture lineage from SQL the API can't see. Use both where appropriate.
 
