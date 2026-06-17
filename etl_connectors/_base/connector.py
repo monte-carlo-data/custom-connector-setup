@@ -177,7 +177,24 @@ class Connector:
 
         Common optional fields include ``start_time``, ``end_time``,
         ``trigger``, ``error``, ``task_runs``, ``run_url``,
-        ``inputs``, ``outputs``.
+        ``inputs``, ``outputs``, ``group``.
+
+        **Per-placement runs (optional):** ``group`` is a nested dict in the
+        same shape as ``EtlAsset.group`` (``source_id`` required; ``name``,
+        ``group_type``, etc. optional). Supplying it attributes a run to a
+        specific placement (group-instance) — needed when one job lives in
+        multiple groups under one container. Omit it and Monte Carlo resolves
+        the placement automatically (single-placement jobs need nothing). Pass
+        the group's ``source_id``; the backend mints the internal group id
+        from it (connectors never supply that id themselves)::
+
+            {
+                "job_source_id": "pipeline-123",
+                "run_source_id": "run-456",
+                "status": "success",
+                "event_time": "2024-01-01T00:05:00Z",
+                "group": {"source_id": "prod-workspace", "name": "Prod"},
+            }
 
         **Runtime lineage (optional):** ``inputs`` and ``outputs`` follow
         the same asset-ref format as ``fetch_metadata`` but represent what

@@ -415,7 +415,7 @@ Common nested dict structures (all optional):
 
 | Structure | Keys | Used in |
 | --- | --- | --- |
-| group | `source_id` (req), `name`, `group_type`, `schedule`, `attributes` | `EtlAsset` — identifies the workspace/project |
+| group | `source_id` (req), `name`, `group_type`, `schedule`, `attributes` | `EtlAsset` — identifies the workspace/project; `EtlRunEvent` — pins a run to a placement (see below) |
 | task | `task_source_id` (req), `name` (req), `task_type`, `description`, `inputs`, `outputs` | `EtlAsset` tasks list |
 | error | `message`, `code`, `failure_type` | `EtlRunEvent` — required when status is failed/error |
 | schedule | `kind`, `cron_expression`, `interval_seconds`, `event_trigger` | `EtlAsset`, `EtlGroup` |
@@ -424,6 +424,8 @@ Common nested dict structures (all optional):
 | tag | `key`, `value` | `EtlAsset` properties |
 
 Omit `None` values and empty lists from returned dicts — the agent expects sparse dicts with only populated fields.
+
+**Per-placement runs (optional `group` on `EtlRunEvent`).** A run event may carry the same nested `group` dict used on `EtlAsset` (`source_id` required; `name`, `group_type`, etc. optional). It attributes the run to a specific placement (group-instance) — needed when one logical job lives in multiple groups under one container (e.g. the same mapping placed in both a `dev` and a `prod` workspace). Omit it and Monte Carlo resolves the placement automatically, so single-placement jobs need nothing. Supply the group's `source_id`; Monte Carlo mints the internal group id from it — connectors never supply that id themselves.
 
 ### Lineage via inputs/outputs
 

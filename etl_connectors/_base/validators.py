@@ -138,6 +138,7 @@ def validate_run_events(
     - event_time is valid ISO 8601
     - start_time is valid ISO 8601 when present
     - end_time is valid ISO 8601 when present
+    - group.source_id is present when group is provided
     - Terminal statuses require end_time
     - failed/error statuses require an error object
     - inputs/outputs asset refs have valid asset_type, role, and identifier
@@ -180,6 +181,15 @@ def validate_run_events(
         # job_source_id must be present and non-empty
         if not event.get("job_source_id"):
             errors.append(ValidationError("job_source_id", "job_source_id is required", index))
+
+        # group: if present, must be a dict with source_id (mirrors EtlAsset.group).
+        # Attributes a run to a specific placement (group-instance).
+        group = event.get("group")
+        if group is not None:
+            if not isinstance(group, dict):
+                errors.append(ValidationError("group", "group must be a dict", index))
+            elif not group.get("source_id"):
+                errors.append(ValidationError("group.source_id", "group.source_id is required when group is provided", index))
 
         # start_time: validate format if present
         start_time = event.get("start_time")

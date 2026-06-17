@@ -3,6 +3,8 @@ Jinja2==3.1.6
 dataclasses-json==0.6.7
 # pycarlo is Monte Carlo's SDK — the ETL models were introduced in 0.12.400.
 # 0.12.473 adds nested group/tasks on EtlAsset, EtlGroup, EtlTask models.
+# 0.12.514 adds the optional nested group (EtlGroup) on EtlRunEvent, attributing
+# a run to a specific placement (group-instance).
 # Using >= (not pinned) because the agent image may ship any newer version and
 # connectors must remain compatible.
-pycarlo>=0.12.473
+pycarlo>=0.12.514
