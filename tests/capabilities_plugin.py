@@ -27,15 +27,64 @@ ALL_CAPABILITIES = [
     "supports_field_lineage",
 ]
 
+# ETL optional features tracked via @pytest.mark.etl_capability markers.
+# Grouped by category — prefix determines the display group.
+ALL_ETL_CAPABILITIES = [
+    # Metadata features
+    "metadata_group",
+    "metadata_tasks",
+    "metadata_inputs",
+    "metadata_outputs",
+    "metadata_schedule",
+    "metadata_owner",
+    "metadata_tags",
+    # Run details features
+    "run_timing",
+    "run_error",
+    "run_task_runs",
+    "run_inputs",
+    "run_outputs",
+    "run_group",
+    "run_webhook_mode",
+    # Manifest features
+    "manifest_run_status_mapping",
+    "manifest_task_status_mapping",
+    "manifest_credentials_schema",
+]
+
+# Human-readable labels for ETL capability names.
+_ETL_CAPABILITY_LABELS = {
+    "metadata_group": "Group (workspace/project)",
+    "metadata_tasks": "Tasks (sub-job breakdown)",
+    "metadata_inputs": "Inputs (static lineage)",
+    "metadata_outputs": "Outputs (static lineage)",
+    "metadata_schedule": "Schedule",
+    "metadata_owner": "Owner",
+    "metadata_tags": "Tags / properties",
+    "run_timing": "Start/end time",
+    "run_error": "Error details on failures",
+    "run_task_runs": "Task runs",
+    "run_inputs": "Inputs (runtime lineage)",
+    "run_outputs": "Outputs (runtime lineage)",
+    "run_group": "Group on runs",
+    "run_webhook_mode": "Webhook mode (run_ids)",
+    "manifest_run_status_mapping": "Run status mapping",
+    "manifest_task_status_mapping": "Task-level status mapping",
+    "manifest_credentials_schema": "Credentials schema",
+}
+
 
 def pytest_configure(config):
-    # In ETL mode, capabilities tracking is not applicable
     if getattr(config, "_connector_type", None) == "etl":
         if config.getoption("--export", default=False):
             raise pytest.UsageError(
                 "--export is not supported for ETL connectors"
             )
-        config._capabilities_results = {"templates": {}, "capabilities": {}}
+        config._capabilities_results = {
+            "templates": {},
+            "capabilities": {},
+            "etl_capabilities": {},
+        }
         return
 
     if config.getoption("--export", default=False) and config.getoption("-m", default=""):
@@ -46,6 +95,7 @@ def pytest_configure(config):
     config._capabilities_results = {
         "templates": {},
         "capabilities": {},
+        "etl_capabilities": {},
     }
 
 
@@ -75,6 +125,14 @@ def pytest_runtest_makereport(item, call):
                 results["capabilities"].setdefault(cap_name, False)
             else:
                 results["capabilities"][cap_name] = False
+
+    # Collect ETL capability markers
+    for marker in item.iter_markers("etl_capability"):
+        for cap_name in marker.args:
+            if call.excinfo is None:
+                results["etl_capabilities"].setdefault(cap_name, True)
+            else:
+                results["etl_capabilities"].setdefault(cap_name, False)
 
 
 # Mapping from template method name (without _template suffix) to the set of
@@ -374,3 +432,47 @@ def pytest_sessionfinish(session, exitstatus):
         filepath = os.path.join(export_path, f"{template_name}.j2")
         with open(filepath, "w") as f:
             f.write(template_string)
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Print ETL capability summary after test results."""
+    if getattr(config, "_connector_type", None) != "etl":
+        return
+
+    results = getattr(config, "_capabilities_results", {})
+    etl_caps = results.get("etl_capabilities", {})
+    if not etl_caps:
+        return
+
+    # Fill defaults for capabilities whose tests did not run
+    for cap in ALL_ETL_CAPABILITIES:
+        etl_caps.setdefault(cap, None)
+
+    tw = terminalreporter._tw
+
+    connector_name = getattr(config, "_connector_name", "unknown")
+    tw.sep("=", f"ETL Capability Summary -- {connector_name}")
+
+    categories = [
+        ("Metadata Features", [c for c in ALL_ETL_CAPABILITIES if c.startswith("metadata_")]),
+        ("Run Details Features", [c for c in ALL_ETL_CAPABILITIES if c.startswith("run_")]),
+        ("Manifest Features", [c for c in ALL_ETL_CAPABILITIES if c.startswith("manifest_")]),
+    ]
+
+    for category, caps in categories:
+        tw.line(f"\n  {category}:")
+        for cap in caps:
+            status = etl_caps.get(cap)
+            label = _ETL_CAPABILITY_LABELS.get(cap, cap)
+            dots = "." * (42 - len(label))
+            if status is True:
+                tw.line(f"    {label} {dots} YES", green=True)
+            elif status is False:
+                tw.line(f"    {label} {dots}  - ", yellow=True)
+            else:
+                tw.line(f"    {label} {dots}  ? ")
+
+    supported = sum(1 for v in etl_caps.values() if v is True)
+    total = len(ALL_ETL_CAPABILITIES)
+    tw.line(f"\n  {supported}/{total} optional features implemented")
+    tw.sep("=")

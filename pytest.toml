@@ -12,4 +12,5 @@ markers = [
     "etl_connection: ETL connector connection tests",
     "etl_metadata: ETL metadata collection tests",
     "etl_run_details: ETL run details collection tests",
+    "etl_capability: ETL optional feature capability tests",
 ]

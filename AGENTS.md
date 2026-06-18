@@ -85,6 +85,8 @@ CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 CONNECTOR=<name> docker compose run --rm test -m etl_connection,etl_metadata,etl_run_details
 ```
 
+Each test group includes **capability tests** that probe optional features (groups, tasks, lineage, schedule, error details, webhook mode, etc.). Features absent from the returned data show as `xfail`. After the tests, an **ETL Capability Summary** prints showing which features are implemented — review it to identify opportunities to enrich the connector.
+
 ### Combined Agent Images
 
 To ship a DW connector and an ETL connector in a single agent image:

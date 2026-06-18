@@ -546,6 +546,21 @@ CONNECTOR=<name> docker compose run --rm test -m etl_metadata
 CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 ```
 
+Each test group also runs **capability tests** that check for optional features (groups, tasks, lineage, schedule, error details, etc.). Features that aren't present in the returned data show as `xfail` rather than failures. After the tests finish, a summary table prints which features your connector implements:
+
+```
+=================== ETL Capability Summary -- coalesce ====================
+
+  Metadata Features:
+    Group (workspace/project) ............. YES
+    Tasks (sub-job breakdown) ............. YES
+    Inputs (static lineage) ...............  -
+    ...
+
+  8/17 optional features implemented
+===========================================================================
+```
+
 ### Webhook-Triggered Run Collection
 
 By default, Monte Carlo polls your ETL connector every 60 minutes, calling `fetch_run_details` in **polling mode** (`lookback` set to 60 minutes) to collect all recent runs. This catches failures within that window, but it means a failed run could take up to an hour to appear in Monte Carlo.
@@ -620,6 +635,7 @@ custom-connector-setup/
     test_etl_connection.py                # ETL connection test
     test_etl_metadata.py                  # ETL metadata test
     test_etl_run_details.py               # ETL run details test
+    test_etl_capabilities.py              # Per-feature capability tests (xfail when absent)
   .claude/
     skills/                               # Claude Code automation skills
       create-connector/SKILL.md           # DW + ETL scaffolding

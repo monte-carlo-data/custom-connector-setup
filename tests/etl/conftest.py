@@ -80,3 +80,15 @@ def lookback() -> timedelta:
     """Default lookback interval for ETL fetch calls."""
     hours = int(os.environ.get("ETL_TEST_LOOKBACK_HOURS", 7 * 24))
     return timedelta(hours=hours)
+
+
+@pytest.fixture(scope="session")
+def etl_metadata_data(etl_connector):
+    """Cached metadata from fetch_metadata — shared across tests."""
+    return etl_connector.fetch_metadata(limit=100, offset=0)
+
+
+@pytest.fixture(scope="session")
+def etl_run_events_data(etl_connector, lookback):
+    """Cached run events from fetch_run_details (polling mode) — shared across tests."""
+    return etl_connector.fetch_run_details(lookback=lookback, limit=100, offset=0)

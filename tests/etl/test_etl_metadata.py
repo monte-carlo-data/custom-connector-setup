@@ -8,9 +8,9 @@ from etl_connectors._base.validators import validate_metadata_events
 
 
 @pytest.mark.etl_metadata
-def test_fetch_metadata(etl_connector):
+def test_fetch_metadata(etl_metadata_data):
     """fetch_metadata must return a non-empty list of valid dicts."""
-    assets = etl_connector.fetch_metadata(limit=100, offset=0)
+    assets = etl_metadata_data
 
     assert len(assets) > 0, (
         "No metadata returned. Ensure the test environment has recent ETL activity."

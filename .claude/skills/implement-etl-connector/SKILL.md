@@ -278,12 +278,25 @@ This runs two tests:
 
 Fix and re-test.
 
-## Step 11: Report and suggest next step
+## Step 11: Review the capability summary
+
+After the tests pass, the test framework prints an **ETL Capability Summary** showing which
+features your connector implements. Review it with the user and call out any features marked
+` - ` that the vendor API could support. The summary covers:
+
+- **Metadata features** — group, tasks, inputs/outputs (lineage), schedule, owner, tags
+- **Run details features** — timing, error details, task runs, runtime lineage, group, webhook mode
+- **Manifest features** — run status mapping, task-level status mapping, credentials schema
+
+Features marked ` - ` are optional — the connector works without them, but implementing them
+enables richer observability in Monte Carlo.
+
+## Step 12: Report and suggest next step
 
 Print a summary of what was implemented:
 - Which methods were implemented
 - How many assets/runs the test discovered
-- Any fields left unpopulated (with reasons)
+- Highlight the capability summary results — which features are implemented and which are not
 
 Then suggest:
 

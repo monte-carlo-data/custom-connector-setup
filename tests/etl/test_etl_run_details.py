@@ -9,10 +9,10 @@ from etl_connectors._base.validators import validate_run_events
 
 @pytest.mark.etl_run_details
 def test_fetch_run_details_polling(
-    etl_connector, lookback, run_status_mapping, task_run_status_mapping
+    etl_run_events_data, run_status_mapping, task_run_status_mapping
 ):
     """fetch_run_details in polling mode must return valid run event dicts."""
-    run_events = etl_connector.fetch_run_details(lookback=lookback, limit=100, offset=0)
+    run_events = etl_run_events_data
 
     assert len(run_events) > 0, (
         "No run events returned in polling mode. "
@@ -37,11 +37,11 @@ def test_fetch_run_details_polling(
 
 @pytest.mark.etl_run_details
 def test_fetch_run_details_by_id(
-    etl_connector, lookback, run_status_mapping, task_run_status_mapping
+    etl_connector, etl_run_events_data, run_status_mapping, task_run_status_mapping
 ):
     """fetch_run_details in webhook mode must return events for specific run IDs."""
-    # First discover some run IDs via polling
-    run_events = etl_connector.fetch_run_details(lookback=lookback, limit=10, offset=0)
+    # Derive run IDs from cached polling results
+    run_events = etl_run_events_data
     if len(run_events) == 0:
         pytest.skip("No runs available to test webhook mode")
 
