@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime
 from typing import List
 
 
@@ -19,9 +19,9 @@ class Connector:
     - **fetch_run_details** returns run execution data. It operates in two
       modes:
 
-      1. **Polling mode** (``lookback`` provided, no ``run_ids``): fetch all
-         runs within the time window. Used by the agent on a schedule to
-         discover recent activity.
+      1. **Polling mode** (``window_start``/``window_end`` provided, no
+         ``run_ids``): fetch all runs within the fixed time window. Used by
+         the agent on a schedule to discover recent activity.
       2. **Webhook mode** (``run_ids`` provided): fetch details for specific
          runs by ID. Used when a webhook notifies Monte Carlo about a run
          (e.g. a failure), and we need error details, task-level breakdown,
@@ -144,7 +144,8 @@ class Connector:
     def fetch_run_details(
         self,
         run_ids: List[str] | None = None,
-        lookback: timedelta | None = None,
+        window_start: datetime | None = None,
+        window_end: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> List[dict]:
@@ -158,12 +159,17 @@ class Connector:
         (typically a failure) and we need error details, task-level
         breakdown, etc.
 
-        **Polling mode** — when ``run_ids`` is *not* provided, use
-        ``lookback`` to compute ``since = now - lookback`` and return all
-        runs updated within that window. ``limit`` and ``offset`` control
-        pagination.
+        **Polling mode** — when ``run_ids`` is *not* provided, return all
+        runs that fall within the fixed ``[window_start, window_end)`` window
+        (closed lower bound, open upper bound). The caller pins this window
+        once and passes the *same* bounds unchanged across every paginated
+        call, so pages never skip or duplicate runs — do not derive the
+        window from ``now()`` yourself. ``window_start`` and ``window_end``
+        are timezone-aware ``datetime`` objects. ``limit`` and ``offset``
+        control pagination.
 
-        At least one of ``run_ids`` or ``lookback`` must be provided.
+        Provide ``run_ids`` (webhook mode) or both ``window_start`` and
+        ``window_end`` (polling mode).
 
         Each dict in the returned list should conform to the ``EtlRunEvent``
         schema defined in ``pycarlo.features.ingestion.etl``. Required
@@ -204,9 +210,13 @@ class Connector:
 
         Args:
             run_ids: Vendor-native run identifiers to fetch. When provided,
-                     ``lookback`` is ignored.
-            lookback: Time interval to look back from now. Required when
-                      ``run_ids`` is not provided.
+                     the time window is ignored.
+            window_start: Inclusive lower bound of the run-collection window
+                          (timezone-aware). Required when ``run_ids`` is not
+                          provided.
+            window_end: Exclusive upper bound of the run-collection window
+                        (timezone-aware). Required when ``run_ids`` is not
+                        provided.
             limit: Maximum number of run events to return (polling mode).
             offset: Number of run events to skip (polling mode).
 
@@ -214,18 +224,20 @@ class Connector:
             List of dicts, each representing a run event.
 
         Raises:
-            ValueError: If neither ``run_ids`` nor ``lookback`` is provided.
+            ValueError: If ``run_ids`` is not provided and the window bounds
+                are incomplete.
         """
-        if run_ids is None and lookback is None:
+        if run_ids is None and (window_start is None or window_end is None):
             raise ValueError(
-                "At least one of run_ids or lookback must be provided"
+                "Provide run_ids (webhook mode) or both window_start and "
+                "window_end (polling mode)"
             )
 
         # TODO: query your vendor API and return run event dicts, e.g.:
         #
-        # Polling mode:
-        #   since = datetime.now(timezone.utc) - lookback
-        #   runs = self.client.list_runs(updated_after=since)
+        # Polling mode — filter to the fixed [window_start, window_end) window:
+        #   runs = self.client.list_runs(updated_after=window_start)
+        #   runs = [r for r in runs if window_start <= r.updated_at < window_end]
         #   return [
         #       {
         #           "job_source_id": r.pipeline_id,

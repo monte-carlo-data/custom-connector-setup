@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -76,10 +76,16 @@ def task_run_status_mapping(etl_manifest, run_status_mapping) -> dict[str, str] 
 
 
 @pytest.fixture(scope="session")
-def lookback() -> timedelta:
-    """Default lookback interval for ETL fetch calls."""
-    hours = int(os.environ.get("ETL_TEST_LOOKBACK_HOURS", 7 * 24))
-    return timedelta(hours=hours)
+def window_end() -> datetime:
+    """Upper bound (exclusive) of the run-collection window for ETL fetch calls."""
+    return datetime.now(timezone.utc)
+
+
+@pytest.fixture(scope="session")
+def window_start(window_end) -> datetime:
+    """Lower bound (inclusive) of the run-collection window for ETL fetch calls."""
+    hours = int(os.environ.get("ETL_TEST_WINDOW_HOURS", 7 * 24))
+    return window_end - timedelta(hours=hours)
 
 
 @pytest.fixture(scope="session")
@@ -89,6 +95,8 @@ def etl_metadata_data(etl_connector):
 
 
 @pytest.fixture(scope="session")
-def etl_run_events_data(etl_connector, lookback):
+def etl_run_events_data(etl_connector, window_start, window_end):
     """Cached run events from fetch_run_details (polling mode) — shared across tests."""
-    return etl_connector.fetch_run_details(lookback=lookback, limit=100, offset=0)
+    return etl_connector.fetch_run_details(
+        window_start=window_start, window_end=window_end, limit=100, offset=0
+    )
