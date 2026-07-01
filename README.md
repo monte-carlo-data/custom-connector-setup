@@ -392,14 +392,14 @@ class Connector:
     def setup_connection(self): ...          # optional — initialize API client using self.credentials
     def close_connection(self): ...          # optional — clean up sessions
     def fetch_metadata(self, limit, offset) -> list[dict]: ...                            # required
-    def fetch_run_details(self, run_ids?, lookback?, limit, offset) -> list[dict]: ...    # required
+    def fetch_run_details(self, run_ids?, window_start?, window_end?, limit, offset) -> list[dict]: ...    # required
 ```
 
 The agent sets `self.credentials` (a dict from `credentials.json`'s `connect_args`) as an attribute before calling any methods — no `__init__` needed. `setup_connection` and `close_connection` are lifecycle hooks for managing API clients or sessions. The two required methods do all the work:
 
 - `fetch_metadata(limit, offset)` — returns dicts describing jobs/tasks (pipelines, workflows, DAGs). Each dict must have `job_source_id` and `name`. This is structural metadata only — no run history. `limit` and `offset` support pagination.
-- `fetch_run_details(run_ids?, lookback?, limit, offset)` — returns dicts with status, timing, errors, and task-level details. Each dict must have `job_source_id`, `run_source_id`, `status`, and `event_time`. Operates in two modes:
-  - **Polling mode** (`lookback` provided, no `run_ids`): fetch all runs updated within the time window. Used by the agent on a schedule to discover recent activity. `limit`/`offset` paginate results.
+- `fetch_run_details(run_ids?, window_start?, window_end?, limit, offset)` — returns dicts with status, timing, errors, and task-level details. Each dict must have `job_source_id`, `run_source_id`, `status`, and `event_time`. Operates in two modes:
+  - **Polling mode** (`window_start`/`window_end` provided, no `run_ids`): fetch all runs that fall within the fixed `[window_start, window_end)` window (closed lower bound, open upper bound). Both bounds are timezone-aware `datetime` objects. The agent pins this window once and passes the same bounds unchanged across every paginated call, so pages never skip or duplicate runs — don't derive the window from `now()`. `limit`/`offset` paginate results.
   - **Webhook mode** (`run_ids` provided): fetch details for specific runs by ID, regardless of time window. Used when a webhook notifies Monte Carlo about a run (e.g. a failure) and we need error details and task-level breakdown.
 
 ### Dict schema reference
@@ -563,7 +563,7 @@ Each test group also runs **capability tests** that check for optional features 
 
 ### Webhook-Triggered Run Collection
 
-By default, Monte Carlo polls your ETL connector every 60 minutes, calling `fetch_run_details` in **polling mode** (`lookback` set to 60 minutes) to collect all recent runs. This catches failures within that window, but it means a failed run could take up to an hour to appear in Monte Carlo.
+By default, Monte Carlo polls your ETL connector every 60 minutes, calling `fetch_run_details` in **polling mode** (with `window_start`/`window_end` bounding a ~60-minute window) to collect all recent runs. This catches failures within that window, but it means a failed run could take up to an hour to appear in Monte Carlo.
 
 For faster failure detection, you can configure your ETL tool to POST to a webhook that triggers an immediate run collection. When you register the connection in Monte Carlo, you receive:
 

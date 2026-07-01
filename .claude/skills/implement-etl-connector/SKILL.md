@@ -135,21 +135,22 @@ Recommended keys:
 Parameters:
 - `limit` and `offset` support pagination — return at most `limit` assets starting from `offset`.
 
-### `fetch_run_details(self, run_ids=None, lookback=None, limit=100, offset=0) -> list[dict]`
+### `fetch_run_details(self, run_ids=None, window_start=None, window_end=None, limit=100, offset=0) -> list[dict]`
 
 Return a list of dicts following the `EtlRunEvent` schema in `pycarlo.features.ingestion.etl`. This method operates in **two modes**:
 
-**Polling mode** (`lookback` provided, no `run_ids`): Fetch all runs updated within the time window. The agent calls this on a schedule to discover recent activity. Compute `since = datetime.now(timezone.utc) - lookback` and return runs newer than that. `limit` and `offset` paginate results.
+**Polling mode** (`window_start`/`window_end` provided, no `run_ids`): Fetch all runs that fall within the fixed `[window_start, window_end)` window — closed lower bound, open upper bound. Both bounds are timezone-aware `datetime` objects. The agent pins this window once and passes the same bounds unchanged across every paginated call, so pages never skip or duplicate runs — filter against the bounds you're given; **do not** derive the window from `now()`. `limit` and `offset` paginate results.
 
 **Webhook mode** (`run_ids` provided): Fetch details for specific runs by ID, regardless of time window. This path is used when a webhook notifies Monte Carlo about a particular run (e.g. a failure) and we need error details, task-level breakdown, etc.
 
-At least one of `run_ids` or `lookback` must be provided — the template includes a `ValueError` guard. When `run_ids` is provided, `lookback` is ignored.
+Provide `run_ids` (webhook mode) or both `window_start` and `window_end` (polling mode) — the template includes a `ValueError` guard. When `run_ids` is provided, the window is ignored.
 
 ```python
 def fetch_run_details(
     self,
     run_ids: list[str] | None = None,
-    lookback: timedelta | None = None,
+    window_start: datetime | None = None,
+    window_end: datetime | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict]:
@@ -262,7 +263,7 @@ CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 
 This runs two tests:
 
-1. **Polling mode** — calls `fetch_run_details(lookback=..., limit=100, offset=0)` and validates:
+1. **Polling mode** — calls `fetch_run_details(window_start=..., window_end=..., limit=100, offset=0)` and validates:
    - Returns a non-empty list of dicts
    - Each dict has the required keys (`job_source_id`, `run_source_id`, `status`, `event_time`)
    - All dicts pass `validate_run_events()` — ISO 8601 timestamps, terminal statuses have `end_time`, failed/error statuses have `error` dicts
