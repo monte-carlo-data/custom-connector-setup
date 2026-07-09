@@ -456,7 +456,7 @@ def main():
 
         # Run docker build
         result = subprocess.run(
-            ["docker", "build", "--platform", args.docker_platform, "-t", tag, "."],
+            ["docker", "build", "--pull", "--platform", args.docker_platform, "-t", tag, "."],
             cwd=tmp_dir,
             check=False,
         )
