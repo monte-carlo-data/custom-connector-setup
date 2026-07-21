@@ -46,6 +46,8 @@ Note: If `connectors/<name>/Dockerfile.extra` exists with system dependency inst
 
 If any are missing, stop and tell the user to run `/create-connector <name> --etl` first.
 
+Before building an ETL image, the connector's job/task/group mapping should have been inspected and approved via `/validate-etl-connector <name>` (the gate after implementation). If the user hasn't run it, suggest doing so first — the unit tests confirm well-formed output but not a correct mapping.
+
 ETL connectors do not require an export step — the `manifest.json` in `etl_connectors/<name>/` is the single source of truth (status mappings are authored there directly). Skip Steps 2–4 and go directly to Step 5.
 
 ## Step 2: Check for existing export

@@ -301,4 +301,4 @@ Print a summary of what was implemented:
 
 Then suggest:
 
-> ETL connector `<name>` is implemented and all tests pass. Next step: run `/build-agent-image <name>` to build the deployable Docker image.
+> ETL connector `<name>` is implemented and all tests pass. Next step: run `/validate-etl-connector <name>` to inspect how a real job maps into Monte Carlo's model (job name, task hierarchy, group, optional extras) before building the image.
