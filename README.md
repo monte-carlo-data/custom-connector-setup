@@ -371,13 +371,22 @@ ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M
    CONNECTOR=<name> docker compose run --rm test -m etl_connection
    ```
 
-5. **Build:**
+5. **Validate the mapping:** Inspect how one real job maps into Monte Carlo's model — job name, task hierarchy, group, and optional extras (owner, trigger, run URL) — using the connector's own terminology, before building the image. The unit tests confirm well-formed output; this confirms the *right* vendor concepts were mapped.
+
+   ```bash
+   CONNECTOR=<name> docker compose run --rm --entrypoint python test \
+     scripts/validate_etl_connector.py --job-id <job_source_id>
+   ```
+
+   Omit `--job-id` to list discovered jobs and be prompted (needs an interactive terminal). `--limit N` sets how many recent runs to show (default 5); the run window is the last 7 days, overridable via `ETL_VALIDATE_WINDOW_HOURS` (falls back to `ETL_TEST_WINDOW_HOURS`). Output may contain live vendor data — secret-looking values in run URLs/errors are masked, but don't paste it into shared logs unreviewed.
+
+6. **Build:**
 
    ```bash
    python scripts/generate_agent_image.py --etl-connection <name>
    ```
 
-6. **Deploy, register, and connect:**
+7. **Deploy, register, and connect:**
 
    Push the image to your container registry and follow the Monte Carlo documentation to deploy the agent, register it, and add the connection:
 
@@ -544,6 +553,11 @@ CONNECTOR=<name> docker compose run --rm test -m etl_metadata
 
 # Run details test — validates fetch_run_details returns well-formed dicts
 CONNECTOR=<name> docker compose run --rm test -m etl_run_details
+
+# Mapping inspection — collect one job's asset + recent runs and print how they
+# map into Monte Carlo's model (post-implementation gate, not a pytest run).
+CONNECTOR=<name> docker compose run --rm --entrypoint python test \
+  scripts/validate_etl_connector.py --job-id <job_source_id>
 ```
 
 Each test group also runs **capability tests** that check for optional features (groups, tasks, lineage, schedule, error details, etc.). Features that aren't present in the returned data show as `xfail` rather than failures. After the tests finish, a summary table prints which features your connector implements:

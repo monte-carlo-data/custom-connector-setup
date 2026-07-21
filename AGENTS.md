@@ -65,7 +65,8 @@ The ETL workflow has its own Claude Code skills:
 | ---- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | 1    | `/create-connector <name> --etl`                                                                | Scaffold ETL connector with prompts for terminology and optional icon URL   |
 | 2    | `/implement-etl-connector <name>`                                                               | Research vendor API, implement connector methods, verify with tests |
-| 3    | `/build-agent-image <name>`                                                                     | Build deployable agent image (auto-detects connector type)    |
+| 3    | `/validate-etl-connector <name>`                                                                | Collect one job's asset + recent runs and inspect the mapping (job/task/group, terminology) before building |
+| 4    | `/build-agent-image <name>`                                                                     | Build deployable agent image (auto-detects connector type)    |
 
 Each skill file (`.claude/skills/*/SKILL.md`) contains detailed step-by-step instructions.
 
@@ -83,6 +84,11 @@ CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 
 # All ETL tests
 CONNECTOR=<name> docker compose run --rm test -m etl_connection,etl_metadata,etl_run_details
+
+# Inspect one job's mapping (asset + recent runs) — post-implementation gate.
+# Not a pytest run, so override the entrypoint. Omit --job-id to list jobs and be prompted.
+CONNECTOR=<name> docker compose run --rm --entrypoint python test \
+  scripts/validate_etl_connector.py --job-id <job_source_id>
 ```
 
 Each test group includes **capability tests** that probe optional features (groups, tasks, lineage, schedule, error details, webhook mode, etc.). Features absent from the returned data show as `xfail`. After the tests, an **ETL Capability Summary** prints showing which features are implemented — review it to identify opportunities to enrich the connector.
