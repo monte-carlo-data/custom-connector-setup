@@ -9,10 +9,13 @@ unit-tested locally without a live vendor connection. The script owns the I/O:
 paginated ``fetch_metadata``/``fetch_run_details`` calls, prompting, printing.
 
 Design notes:
-- The connector contract (``EtlAsset``/``EtlRunEvent`` dicts) is displayed
-  **unmodified** — we never rewrite schema keys. Integration-specific terminology
-  is surfaced only via section headers and a legend, so the output stays honest
-  about the real schema the ingestion pipeline sees.
+- The display **relabels** the concept keys of the connector contract
+  (``EtlAsset``/``EtlRunEvent`` dicts) using the integration's own terminology
+  from ``manifest.json`` — e.g. ``job_source_id`` → ``pipeline_source_id``,
+  ``tasks`` → ``components``, ``group`` → ``project`` — so a connector author
+  reads the mapping in their vendor's vocabulary. This is a display-only
+  transform; schema validation (:func:`collect_validation_warnings`) always runs
+  on the original canonical dicts.
 - ``run_url`` / ``error.message`` (and similar free-text fields) are connector-
   supplied and can carry secrets (presigned URLs, tokens in stack traces). They
   are passed through :func:`redact_sensitive` before display, since this output
@@ -37,13 +40,7 @@ DEFAULT_PAGE_SIZE = 100
 # page size this is 100k items; the caller should surface if it is ever hit.
 DEFAULT_MAX_PAGES = 1000
 
-# The manifest ``terminology`` block uses singular keys; each maps to a distinct
-# surface of the canonical schema. Order controls legend rendering.
-_TERM_SURFACES = (
-    ("job", "job_source_id + name"),
-    ("group", "group.source_id + group.name"),
-    ("task", "tasks[].task_source_id + .name"),
-)
+# Generic fallbacks when the manifest omits a terminology label for a concept.
 _TERM_DEFAULTS = {"job": "Job", "group": "Group", "task": "Task"}
 
 # Keys whose string values are free-form/connector-supplied and may embed secrets.
@@ -139,16 +136,39 @@ def _label(terminology: dict | None, key: str) -> str:
     return label if label else _TERM_DEFAULTS[key]
 
 
-def terminology_legend(terminology: dict | None) -> list[str]:
-    """Legend lines mapping each vendor term to its canonical schema surface.
+def _slug(label: str) -> str:
+    """Turn a vendor label into a JSON-key-friendly token (``"Data Pipeline"`` → ``data_pipeline``)."""
+    return label.strip().lower().replace(" ", "_")
 
-    Uses vendor labels when the manifest supplies them, generic defaults otherwise.
-    Always renders all three surfaces so the reader sees the full mapping.
+
+def build_keymap(terminology: dict | None) -> dict:
+    """Map canonical concept keys to vendor-labelled keys from the manifest.
+
+    Only the job/group/task *concept* keys are relabelled; leaf identifiers that
+    aren't part of the terminology (``run_source_id``, a group's inner
+    ``source_id``, ``name``, ``status``, timestamps, ...) are left untouched. When
+    a concept has no manifest label, its default slug yields the original key, so
+    the mapping is a no-op for that concept.
     """
-    lines = ["Terminology (this integration → Monte Carlo schema):"]
-    for key, surface in _TERM_SURFACES:
-        lines.append(f"  {_label(terminology, key)} = {key} → {surface}")
-    return lines
+    job = _slug(_label(terminology, "job"))
+    group = _slug(_label(terminology, "group"))
+    task = _slug(_label(terminology, "task"))
+    return {
+        "job_source_id": f"{job}_source_id",
+        "group": group,
+        "tasks": f"{task}s",
+        "task_source_id": f"{task}_source_id",
+        "task_runs": f"{task}_runs",
+    }
+
+
+def _relabel_keys(obj, keymap: dict):
+    """Recursively copy ``obj``, renaming any dict key found in ``keymap``."""
+    if isinstance(obj, dict):
+        return {keymap.get(k, k): _relabel_keys(v, keymap) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_relabel_keys(item, keymap) for item in obj]
+    return obj
 
 
 def _dump(obj) -> str:
@@ -158,18 +178,18 @@ def _dump(obj) -> str:
 def format_for_display(asset: dict, runs: list[dict], terminology: dict | None) -> str:
     """Render the job's asset and recent runs for terminal inspection.
 
-    Canonical JSON is shown unmodified (after secret redaction); vendor terminology
-    appears only in the section headers and legend.
+    Concept keys are relabelled to the connector's terminology (display only);
+    secret-looking values are redacted. No canonical-schema legend — the vendor
+    terms are the keys.
     """
+    keymap = build_keymap(terminology)
     job_label = _label(terminology, key="job")
-    sections: list[str] = []
-    sections.append("\n".join(terminology_legend(terminology)))
-    sections.append(
-        f"=== {job_label} (job_source_id={asset.get('job_source_id')!r}) ===\n{_dump(asset)}"
-    )
+    sections = [
+        f"=== {job_label}: {asset.get('name')} ===\n{_dump(_relabel_keys(asset, keymap))}"
+    ]
     if runs:
         header = f"=== {len(runs)} most recent {job_label} run(s) ==="
-        sections.append(f"{header}\n{_dump(runs)}")
+        sections.append(f"{header}\n{_dump(_relabel_keys(runs, keymap))}")
     else:
         sections.append(
             f"=== {job_label} runs ===\n(no runs found in the collection window)"

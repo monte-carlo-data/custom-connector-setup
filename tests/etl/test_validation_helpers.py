@@ -8,13 +8,13 @@ Pure-logic tests — no connector, no credentials, no network. Run locally with:
 from __future__ import annotations
 
 from etl_connectors._base.validation import (
+    build_keymap,
     collect_validation_warnings,
     find_asset,
     format_for_display,
     paginate,
     recent_runs_for_job,
     redact_sensitive,
-    terminology_legend,
 )
 
 TERMINOLOGY = {"group": "Project", "job": "Pipeline", "task": "Component"}
@@ -183,38 +183,45 @@ def test_redact_non_string_passthrough():
     assert redact_sensitive(None) is None
 
 
-# --- terminology_legend ---------------------------------------------------
+# --- build_keymap ---------------------------------------------------------
 
 
-def test_legend_uses_vendor_labels_and_maps_task_to_tasks_surface():
-    lines = terminology_legend(TERMINOLOGY)
-    text = "\n".join(lines)
-    assert "Pipeline = job" in text
-    assert "Project = group" in text
-    # Singular manifest key `task` maps to the plural `tasks[]` schema surface.
-    assert "Component = task → tasks[].task_source_id + .name" in text
+def test_keymap_uses_vendor_labels():
+    km = build_keymap(TERMINOLOGY)
+    assert km["job_source_id"] == "pipeline_source_id"
+    assert km["group"] == "project"
+    assert km["tasks"] == "components"
+    assert km["task_source_id"] == "component_source_id"
+    assert km["task_runs"] == "component_runs"
 
 
-def test_legend_falls_back_to_defaults_when_missing_or_partial():
-    partial = terminology_legend({"job": "Pipeline"})
-    text = "\n".join(partial)
-    assert "Pipeline = job" in text
-    assert "Group = group" in text  # default used for the absent key
-    assert "Task = task" in text
+def test_keymap_falls_back_to_canonical_when_missing_or_partial():
+    # No terminology at all → every mapping is a no-op (keys unchanged).
+    none_km = build_keymap(None)
+    assert none_km["job_source_id"] == "job_source_id"
+    assert none_km["group"] == "group"
+    assert none_km["tasks"] == "tasks"
 
-    none_text = "\n".join(terminology_legend(None))
-    assert "Job = job" in none_text
-    assert "Group = group" in none_text
-    assert "Task = task" in none_text
+    # Partial: job labelled, group/task fall back to canonical.
+    partial = build_keymap({"job": "Pipeline"})
+    assert partial["job_source_id"] == "pipeline_source_id"
+    assert partial["group"] == "group"
+    assert partial["tasks"] == "tasks"
+
+
+def test_slug_handles_multiword_labels():
+    km = build_keymap({"job": "Data Pipeline"})
+    assert km["job_source_id"] == "data_pipeline_source_id"
 
 
 # --- format_for_display ---------------------------------------------------
 
 
-def test_format_shows_vendor_headers_canonical_keys_and_redacts():
+def test_format_relabels_keys_drops_legend_and_redacts():
     asset = {
         "job_source_id": "pipe-1",
         "name": "Daily Load",
+        "group": {"source_id": "g1", "name": "My Project"},
         "tasks": [{"task_source_id": "t1", "name": "Extract"}],
     }
     runs = [
@@ -224,16 +231,39 @@ def test_format_shows_vendor_headers_canonical_keys_and_redacts():
             "status": "SUCCESS",
             "event_time": "2026-07-20T10:00:00Z",
             "run_url": "https://vendor.com/r/9?token=leakme",
+            "task_runs": [{"task_source_id": "t1", "run_source_id": "tr-1"}],
         }
     ]
     out = format_for_display(asset, runs, TERMINOLOGY)
-    # Vendor label in the header, but canonical schema keys are NOT rewritten.
-    assert "Pipeline" in out
-    assert "job_source_id" in out
-    assert "task_source_id" in out
+
+    # Header uses the vendor job label + the job's name.
+    assert "=== Pipeline: Daily Load ===" in out
+    # Concept keys are relabelled to vendor terminology.
+    assert "pipeline_source_id" in out
+    assert "component_source_id" in out
+    assert '"components"' in out
+    assert '"project"' in out
+    assert "component_runs" in out
+    # Canonical concept keys are gone.
+    assert "job_source_id" not in out
+    assert "task_source_id" not in out
+    assert '"tasks"' not in out
+    assert '"group"' not in out
+    # Leaf identifiers outside the terminology are untouched.
+    assert "run_source_id" in out
+    assert '"source_id"' in out  # group's inner source_id stays
+    # No legend.
+    assert "Terminology" not in out
     # Secret in run_url is redacted.
     assert "leakme" not in out
     assert "<redacted>" in out
+
+
+def test_format_falls_back_to_canonical_keys_without_terminology():
+    asset = {"job_source_id": "pipe-1", "name": "Daily Load", "tasks": []}
+    out = format_for_display(asset, [], None)
+    assert "job_source_id" in out  # unchanged when no terminology provided
+    assert "=== Job: Daily Load ===" in out
 
 
 def test_format_notes_absent_runs():

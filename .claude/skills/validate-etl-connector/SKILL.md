@@ -64,9 +64,11 @@ Exit codes: `0` success, `1` requested job not found, `2` load/usage error.
 
 ## Step 4: Inspect the output with the user
 
-The output leads with a **terminology legend** mapping the connector's terms to the canonical
-schema, then the job's `EtlAsset`, then its recent `EtlRunEvent`s (canonical JSON — keys are
-never rewritten). Walk through it using the vendor's terms and confirm:
+The output shows the job's asset then its recent runs, with the JSON **keys relabelled to the
+connector's own terminology** (from `manifest.json` — e.g. `job_source_id` → `pipeline_source_id`,
+`tasks` → `components`, `group` → `project`), so it reads in the vendor's vocabulary. This is a
+display-only relabel — the underlying schema is unchanged, and the unit-test validators still
+check the canonical dicts. Walk through it and confirm:
 
 - **Job name** looks right — a human-readable name, not an internal identifier.
 - **Tasks** (the vendor's term, e.g. Components/Nodes/Steps) are the right sub-units, and the
