@@ -371,14 +371,14 @@ ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M
    CONNECTOR=<name> docker compose run --rm test -m etl_connection
    ```
 
-5. **Validate the mapping:** Inspect how one real job maps into Monte Carlo's model — job name, task hierarchy, group, and optional extras (owner, trigger, run URL) — using the connector's own terminology, before building the image. The unit tests confirm well-formed output; this confirms the *right* vendor concepts were mapped.
+5. **Inspect the output:** Print one asset and one recent run as JSON so you can eyeball how the connector maps the vendor's data into Monte Carlo's model — job name, tasks, group, and optional extras — before building the image. The unit tests confirm the output is *well-formed*; this shows the actual shape.
 
    ```bash
    CONNECTOR=<name> docker compose run --rm --entrypoint python test \
      scripts/validate_etl_connector.py
    ```
 
-   It auto-selects the job with the most recent run in the window (so you always inspect a job that actually ran), falling back to the first discovered job if none ran. `--limit N` sets how many recent runs to show (default 5); the run window is the last 7 days, overridable via `ETL_VALIDATE_WINDOW_HOURS` (falls back to `ETL_TEST_WINDOW_HOURS`).
+   It calls `fetch_metadata` (limit 1) and `fetch_run_details` (last 1 hour, limit 1) and prints both.
 
 6. **Build:**
 

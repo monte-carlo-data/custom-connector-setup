@@ -1,28 +1,18 @@
 #!/usr/bin/env python3
-"""Interactive setup-validation for an ETL connector.
+"""Fetch one asset and one recent run from an ETL connector and print them as JSON.
 
-Runs *after* a connector's ``connector.py`` is implemented and *before* the
-agent image is built. Auto-selects one job — the one with the most recent run in
-the collection window — and prints how its asset and recent runs map into Monte
-Carlo's ETL model, using the connector's own terminology, so a human (or AI) can
-confirm the mapping looks right before shipping. Picking the most-recently-run job
-means the inspection always lands on a job with real runs to look at, rather than
-an arbitrary (often idle) first-listed one.
-
-This does not replace the pytest suite; it's an inspect-and-approve gate.
-
-Usage (inside the Docker test image, which has the connector's vendor deps):
+Run after implementing `connector.py`, before building the agent image, so a
+human (or AI) can eyeball how the connector maps the vendor's data into Monte
+Carlo's ETL model.
 
     CONNECTOR=<name> docker compose run --rm --entrypoint python test \\
         scripts/validate_etl_connector.py
-
-Exit codes: 0 success (including a connector whose jobs have no recent runs),
-1 connector returned no jobs, 2 load/usage error.
 """
 
 from __future__ import annotations
 
-import argparse
+import importlib
+import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -31,145 +21,38 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from etl_connectors._base.loader import (  # noqa: E402
-    ConnectorLoadError,
-    build_connector,
-    load_manifest,
-)
-from etl_connectors._base.validation import (  # noqa: E402
-    choose_job,
-    collect_validation_warnings,
-    format_for_display,
-    paginate,
-    recent_runs_for_job,
-)
 
-DEFAULT_RUN_LIMIT = 5
-DEFAULT_WINDOW_HOURS = 7 * 24
-ETL_CONNECTORS_DIR = os.path.join(REPO_ROOT, "etl_connectors")
+def _dump(label, obj):
+    print(f"\n=== {label} ===")
+    print(json.dumps(obj, indent=2, sort_keys=True, default=str))
 
 
-def _window_hours() -> int:
-    """Run-collection window, mirroring the test harness's knob.
+def main():
+    name = os.environ.get("CONNECTOR") or (sys.argv[1] if len(sys.argv) > 1 else None)
+    if not name:
+        sys.exit("Set CONNECTOR=<name> (or pass it as the first argument).")
 
-    ``ETL_VALIDATE_WINDOW_HOURS`` takes precedence, then ``ETL_TEST_WINDOW_HOURS``
-    (so the two never silently diverge), then the 7-day default.
-    """
-    for var in ("ETL_VALIDATE_WINDOW_HOURS", "ETL_TEST_WINDOW_HOURS"):
-        value = os.environ.get(var)
-        if value:
-            return int(value)
-    return DEFAULT_WINDOW_HOURS
+    creds_path = os.path.join(REPO_ROOT, "etl_connectors", name, "credentials.json")
+    with open(creds_path) as f:
+        credentials = json.load(f).get("connect_args", {})
 
-
-def _resolve_connector_name(explicit: str | None) -> str:
-    """Resolve the ETL connector name from --connector, CONNECTOR, or auto-detect."""
-    name = explicit or os.environ.get("CONNECTOR")
-    if name:
-        return name
-    candidates = []
-    if os.path.isdir(ETL_CONNECTORS_DIR):
-        candidates = [
-            d
-            for d in os.listdir(ETL_CONNECTORS_DIR)
-            if not d.startswith(("_", "."))
-            and os.path.isdir(os.path.join(ETL_CONNECTORS_DIR, d))
-        ]
-    if len(candidates) == 1:
-        return candidates[0]
-    raise SystemExit(
-        "Specify a connector with --connector <name> or CONNECTOR=<name> "
-        f"(found: {', '.join(sorted(candidates)) or 'none'})."
-    )
-
-
-def main(argv: list | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Validate one job's asset + recent runs for an ETL connector."
-    )
-    parser.add_argument(
-        "--connector", help="Connector name (default: $CONNECTOR or sole ETL connector)"
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=DEFAULT_RUN_LIMIT,
-        help=f"Max recent runs to show (default: {DEFAULT_RUN_LIMIT})",
-    )
-    args = parser.parse_args(argv)
-
-    name = _resolve_connector_name(args.connector)
+    connector = importlib.import_module(f"etl_connectors.{name}.connector").Connector()
+    connector.credentials = credentials
+    connector.setup_connection()
     try:
-        manifest = load_manifest(name)
-        connector = build_connector(name)
-    except ConnectorLoadError as e:
-        print(str(e), file=sys.stderr)
-        return 2
-
-    terminology = manifest.get("terminology") or {}
-    job_label = terminology.get("job") or "Job"
-
-    try:
-        assets = paginate(
-            lambda limit, offset: connector.fetch_metadata(limit=limit, offset=offset)
-        )
-        print(
-            f"Collected {len(assets)} {job_label.lower()}(s) from fetch_metadata.",
-            file=sys.stderr,
-        )
-
         window_end = datetime.now(timezone.utc)
-        window_start = window_end - timedelta(hours=_window_hours())
-        run_events = paginate(
-            lambda limit, offset: connector.fetch_run_details(
-                window_start=window_start,
-                window_end=window_end,
-                limit=limit,
-                offset=offset,
-            )
+        window_start = window_end - timedelta(hours=1)
+
+        assets = connector.fetch_metadata(limit=1, offset=0)
+        runs = connector.fetch_run_details(
+            window_start=window_start, window_end=window_end, limit=1, offset=0
         )
 
-        asset, job_id = choose_job(assets, run_events)
-        if asset is None or job_id is None:
-            print(
-                f"fetch_metadata returned no usable {job_label.lower()}s "
-                "(no job_source_id) — nothing to validate.",
-                file=sys.stderr,
-            )
-            return 1
-
-        runs = recent_runs_for_job(run_events, job_id, args.limit)
-        selection = (
-            "most recently run" if runs else "first discovered; no runs in window"
-        )
-        print(
-            f"Inspecting {job_label.lower()} {job_id!r} ({selection}).",
-            file=sys.stderr,
-        )
-
-        print(format_for_display(asset, runs, terminology))
-
-        if not runs:
-            print(
-                f"\nNote: 0 runs for this {job_label.lower()} in the last "
-                f"{_window_hours()}h. Widen with ETL_VALIDATE_WINDOW_HOURS if expected.",
-                file=sys.stderr,
-            )
-
-        warnings = collect_validation_warnings(asset, runs, manifest)
-        if warnings:
-            print("\n" + "=" * 60, file=sys.stderr)
-            print(
-                f"{len(warnings)} schema validation warning(s) — review before approving:",
-                file=sys.stderr,
-            )
-            for w in warnings:
-                print(f"  [{w.event_index}] {w.field}: {w.message}", file=sys.stderr)
-
-        return 0
+        _dump("fetch_metadata — 1 asset", assets[0] if assets else None)
+        _dump("fetch_run_details — 1 run (last 1h)", runs[0] if runs else None)
     finally:
         connector.close_connection()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
