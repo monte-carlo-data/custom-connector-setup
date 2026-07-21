@@ -86,9 +86,9 @@ CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 CONNECTOR=<name> docker compose run --rm test -m etl_connection,etl_metadata,etl_run_details
 
 # Inspect one job's mapping (asset + recent runs) — post-implementation gate.
-# Not a pytest run, so override the entrypoint. Omit --job-id to list jobs and be prompted.
+# Not a pytest run, so override the entrypoint. Auto-selects the most-recently-run job.
 CONNECTOR=<name> docker compose run --rm --entrypoint python test \
-  scripts/validate_etl_connector.py --job-id <job_source_id>
+  scripts/validate_etl_connector.py
 ```
 
 Each test group includes **capability tests** that probe optional features (groups, tasks, lineage, schedule, error details, webhook mode, etc.). Features absent from the returned data show as `xfail`. After the tests, an **ETL Capability Summary** prints showing which features are implemented — review it to identify opportunities to enrich the connector.

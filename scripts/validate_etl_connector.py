@@ -2,22 +2,22 @@
 """Interactive setup-validation for an ETL connector.
 
 Runs *after* a connector's ``connector.py`` is implemented and *before* the
-agent image is built. Collects one job's asset and its most-recent runs from the
-live vendor, then prints how they map into Monte Carlo's ETL model — using the
-connector's own terminology — so a human (or AI) can confirm the mapping looks
-right before shipping.
+agent image is built. Auto-selects one job — the one with the most recent run in
+the collection window — and prints how its asset and recent runs map into Monte
+Carlo's ETL model, using the connector's own terminology, so a human (or AI) can
+confirm the mapping looks right before shipping. Picking the most-recently-run job
+means the inspection always lands on a job with real runs to look at, rather than
+an arbitrary (often idle) first-listed one.
 
 This does not replace the pytest suite; it's an inspect-and-approve gate.
 
 Usage (inside the Docker test image, which has the connector's vendor deps):
 
     CONNECTOR=<name> docker compose run --rm --entrypoint python test \\
-        scripts/validate_etl_connector.py --job-id <job_source_id>
+        scripts/validate_etl_connector.py
 
-Omit ``--job-id`` to list discovered jobs and be prompted (needs a TTY).
-
-Exit codes: 0 success (including an idle job with no recent runs),
-1 requested job not found, 2 load/usage error.
+Exit codes: 0 success (including a connector whose jobs have no recent runs),
+1 connector returned no jobs, 2 load/usage error.
 
 Note: output can contain vendor-supplied data (run URLs, error text). Secret-
 looking values are masked, but don't paste output into shared/CI logs unreviewed.
@@ -40,8 +40,8 @@ from etl_connectors._base.loader import (  # noqa: E402
     load_manifest,
 )
 from etl_connectors._base.validation import (  # noqa: E402
+    choose_job,
     collect_validation_warnings,
-    find_asset,
     format_for_display,
     paginate,
     recent_runs_for_job,
@@ -86,23 +86,12 @@ def _resolve_connector_name(explicit: str | None) -> str:
     )
 
 
-def _prompt_for_job(assets: list, job_label: str) -> str:
-    """List discovered jobs and prompt for one. Requires an interactive TTY."""
-    print(f"\nDiscovered {len(assets)} {job_label.lower()}(s):")
-    for asset in assets:
-        print(f"  {asset.get('job_source_id')}  —  {asset.get('name')}")
-    return input(f"\nEnter the {job_label} job_source_id to validate: ").strip()
-
-
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate one job's asset + recent runs for an ETL connector."
     )
     parser.add_argument(
         "--connector", help="Connector name (default: $CONNECTOR or sole ETL connector)"
-    )
-    parser.add_argument(
-        "--job-id", help="job_source_id to validate (prompted if omitted)"
     )
     parser.add_argument(
         "--limit",
@@ -132,26 +121,6 @@ def main(argv: list | None = None) -> int:
             file=sys.stderr,
         )
 
-        job_id = args.job_id
-        if not job_id:
-            if not sys.stdin.isatty():
-                print(
-                    "No --job-id given and stdin is not a TTY. Re-run with "
-                    "--job-id <job_source_id>.",
-                    file=sys.stderr,
-                )
-                return 2
-            job_id = _prompt_for_job(assets, job_label)
-
-        asset = find_asset(assets, job_id)
-        if asset is None:
-            print(
-                f"No {job_label.lower()} found with job_source_id={job_id!r}. "
-                "Re-run without --job-id to list available ids.",
-                file=sys.stderr,
-            )
-            return 1
-
         window_end = datetime.now(timezone.utc)
         window_start = window_end - timedelta(hours=_window_hours())
         run_events = paginate(
@@ -162,7 +131,24 @@ def main(argv: list | None = None) -> int:
                 offset=offset,
             )
         )
+
+        asset, job_id = choose_job(assets, run_events)
+        if asset is None or job_id is None:
+            print(
+                f"fetch_metadata returned no usable {job_label.lower()}s "
+                "(no job_source_id) — nothing to validate.",
+                file=sys.stderr,
+            )
+            return 1
+
         runs = recent_runs_for_job(run_events, job_id, args.limit)
+        selection = (
+            "most recently run" if runs else "first discovered; no runs in window"
+        )
+        print(
+            f"Inspecting {job_label.lower()} {job_id!r} ({selection}).",
+            file=sys.stderr,
+        )
 
         print(format_for_display(asset, runs, terminology))
 

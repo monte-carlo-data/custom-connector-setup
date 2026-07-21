@@ -1,7 +1,7 @@
 ---
 name: validate-etl-connector
 description: Collect one job's asset + recent runs from an implemented ETL connector and inspect how it maps into Monte Carlo's model before building the agent image
-argument-hint: <connector-name> [--job-id ID]
+argument-hint: <connector-name>
 disable-model-invocation: false
 ---
 
@@ -18,7 +18,7 @@ It does not replace the unit tests — run it after they pass.
 
 ## Arguments
 
-`$ARGUMENTS` contains the ETL connector name (required) and an optional `--job-id ID`.
+`$ARGUMENTS` contains the ETL connector name (required).
 
 **If no connector name is provided:** list the ETL connectors under `etl_connectors/`
 (excluding `_base`) and ask which one. Do not proceed until they respond.
@@ -30,39 +30,28 @@ Confirm the connector is implemented and its unit tests pass:
 - `etl_connectors/<name>/credentials.json` has real vendor credentials
 - The ETL tests pass (`/implement-etl-connector` Step 8–10). If they haven't been run, run them first — there's no point validating output the tests would reject.
 
-## Step 2: Pick a Job ID
+## Step 2: Run the validation script
 
-The script validates **one job**. The Job ID is the connector's own `job_source_id` — the
-value `fetch_metadata()` returns for the pipeline/workflow/DAG you want to inspect (often a
-UUID, a name, or `<workspace>:<pipeline>`).
-
-- **If `--job-id` was provided**, use it.
-- **If you (the AI) implemented `connector.py`**, you know what `job_source_id` is built from —
-  tell the user what to expect and pick a representative one (prefer a job you know has recent
-  runs, ideally one with a failure so error/task-run rendering is exercised).
-- **Otherwise**, run the script *without* `--job-id` — it lists every discovered job (id + name)
-  and prompts for a choice. This is the "how do I find the Job ID" path.
-
-## Step 3: Run the validation script
+The script validates **one job** and picks it automatically — the job with the most recent
+run in the window, so the inspection lands on a job that actually ran (it falls back to the
+first discovered job only when nothing ran). There's no job to choose or look up.
 
 The script must run **inside the Docker test image** (it needs the connector's vendor deps).
 The image entrypoint is `pytest`, so override it with `--entrypoint python`:
 
 ```bash
 CONNECTOR=<name> docker compose run --rm --entrypoint python test \
-  scripts/validate_etl_connector.py --job-id <job_source_id>
+  scripts/validate_etl_connector.py
 ```
 
-- Omit `--job-id` to list jobs and be prompted (needs an interactive terminal — the script
-  fails fast on non-TTY stdin and tells you to pass `--job-id`).
 - `--limit N` controls how many recent runs are shown (default 5).
 - Run window: last 7 days, override with `ETL_VALIDATE_WINDOW_HOURS` (falls back to
-  `ETL_TEST_WINDOW_HOURS`). If a job is idle, the script prints the asset and a "0 runs" note
-  and exits 0 — that's not a failure.
+  `ETL_TEST_WINDOW_HOURS`). If every job is idle, the script prints the first job's asset and
+  a "0 runs" note and exits 0 — that's not a failure.
 
-Exit codes: `0` success, `1` requested job not found, `2` load/usage error.
+Exit codes: `0` success, `1` connector returned no jobs, `2` load/usage error.
 
-## Step 4: Inspect the output with the user
+## Step 3: Inspect the output with the user
 
 The output shows the job's asset then its recent runs, with the JSON **keys relabelled to the
 connector's own terminology** (from `manifest.json` — e.g. `job_source_id` → `pipeline_source_id`,
@@ -81,7 +70,7 @@ check the canonical dicts. Walk through it and confirm:
 Secret-looking values in `run_url`/`error` are masked in the output. Even so, don't paste the
 output into shared or CI logs unreviewed — it contains live vendor data.
 
-## Step 5: Approve or iterate
+## Step 4: Approve or iterate
 
 - **Mapping looks wrong** (wrong identifier as the name, tasks flattened, group misassigned):
   go back to `/implement-etl-connector`, fix `connector.py`, re-run the unit tests, and re-run

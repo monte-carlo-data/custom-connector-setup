@@ -78,12 +78,32 @@ def paginate(
     return items
 
 
-def find_asset(assets: list[dict], job_source_id: str) -> dict | None:
-    """Return the asset whose ``job_source_id`` matches, or ``None`` if absent."""
-    for asset in assets:
-        if asset.get("job_source_id") == job_source_id:
-            return asset
-    return None
+def _run_sort_key(event: dict) -> tuple:
+    """Order runs by ``event_time``; missing/empty times sort last under ``reverse=True``."""
+    return (bool(event.get("event_time")), event.get("event_time") or "")
+
+
+def choose_job(
+    assets: list[dict], run_events: list[dict]
+) -> tuple[dict | None, str | None]:
+    """Pick the single job to inspect, returning ``(asset, job_source_id)``.
+
+    Prefers the job whose most recent run is newest across the whole window, so the
+    inspection always lands on a job that actually ran (an idle first-listed job is a
+    useless thing to show). Falls back to the first asset — by the connector's own
+    ordering — when there are no runs, or when the most-recent runs reference jobs
+    ``fetch_metadata`` didn't return. Returns ``(None, None)`` only when the connector
+    reported no jobs at all.
+    """
+    if not assets:
+        return None, None
+    by_id = {a.get("job_source_id"): a for a in assets}
+    for event in sorted(run_events, key=_run_sort_key, reverse=True):
+        job_id = event.get("job_source_id")
+        if job_id in by_id:
+            return by_id[job_id], job_id
+    first = assets[0]
+    return first, first.get("job_source_id")
 
 
 def recent_runs_for_job(
@@ -95,10 +115,7 @@ def recent_runs_for_job(
     sort last (and never raise), since real vendor data can omit the field.
     """
     matching = [e for e in run_events if e.get("job_source_id") == job_source_id]
-    matching.sort(
-        key=lambda e: (bool(e.get("event_time")), e.get("event_time") or ""),
-        reverse=True,
-    )
+    matching.sort(key=_run_sort_key, reverse=True)
     return matching[:limit]
 
 
