@@ -16,16 +16,11 @@ Design notes:
   reads the mapping in their vendor's vocabulary. This is a display-only
   transform; schema validation (:func:`collect_validation_warnings`) always runs
   on the original canonical dicts.
-- ``run_url`` / ``error.message`` (and similar free-text fields) are connector-
-  supplied and can carry secrets (presigned URLs, tokens in stack traces). They
-  are passed through :func:`redact_sensitive` before display, since this output
-  predictably lands in terminals, CI logs, and AI transcripts.
 """
 
 from __future__ import annotations
 
 import json
-import re
 from typing import Callable
 
 from etl_connectors._base.validators import (
@@ -42,19 +37,6 @@ DEFAULT_MAX_PAGES = 1000
 
 # Generic fallbacks when the manifest omits a terminology label for a concept.
 _TERM_DEFAULTS = {"job": "Job", "group": "Group", "task": "Task"}
-
-# Keys whose string values are free-form/connector-supplied and may embed secrets.
-_REDACT_KEYS = frozenset({"run_url", "url", "message"})
-
-# Query-string params whose names hint at a secret (covers AWS presigned URLs:
-# X-Amz-Signature, X-Amz-Credential, X-Amz-Security-Token).
-_SECRET_QS_RE = re.compile(
-    r"([?&][^=&\s]*(?:token|key|secret|password|signature|sig|credential|auth|access)"
-    r"[^=&\s]*=)[^&\s]+",
-    re.IGNORECASE,
-)
-_BEARER_RE = re.compile(r"(bearer\s+)[A-Za-z0-9._\-]+", re.IGNORECASE)
-_REDACTION = "<redacted>"
 
 
 def paginate(
@@ -119,34 +101,6 @@ def recent_runs_for_job(
     return matching[:limit]
 
 
-def redact_sensitive(value):
-    """Mask secret-looking query-string params and bearer tokens in a string.
-
-    Accepts any value; non-strings are returned unchanged. Redacts only the
-    sensitive *values*, so the surrounding structure (URL host/path, error
-    prose) stays readable.
-    """
-    if not isinstance(value, str):
-        return value
-    redacted = _SECRET_QS_RE.sub(rf"\1{_REDACTION}", value)
-    redacted = _BEARER_RE.sub(rf"\1{_REDACTION}", redacted)
-    return redacted
-
-
-def _redact_deep(obj):
-    """Recursively copy ``obj``, redacting string values under :data:`_REDACT_KEYS`."""
-    if isinstance(obj, dict):
-        return {
-            k: redact_sensitive(v)
-            if k in _REDACT_KEYS and isinstance(v, str)
-            else _redact_deep(v)
-            for k, v in obj.items()
-        }
-    if isinstance(obj, list):
-        return [_redact_deep(item) for item in obj]
-    return obj
-
-
 def _label(terminology: dict | None, key: str) -> str:
     """Vendor label for a terminology key, falling back to the generic default."""
     label = (terminology or {}).get(key)
@@ -189,15 +143,14 @@ def _relabel_keys(obj, keymap: dict):
 
 
 def _dump(obj) -> str:
-    return json.dumps(_redact_deep(obj), indent=2, sort_keys=True, default=str)
+    return json.dumps(obj, indent=2, sort_keys=True, default=str)
 
 
 def format_for_display(asset: dict, runs: list[dict], terminology: dict | None) -> str:
     """Render the job's asset and recent runs for terminal inspection.
 
-    Concept keys are relabelled to the connector's terminology (display only);
-    secret-looking values are redacted. No canonical-schema legend — the vendor
-    terms are the keys.
+    Concept keys are relabelled to the connector's terminology (display only).
+    No canonical-schema legend — the vendor terms are the keys.
     """
     keymap = build_keymap(terminology)
     job_label = _label(terminology, key="job")

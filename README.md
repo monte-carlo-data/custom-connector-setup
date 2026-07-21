@@ -378,7 +378,7 @@ ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M
      scripts/validate_etl_connector.py
    ```
 
-   It auto-selects the job with the most recent run in the window (so you always inspect a job that actually ran), falling back to the first discovered job if none ran. `--limit N` sets how many recent runs to show (default 5); the run window is the last 7 days, overridable via `ETL_VALIDATE_WINDOW_HOURS` (falls back to `ETL_TEST_WINDOW_HOURS`). Output may contain live vendor data — secret-looking values in run URLs/errors are masked, but don't paste it into shared logs unreviewed.
+   It auto-selects the job with the most recent run in the window (so you always inspect a job that actually ran), falling back to the first discovered job if none ran. `--limit N` sets how many recent runs to show (default 5); the run window is the last 7 days, overridable via `ETL_VALIDATE_WINDOW_HOURS` (falls back to `ETL_TEST_WINDOW_HOURS`).
 
 6. **Build:**
 

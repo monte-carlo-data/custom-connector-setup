@@ -67,9 +67,6 @@ check the canonical dicts. Walk through it and confirm:
   schedule, lineage `inputs`/`outputs`.
 - **Schema-validation warnings**, if any, are printed as a banner — resolve them before approving.
 
-Secret-looking values in `run_url`/`error` are masked in the output. Even so, don't paste the
-output into shared or CI logs unreviewed — it contains live vendor data.
-
 ## Step 4: Approve or iterate
 
 - **Mapping looks wrong** (wrong identifier as the name, tasks flattened, group misassigned):

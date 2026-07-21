@@ -18,9 +18,6 @@ Usage (inside the Docker test image, which has the connector's vendor deps):
 
 Exit codes: 0 success (including a connector whose jobs have no recent runs),
 1 connector returned no jobs, 2 load/usage error.
-
-Note: output can contain vendor-supplied data (run URLs, error text). Secret-
-looking values are masked, but don't paste output into shared/CI logs unreviewed.
 """
 
 from __future__ import annotations
