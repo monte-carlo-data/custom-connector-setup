@@ -371,13 +371,22 @@ ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M
    CONNECTOR=<name> docker compose run --rm test -m etl_connection
    ```
 
-5. **Build:**
+5. **Inspect the output:** Print one asset and one recent run as JSON so you can eyeball how the connector maps the vendor's data into Monte Carlo's model — job name, tasks, group, and optional extras — before building the image. The unit tests confirm the output is *well-formed*; this shows the actual shape.
+
+   ```bash
+   CONNECTOR=<name> docker compose run --rm --entrypoint python test \
+     scripts/validate_etl_connector.py
+   ```
+
+   It calls `fetch_metadata` (limit 1) and `fetch_run_details` (last 1 hour, limit 1) and prints both.
+
+6. **Build:**
 
    ```bash
    python scripts/generate_agent_image.py --etl-connection <name>
    ```
 
-6. **Deploy, register, and connect:**
+7. **Deploy, register, and connect:**
 
    Push the image to your container registry and follow the Monte Carlo documentation to deploy the agent, register it, and add the connection:
 
@@ -544,6 +553,12 @@ CONNECTOR=<name> docker compose run --rm test -m etl_metadata
 
 # Run details test — validates fetch_run_details returns well-formed dicts
 CONNECTOR=<name> docker compose run --rm test -m etl_run_details
+
+# Mapping inspection — auto-selects the job with the most recent run and prints
+# how its asset + runs map into Monte Carlo's model (post-implementation gate,
+# not a pytest run).
+CONNECTOR=<name> docker compose run --rm --entrypoint python test \
+  scripts/validate_etl_connector.py
 ```
 
 Each test group also runs **capability tests** that check for optional features (groups, tasks, lineage, schedule, error details, etc.). Features that aren't present in the returned data show as `xfail` rather than failures. After the tests finish, a summary table prints which features your connector implements:

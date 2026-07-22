@@ -65,7 +65,8 @@ The ETL workflow has its own Claude Code skills:
 | ---- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | 1    | `/create-connector <name> --etl`                                                                | Scaffold ETL connector with prompts for terminology and optional icon URL   |
 | 2    | `/implement-etl-connector <name>`                                                               | Research vendor API, implement connector methods, verify with tests |
-| 3    | `/build-agent-image <name>`                                                                     | Build deployable agent image (auto-detects connector type)    |
+| 3    | `/validate-etl-connector <name>`                                                                | Print one asset + one recent run as JSON to inspect the mapping before building |
+| 4    | `/build-agent-image <name>`                                                                     | Build deployable agent image (auto-detects connector type)    |
 
 Each skill file (`.claude/skills/*/SKILL.md`) contains detailed step-by-step instructions.
 
@@ -83,6 +84,11 @@ CONNECTOR=<name> docker compose run --rm test -m etl_run_details
 
 # All ETL tests
 CONNECTOR=<name> docker compose run --rm test -m etl_connection,etl_metadata,etl_run_details
+
+# Inspect output — print one asset + one recent run as JSON (post-implementation gate).
+# Not a pytest run, so override the entrypoint.
+CONNECTOR=<name> docker compose run --rm --entrypoint python test \
+  scripts/validate_etl_connector.py
 ```
 
 Each test group includes **capability tests** that probe optional features (groups, tasks, lineage, schedule, error details, webhook mode, etc.). Features absent from the returned data show as `xfail`. After the tests, an **ETL Capability Summary** prints showing which features are implemented — review it to identify opportunities to enrich the connector.
