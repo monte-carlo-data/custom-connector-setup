@@ -94,6 +94,29 @@ Update `credentials.json` with the keys your connector will need:
 
 The keys in `connect_args` are whatever your `setup_connection()` method reads via `self.credentials`.
 
+## Step 5b: Add a credentials schema (recommended)
+
+Add a `credentials_schema` to `manifest.json` so the agent validates self-hosted credentials at setup time — catching missing fields, wrong types, and typos before they surface at query time. The schema uses [cerberus](https://docs.python-cerberus.org/) format.
+
+**The schema validates the entire `credentials.json` payload, so it must wrap your keys under a top-level `connect_args` dict.** It is *not* a mirror of `self.credentials` — `self.credentials` is the already-unwrapped *contents* of `connect_args`, but validation runs against the whole file. Omitting the `connect_args` wrapper is the most common mistake.
+
+```json
+{
+  "credentials_schema": {
+    "connect_args": {
+      "type": "dict",
+      "required": true,
+      "schema": {
+        "api_key": { "type": "string", "required": true, "empty": false },
+        "base_url": { "type": "string", "required": false }
+      }
+    }
+  }
+}
+```
+
+The inner `schema` keys must match the keys your `setup_connection()` reads via `self.credentials`. Common cerberus rules: `type` (`string`/`integer`/`boolean`/`dict`), `required`, `empty`, `allowed` (enum). If `credentials_schema` is absent or empty (`{}`), no validation is performed.
+
 ## Step 6: Implement the connector
 
 Edit `etl_connectors/<name>/connector.py`. Implement all methods:

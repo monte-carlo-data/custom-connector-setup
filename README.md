@@ -169,7 +169,7 @@ The schema uses [cerberus](https://docs.python-cerberus.org/) format. Add it as 
 }
 ```
 
-The schema should mirror what your `create_connection()` method expects from `self.credentials`. Common cerberus rules:
+The schema validates the entire `credentials.json` payload, so the keys must be wrapped under a top-level `connect_args` dict (as shown above) — it is **not** a mirror of `self.credentials`, which is the already-unwrapped *contents* of `connect_args`. Omitting the `connect_args` wrapper is the most common mistake. The inner `schema` keys should match what your `create_connection()` method reads from `self.credentials`. Common cerberus rules:
 
 | Rule | Example | Meaning |
 |------|---------|---------|
