@@ -226,3 +226,10 @@ def test_manifest_credentials_schema(etl_manifest):
         pytest.xfail(
             "Optional feature: credentials_schema not declared in manifest.json"
         )
+    # The schema validates the whole credentials.json payload, which is wrapped
+    # in connect_args — so a declared schema must nest its keys under it.
+    assert "connect_args" in schema, (
+        "credentials_schema must wrap its keys under a top-level 'connect_args' "
+        "dict — it validates the entire credentials.json payload, not the "
+        "unwrapped self.credentials. See README §5b."
+    )
