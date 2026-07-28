@@ -41,7 +41,8 @@ python scripts/create_connector.py <connector-name> --etl
 
 This is interactive — it prompts for terminology mappings (group/job/task labels) and an optional icon URL. **Before running the script, ask the user** for both:
 
-1. **Terminology** — propose a mapping based on the vendor's terms (e.g., for Coalesce: group=Environment, job=Job, task=Node; for Azure Data Factory: group=Data Factory, job=Pipeline, task=Activity) and let the user confirm or adjust.
+1. **Terminology** — propose a mapping based on the vendor's terms (e.g., for Coalesce: job=Job, task=Node; for Azure Data Factory: job=Pipeline, task=Activity) and let the user confirm or adjust.
+   - `job` and `task` are always required. **`group` is optional** — it only applies when the vendor can host the *same* job in multiple named environments (e.g. Dev and Prod) and you need to tell those instances apart. Most integrations don't have this concept — leave `group` blank unless the vendor clearly does (e.g. Matillion "Environment", a "Workspace" that duplicates jobs). When in doubt, omit it; it can be added to `manifest.json` later.
 2. **Icon URL** — ask if they want a custom icon for the integration (shown in the Monte Carlo UI). Must be a publicly reachable image URL (SVG/PNG). Verify it returns HTTP 200 before using. Skip if they don't want one — it can be added later as the `icon_url` key in `manifest.json` (requires rebuilding the agent image).
 
 Then answer the script's prompts with those values (pipe via stdin if running non-interactively).

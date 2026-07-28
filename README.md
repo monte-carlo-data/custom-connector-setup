@@ -355,6 +355,8 @@ Nothing is installed on your machine — everything runs inside the container.
 
 ETL connectors monitor pipeline orchestration tools (Coalesce, Talend, Control-M, etc.) by returning structured event data. Unlike DW connectors which provide SQL templates, ETL connectors implement two Python methods that return plain dicts. The agent framework handles pushing data to Monte Carlo.
 
+> **Reference implementation.** For a complete, worked ETL connector built on this framework, see the public [Matillion DPC (Maia) example](https://github.com/monte-carlo-data/mcd-public-resources/tree/main/custom_connectors/matillion_maia) in `monte-carlo-data/mcd-public-resources`. It's the best model for how `fetch_metadata` and `fetch_run_details` come together on a real vendor API. (Additional DW/ETL examples live alongside it under [`custom_connectors/`](https://github.com/monte-carlo-data/mcd-public-resources/tree/main/custom_connectors).)
+
 1. **Create:**
 
    ```bash
@@ -534,7 +536,7 @@ Query tagging complements `inputs`/`outputs`: asset refs describe what the vendo
 }
 ```
 
-The `terminology` field maps Monte Carlo's generic concepts (group, job, task) to the terms your orchestrator uses. The optional `credentials_schema` field enables server-side credential validation — see [step 5b](#5b-add-a-credentials-schema-optional) for details.
+The `terminology` field maps Monte Carlo's generic concepts to the terms your orchestrator uses. `job` and `task` are always expected; **`group` is optional** and many connectors omit it (the `powerbi_dataflow` and most single-environment tools have no group). Only include `group` when the vendor can host the same job in multiple named environments (e.g. Dev and Prod) that a run needs to be attributed to — see the [`group` on a run](#dict-schema-reference) note above. The optional `credentials_schema` field enables server-side credential validation — see [step 5b](#5b-add-a-credentials-schema-optional) for details.
 
 `icon_url` is optional — a publicly reachable image URL (SVG/PNG) used as the integration's icon in the Monte Carlo UI. The scaffold script prompts for it; it can also be added to `manifest.json` later (rebuild and redeploy the agent image for the change to take effect).
 

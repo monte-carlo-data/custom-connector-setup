@@ -114,7 +114,12 @@ def _create_etl_connector(name, repo_root):
     # Interactive terminology prompts
     print(f"Creating ETL connector '{name}'...")
     print()
-    group_label = _prompt("What does this tool call a group of jobs?", "Group")
+    print(
+        "'Group' is optional — only set it if the tool can host the same job in\n"
+        "multiple named environments (e.g. Dev and Prod) and you need to tell them\n"
+        "apart. Leave it blank if the tool has no such concept."
+    )
+    group_label = _prompt("What does this tool call a group of jobs? (optional, blank to skip)", "")
     job_label = _prompt("What does this tool call a job?", "Job")
     task_label = _prompt("What does this tool call a task?", "Task")
     icon_url = _prompt("Icon URL (leave blank to skip)", "")
@@ -140,11 +145,13 @@ def _create_etl_connector(name, repo_root):
         "connection_name": name,
         "asset_class": "etl",
         "terminology": {
-            "group": group_label,
             "job": job_label,
             "task": task_label,
         },
     }
+    # group is optional — only include it when the vendor has a group concept
+    if group_label:
+        manifest["terminology"]["group"] = group_label
     manifest["run_status_mapping"] = {}
     manifest["credentials_schema"] = {}
     if icon_url:
@@ -182,7 +189,8 @@ def _create_etl_connector(name, repo_root):
 
     print(f"Created ETL connector '{name}' at etl_connectors/{name}/")
     print(f"  connection_type: {connection_type}")
-    print(f"  terminology: group={group_label}, job={job_label}, task={task_label}")
+    group_summary = group_label if group_label else "(none)"
+    print(f"  terminology: group={group_summary}, job={job_label}, task={task_label}")
     print()
     print("Next steps:")
     print(f"  1. Edit etl_connectors/{name}/connector.py      — implement fetch_metadata & fetch_run_details")

@@ -7,6 +7,18 @@ disable-model-invocation: false
 
 # Implement ETL Connector: Research, Implement, and Test
 
+## Reference implementation
+
+This repo does not ship a worked ETL example. Before implementing, **read the public reference
+implementation** — a complete Matillion DPC (Maia) connector built on this same framework:
+
+**https://github.com/monte-carlo-data/mcd-public-resources/tree/main/custom_connectors/matillion_maia**
+
+It shows a real `connector.py` (`fetch_metadata` + `fetch_run_details`, pagination, status
+mapping, task hierarchy, error handling) and a `credentials_example.json`. Use it as the model for
+structure and idioms — adapt it to the vendor you're implementing rather than copying blindly.
+Fetch the raw files with WebFetch if you can't browse the tree.
+
 ## Arguments
 
 `$ARGUMENTS` contains the ETL connector name (required). Example: `coalesce`, `talend`, `control_m`.
@@ -35,11 +47,13 @@ Read `manifest.json` to understand the vendor's terminology mapping:
 
 ```json
 {
-  "terminology": { "group": "Workspace", "job": "Pipeline", "task": "Node" }
+  "terminology": { "job": "Pipeline", "task": "Node", "group": "Workspace" }
 }
 ```
 
-This tells you how Monte Carlo's generic concepts map to the vendor's terms. Use it to guide your API exploration — "groups" map to workspaces (or projects, environments, etc.), "jobs" map to pipelines (or workflows, DAGs, etc.), and "tasks" map to individual nodes (or steps, operators, etc.).
+This tells you how Monte Carlo's generic concepts map to the vendor's terms. Use it to guide your API exploration — "jobs" map to pipelines (or workflows, DAGs, etc.), and "tasks" map to individual nodes (or steps, operators, etc.).
+
+**`group` is optional and often absent.** It only applies when the vendor can host the *same* job in multiple named environments (e.g. Dev and Prod) and a run belongs to one of them. If the manifest has no `group` key, the vendor has no such concept — don't invent one, and don't populate `group` on the assets/runs you return. Only wire up `group` (see Step 6) when the manifest defines it.
 
 ## Step 3: Research the vendor API
 
@@ -143,7 +157,7 @@ Required dict keys per asset:
 - `name` — human-readable job name
 
 Recommended keys:
-- `group` — a dict with `source_id` (required), `name`, `group_type`, `schedule`, `attributes`
+- `group` — **only if the manifest defines a `group` terminology** (see Step 2); most connectors omit it. A dict with `source_id` (required), `name`, `group_type`, `schedule`, `attributes`
 - `tasks` — a list of dicts, each with `task_source_id` (required), `name` (required), `task_type`, `description`, `inputs`, `outputs`, `upstream_task_source_ids`, `triggered_job_source_ids`
 - `description`, `folder`, `job_url`, `is_paused`
 - `schedule` — a dict with `kind` (one of: cron, interval, event, upstream, manual) and optional `cron_expression`, `interval_seconds`, `event_trigger` (dict), etc.

@@ -30,8 +30,9 @@ actually mapped into Monte Carlo's model before shipping.
    It fetches one asset (`fetch_metadata`, limit 1) and one run (`fetch_run_details`, last 1h,
    limit 1) and prints both as JSON.
 3. Read the JSON with the user against the connector's `manifest.json` `terminology`: does the job
-   name look right (not an internal id)? Are the tasks the right sub-units? Is the group sensible?
-   Are the optional extras (owner, trigger, run_url, schedule) populated where the vendor exposes
-   them?
+   name look right (not an internal id)? Are the tasks the right sub-units? If the manifest defines
+   a `group` terminology, is the group sensible? (Most connectors have no `group` — its absence is
+   expected, not a gap.) Are the optional extras (owner, trigger, run_url, schedule) populated where
+   the vendor exposes them?
 4. If it looks wrong, go back to `/implement-etl-connector`. If it looks right, suggest
    `/build-agent-image <name>`.

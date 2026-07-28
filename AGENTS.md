@@ -59,6 +59,10 @@ CONNECTOR=<name> docker compose run --rm test --export
 
 ETL connectors monitor pipeline tools (Coalesce, Talend, etc.) by returning structured dicts with run/metadata events. Each connector is a self-contained `Connector` class (same pattern as DW connectors) and doesn't require SQL templates.
 
+**Reference implementation:** this repo ships no worked ETL example. Study the public [Matillion DPC (Maia) connector](https://github.com/monte-carlo-data/mcd-public-resources/tree/main/custom_connectors/matillion_maia) (in `monte-carlo-data/mcd-public-resources`) for a complete `fetch_metadata`/`fetch_run_details` implementation before writing your own.
+
+**Terminology note:** the manifest maps `job` and `task` (always required) and optionally `group`. `group` only applies when the vendor hosts the same job across multiple named environments (e.g. Dev/Prod); most connectors omit it entirely — do not invent a group where the vendor has none.
+
 The ETL workflow has its own Claude Code skills:
 
 | Step | Skill                                                                                           | What it does                                                  |
