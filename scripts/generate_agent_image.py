@@ -20,10 +20,12 @@ AGENT_TYPE = "generic"
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONNECTORS_DIR = os.path.join(REPO_ROOT, "connectors")
 ETL_CONNECTORS_DIR = os.path.join(REPO_ROOT, "etl_connectors")
+TELEMETRY_CONNECTORS_DIR = os.path.join(REPO_ROOT, "telemetry_connectors")
 OUTPUT_DIR = os.path.join(REPO_ROOT, "output")
 
 REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
 ETL_REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
+TELEMETRY_REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
 
 
 def read_dockerfile_extra(base_dir, name):
@@ -48,14 +50,18 @@ def read_dockerfile_extra(base_dir, name):
 def resolve_connector_dir(name):
     """Return (base_dir, connector_type) for a connector name.
 
-    Checks connectors/<name>/ and etl_connectors/<name>/.
+    Checks connectors/<name>/, etl_connectors/<name>/, and
+    telemetry_connectors/<name>/.
     """
     dw_path = os.path.join(CONNECTORS_DIR, name)
     etl_path = os.path.join(ETL_CONNECTORS_DIR, name)
+    telemetry_path = os.path.join(TELEMETRY_CONNECTORS_DIR, name)
     if os.path.isdir(dw_path):
         return CONNECTORS_DIR, "dw"
     if os.path.isdir(etl_path):
         return ETL_CONNECTORS_DIR, "etl"
+    if os.path.isdir(telemetry_path):
+        return TELEMETRY_CONNECTORS_DIR, "telemetry"
     return None, None
 
 
@@ -116,6 +122,78 @@ def build_etl_context(tmp_dir, connectors):
         shutil.copytree(
             src, dest,
             ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
+        )
+
+
+def discover_telemetry_connectors():
+    """Return telemetry connector names from the telemetry_connectors/ directory."""
+    if not os.path.isdir(TELEMETRY_CONNECTORS_DIR):
+        return []
+    return sorted(
+        name
+        for name in os.listdir(TELEMETRY_CONNECTORS_DIR)
+        if not name.startswith("_")
+        and not name.startswith(".")
+        and os.path.isdir(os.path.join(TELEMETRY_CONNECTORS_DIR, name))
+    )
+
+
+def validate_telemetry_connector(name):
+    """Validate a telemetry connector's artifacts. Returns list of errors."""
+    errors = []
+
+    for filename in TELEMETRY_REQUIRED_SOURCE_FILES:
+        path = os.path.join(TELEMETRY_CONNECTORS_DIR, name, filename)
+        if not os.path.isfile(path):
+            errors.append(f"  - Missing telemetry_connectors/{name}/{filename}")
+
+    manifest_path = os.path.join(TELEMETRY_CONNECTORS_DIR, name, "manifest.json")
+    if os.path.isfile(manifest_path):
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+        connection_type = manifest.get("connection_type", "")
+        if not connection_type.startswith("custom-telemetry-connector-"):
+            errors.append(
+                f"  - manifest.json connection_type must match 'custom-telemetry-connector-*', "
+                f"got '{connection_type}'"
+            )
+        # Capabilities are the contract: Monte Carlo only calls what is advertised,
+        # so a connector advertising nothing can never be invoked.
+        capabilities = manifest.get("capabilities", {})
+        if not isinstance(capabilities, dict):
+            errors.append(
+                f"  - manifest.json 'capabilities' must be a dict, "
+                f"got {type(capabilities).__name__}"
+            )
+        elif not any(
+            capabilities.get(key) for key in ("supports_logs", "supports_telemetry")
+        ):
+            errors.append(
+                "  - manifest.json must advertise at least one capability "
+                "(capabilities.supports_logs or capabilities.supports_telemetry)"
+            )
+        creds_schema = manifest.get("credentials_schema")
+        if creds_schema is not None and not isinstance(creds_schema, dict):
+            errors.append(
+                f"  - manifest.json 'credentials_schema' must be a dict, "
+                f"got {type(creds_schema).__name__}"
+            )
+
+    return errors
+
+
+def build_telemetry_context(tmp_dir, connectors):
+    """Copy telemetry connector artifacts into the temporary build context.
+
+    credentials.json and .env are excluded to keep secrets out of images.
+    """
+    _TELEMETRY_EXCLUDE = {"credentials.json", "credentials.json.example", ".env"}
+    for name in connectors:
+        src = os.path.join(TELEMETRY_CONNECTORS_DIR, name)
+        dest = os.path.join(tmp_dir, "custom-telemetry-connectors", name)
+        shutil.copytree(
+            src, dest,
+            ignore=shutil.ignore_patterns(*_TELEMETRY_EXCLUDE),
         )
 
 
@@ -220,7 +298,9 @@ def check_metric_warnings(name):
     return None
 
 
-def generate_dockerfile(connectors, version, base_image=None, etl_connectors=None):
+def generate_dockerfile(
+    connectors, version, base_image=None, etl_connectors=None, telemetry_connectors=None
+):
     """Generate Dockerfile contents for the custom agent image."""
     from_image = base_image or f"montecarlodata/agent:{version}-{AGENT_TYPE}"
     lines = [f"FROM {from_image}", "", "ENV MCD_CUSTOM_CONNECTORS_ENABLED=true", ""]
@@ -249,6 +329,20 @@ def generate_dockerfile(connectors, version, base_image=None, etl_connectors=Non
         lines.append(f"COPY custom-etl-connectors/{name}/ /opt/custom-etl-connectors/{name}/")
         lines.append(
             f"RUN pip install --no-cache-dir -r /opt/custom-etl-connectors/{name}/requirements.txt"
+        )
+        lines.append("")
+
+    for name in (telemetry_connectors or []):
+        lines.append(f"# Telemetry Connector: {name}")
+        extra_content = read_dockerfile_extra(TELEMETRY_CONNECTORS_DIR, name)
+        if extra_content:
+            lines.append(extra_content)
+        lines.append(
+            f"COPY custom-telemetry-connectors/{name}/ /opt/custom-telemetry-connectors/{name}/"
+        )
+        lines.append(
+            f"RUN pip install --no-cache-dir -r "
+            f"/opt/custom-telemetry-connectors/{name}/requirements.txt"
         )
         lines.append("")
 
@@ -295,7 +389,7 @@ def main():
     parser.add_argument(
         "names",
         nargs="*",
-        help="Connector names to include. Auto-discovers from connectors/ and etl_connectors/ if omitted.",
+        help="Connector names to include. Auto-discovers from connectors/, etl_connectors/, and telemetry_connectors/ if omitted.",
     )
     parser.add_argument(
         "--docker-platform",
@@ -325,23 +419,28 @@ def main():
     if args.names:
         connectors = []
         etl_connectors = []
+        telemetry_connectors = []
         for name in args.names:
             base_dir, connector_type = resolve_connector_dir(name)
             if connector_type == "dw":
                 connectors.append(name)
             elif connector_type == "etl":
                 etl_connectors.append(name)
+            elif connector_type == "telemetry":
+                telemetry_connectors.append(name)
             else:
                 print(
-                    f"Error: '{name}' not found in connectors/ or etl_connectors/.",
+                    f"Error: '{name}' not found in connectors/, etl_connectors/, or "
+                    f"telemetry_connectors/.",
                     file=sys.stderr,
                 )
                 sys.exit(1)
     else:
         connectors = discover_connectors()
         etl_connectors = discover_etl_connectors()
+        telemetry_connectors = discover_telemetry_connectors()
 
-    if not connectors and not etl_connectors:
+    if not connectors and not etl_connectors and not telemetry_connectors:
         print(
             "Error: No connectors found. Run tests and export first, or pass connector names.",
             file=sys.stderr,
@@ -369,11 +468,19 @@ def main():
         if errors:
             all_errors[name] = errors
 
+    # Validate telemetry connectors
+    for name in telemetry_connectors:
+        errors = validate_telemetry_connector(name)
+        if errors:
+            all_errors[name] = errors
+
     if all_errors:
         print("Error: Some connectors are missing required artifacts:\n", file=sys.stderr)
         for name, errors in all_errors.items():
             if name in connector_modes:
                 print(f"  {name} (mode: {connector_modes[name]}):", file=sys.stderr)
+            elif name in telemetry_connectors:
+                print(f"  {name} (telemetry):", file=sys.stderr)
             else:
                 print(f"  {name} (etl):", file=sys.stderr)
             for err in errors:
@@ -424,6 +531,7 @@ def main():
             args.version,
             base_image=args.base_image,
             etl_connectors=etl_connectors,
+            telemetry_connectors=telemetry_connectors,
         )
         dockerfile_path = os.path.join(tmp_dir, "Dockerfile")
         with open(dockerfile_path, "w") as f:
@@ -434,6 +542,8 @@ def main():
             build_context(tmp_dir, connectors)
         if etl_connectors:
             build_etl_context(tmp_dir, etl_connectors)
+        if telemetry_connectors:
+            build_telemetry_context(tmp_dir, telemetry_connectors)
 
         base_image = args.base_image or f"montecarlodata/agent:{args.version}-{AGENT_TYPE}"
 
@@ -443,6 +553,8 @@ def main():
             all_connector_names.extend(connectors)
         if etl_connectors:
             all_connector_names.extend(f"{n} (etl)" for n in etl_connectors)
+        if telemetry_connectors:
+            all_connector_names.extend(f"{n} (telemetry)" for n in telemetry_connectors)
         print(f"Building image '{tag}' with connectors: {', '.join(all_connector_names)}")
         print(f"Base image: {base_image}")
         print(f"Docker platform: {args.docker_platform}")
@@ -452,6 +564,8 @@ def main():
             print(f"  {name}: {mode_label}")
         for name in etl_connectors:
             print(f"  {name}: etl")
+        for name in telemetry_connectors:
+            print(f"  {name}: telemetry")
         print()
 
         # Run docker build
@@ -485,6 +599,11 @@ def main():
         for name in etl_connectors:
             print(f"  {name}")
         print()
+    if telemetry_connectors:
+        print("Telemetry connectors:")
+        for name in telemetry_connectors:
+            print(f"  {name}")
+        print()
     print("Next steps:")
     step = 1
     if connectors:
@@ -492,6 +611,9 @@ def main():
         step += 1
     if etl_connectors:
         print(f"  {step}. Verify ETL connectors: docker run --rm --entrypoint ls {tag} /opt/custom-etl-connectors/")
+        step += 1
+    if telemetry_connectors:
+        print(f"  {step}. Verify telemetry connectors: docker run --rm --entrypoint ls {tag} /opt/custom-telemetry-connectors/")
         step += 1
     print(f"  {step}. Push to your container registry:")
     print(f"     docker tag {tag} <your-registry>/{tag}")
@@ -508,6 +630,10 @@ def main():
             creds_files.append(creds_path)
     for name in etl_connectors:
         creds_path = os.path.join(ETL_CONNECTORS_DIR, name, "credentials.json")
+        if os.path.isfile(creds_path):
+            creds_files.append(creds_path)
+    for name in telemetry_connectors:
+        creds_path = os.path.join(TELEMETRY_CONNECTORS_DIR, name, "credentials.json")
         if os.path.isfile(creds_path):
             creds_files.append(creds_path)
 

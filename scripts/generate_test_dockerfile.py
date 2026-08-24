@@ -40,12 +40,12 @@ def _build_footer():
         "RUN find connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;",
     ]
 
-    has_etl_requirements = bool(
-        glob.glob(os.path.join(REPO_ROOT, "etl_connectors", "*", "requirements.txt"))
-    )
-    if has_etl_requirements:
+    # Guarded with `test -d` so the image still builds in a checkout where one of
+    # these connector kinds isn't present.
+    for directory in ("etl_connectors", "telemetry_connectors"):
         footer_lines.append(
-            "RUN find etl_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;"
+            f"RUN test -d {directory} && find {directory} -name requirements.txt "
+            "-exec pip install --no-cache-dir -r {} \\; || true"
         )
 
     footer_lines.append("")
@@ -62,10 +62,14 @@ def main():
     etl_extras = sorted(
         glob.glob(os.path.join(REPO_ROOT, "etl_connectors", "*", "Dockerfile.extra"))
     )
+    telemetry_extras = sorted(
+        glob.glob(os.path.join(REPO_ROOT, "telemetry_connectors", "*", "Dockerfile.extra"))
+    )
 
     lines = [HEADER.format(agent_type=AGENT_TYPE)]
     included = []
     etl_included = []
+    telemetry_included = []
 
     for path in connector_extras:
         name = os.path.basename(os.path.dirname(path))
@@ -97,6 +101,21 @@ def main():
             lines.append("")
             etl_included.append(name)
 
+    for path in telemetry_extras:
+        name = os.path.basename(os.path.dirname(path))
+        with open(path) as f:
+            content = f.read().strip()
+        # Skip files that contain only comments and whitespace
+        has_instructions = any(
+            line.strip() and not line.strip().startswith("#")
+            for line in content.splitlines()
+        )
+        if content and has_instructions:
+            lines.append(f"# From telemetry_connectors/{name}/Dockerfile.extra")
+            lines.append(content)
+            lines.append("")
+            telemetry_included.append(name)
+
     lines.append(_build_footer())
 
     dockerfile = "\n".join(lines)
@@ -104,7 +123,7 @@ def main():
     with open(DOCKERFILE_PATH, "w") as f:
         f.write(dockerfile)
 
-    all_included = included + etl_included
+    all_included = included + etl_included + telemetry_included
     if all_included:
         print(f"Dockerfile generated with extras from: {', '.join(all_included)}")
     else:
