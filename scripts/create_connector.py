@@ -2,12 +2,14 @@
 """Scaffold a new connector directory.
 
 Usage:
-    python scripts/create_connector.py <name>            # data-warehouse connector
-    python scripts/create_connector.py <name> --etl      # ETL connector
+    python scripts/create_connector.py <name>              # data-warehouse connector
+    python scripts/create_connector.py <name> --etl        # ETL connector
+    python scripts/create_connector.py <name> --telemetry  # telemetry connector
 
 Example:
     python scripts/create_connector.py postgres
     python scripts/create_connector.py coalesce --etl
+    python scripts/create_connector.py datadog --telemetry
 """
 import argparse
 import json
@@ -202,6 +204,116 @@ def _create_etl_connector(name, repo_root):
     print(f"  7. CONNECTOR={name} docker compose run test -m etl_connection")
 
 
+def _create_telemetry_connector(name, repo_root):
+    """Create a telemetry connector scaffold with interactive capability prompts."""
+    telemetry_dir = os.path.join(repo_root, "telemetry_connectors")
+    target_dir = os.path.join(telemetry_dir, name)
+
+    if os.path.exists(target_dir):
+        print(
+            f"Error: telemetry connector '{name}' already exists at {target_dir}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(f"Creating telemetry connector '{name}'...")
+    print()
+    print(
+        "A telemetry connector is invoked on demand during an investigation —\n"
+        "not on a collection schedule. Declare only the capabilities you will\n"
+        "actually implement; Monte Carlo never calls a method you don't advertise."
+    )
+    supports_logs = _prompt("Supports logs? (y/n)", "y").lower().startswith("y")
+    supports_telemetry = _prompt("Supports telemetry? (y/n)", "n").lower().startswith("y")
+    icon_url = _prompt("Icon URL (leave blank to skip)", "")
+    print()
+
+    if not supports_logs and not supports_telemetry:
+        print(
+            "Error: a telemetry connector must support at least one capability.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    base_dir = os.path.join(telemetry_dir, "_base")
+    if not os.path.exists(os.path.join(base_dir, "connector.py")):
+        print(f"Error: base template not found at {base_dir}/connector.py", file=sys.stderr)
+        sys.exit(1)
+
+    os.makedirs(target_dir)
+
+    # Copy base connector.py template
+    shutil.copy2(
+        os.path.join(base_dir, "connector.py"),
+        os.path.join(target_dir, "connector.py"),
+    )
+
+    # Generate manifest.json with unique connector type and declared capabilities
+    connection_type = f"custom-telemetry-connector-{secrets.token_hex(4)[:7]}"
+    manifest = {
+        "connection_type": connection_type,
+        "connection_name": name,
+        "asset_class": "telemetry",
+        "capabilities": {
+            "supports_logs": supports_logs,
+            "supports_telemetry": supports_telemetry,
+        },
+        "credentials_schema": {},
+    }
+    if icon_url:
+        manifest["icon_url"] = icon_url
+    with open(os.path.join(target_dir, "manifest.json"), "w") as f:
+        json.dump(manifest, f, indent=2)
+        f.write("\n")
+
+    # Create credentials.json template (vendor creds only — no MC keys)
+    creds = {
+        "connect_args": {
+            "api_key": "",
+            "api_url": "",
+        }
+    }
+    with open(os.path.join(target_dir, "credentials.json"), "w") as f:
+        json.dump(creds, f, indent=2)
+        f.write("\n")
+
+    # Create empty requirements.txt
+    with open(os.path.join(target_dir, "requirements.txt"), "w") as f:
+        f.write("# Add your vendor API client library here, e.g.:\n# datadog-api-client==2.31.0\n")
+
+    # Create empty Dockerfile.extra for system dependencies
+    with open(os.path.join(target_dir, "Dockerfile.extra"), "w") as f:
+        f.write(
+            "# Add Docker instructions for system dependencies needed by your connector.\n"
+            "#\n"
+            "# After editing, regenerate the test Dockerfile:\n"
+            "#   python scripts/generate_test_dockerfile.py\n"
+        )
+
+    # Regenerate the test Dockerfile to pick up the new connector
+    _regenerate_test_dockerfile(repo_root)
+
+    capabilities = [
+        label
+        for label, enabled in (("logs", supports_logs), ("telemetry", supports_telemetry))
+        if enabled
+    ]
+    methods = " & ".join(f"fetch_{capability}" for capability in capabilities)
+    print(f"Created telemetry connector '{name}' at telemetry_connectors/{name}/")
+    print(f"  connection_type: {connection_type}")
+    print(f"  capabilities: {', '.join(capabilities)}")
+    print()
+    print("Next steps:")
+    print(f"  1. Edit telemetry_connectors/{name}/connector.py      — implement {methods}")
+    print(f"  2. Edit telemetry_connectors/{name}/credentials.json  — add vendor API credentials")
+    print(f"  3. Edit telemetry_connectors/{name}/manifest.json     — add credentials_schema (optional, cerberus format)")
+    print(f"  4. Edit telemetry_connectors/{name}/requirements.txt  — add vendor client library")
+    print(f"  5. Edit telemetry_connectors/{name}/Dockerfile.extra  — add system deps (if needed)")
+    print(f"  6. docker compose build")
+    print(f"  7. CONNECTOR={name} RESOURCE_ID=<vendor-resource-id> docker compose run --rm \\")
+    print(f"       --entrypoint python test scripts/validate_telemetry_connector.py")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Create a new connector scaffold")
     parser.add_argument("name", help="Connector name (e.g. postgres, coalesce)")
@@ -210,13 +322,23 @@ def main():
         action="store_true",
         help="Create an ETL pipeline connector instead of a data-warehouse connector",
     )
+    parser.add_argument(
+        "--telemetry",
+        action="store_true",
+        help="Create a telemetry (runtime logs/telemetry) connector instead of a data-warehouse connector",
+    )
     args = parser.parse_args()
 
     name = args.name.lower().replace(" ", "_").replace("-", "_")
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+    if args.etl and args.telemetry:
+        parser.error("--etl and --telemetry are mutually exclusive")
+
     if args.etl:
         _create_etl_connector(name, repo_root)
+    elif args.telemetry:
+        _create_telemetry_connector(name, repo_root)
     else:
         _create_db_connector(name, repo_root)
 

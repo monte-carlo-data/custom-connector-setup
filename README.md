@@ -1,6 +1,6 @@
 # custom-connector-setup
 
-A toolkit for building custom database connectors and ETL pipeline connectors for Monte Carlo. For database (DW) connectors, you implement base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your connector supports. For ETL connectors, you implement two Python methods that return structured run events and job metadata from your pipeline orchestrator. Both produce a generic agent image that you host, deploy, and then register in Monte Carlo.
+A toolkit for building custom database connectors, ETL pipeline connectors, and telemetry connectors for Monte Carlo. For database (DW) connectors, you implement base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your connector supports. For ETL connectors, you implement two Python methods that return structured run events and job metadata from your pipeline orchestrator. For telemetry connectors, you implement the log and/or telemetry retrieval methods the Troubleshooting Agent calls on demand during an investigation. All three produce a generic agent image that you host, deploy, and then register in Monte Carlo.
 
 Supports multiple connectors side by side so you can build and test several at once.
 
@@ -30,6 +30,8 @@ The repo includes skills that automate the full workflow end-to-end for both DW 
 | 3    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
 
 The only manual step is filling in `credentials.json` when the implementation skill pauses. Everything else — scaffolding, API research, implementation, testing, and image building — is handled by the skills.
+
+**Telemetry connector workflow:** no skills yet — this one is a proof of concept. Follow [Telemetry Connector Quick Start](#telemetry-connector-quick-start) and point your agent at `AGENTS.md` plus the worked example in `telemetry_connectors/datadog/`.
 
 ### Fallback: Other AI agents
 
@@ -602,6 +604,106 @@ The webhook ignores any request body — all parameters are passed as query stri
 
 See the [Monte Carlo documentation](https://docs.getmontecarlo.com/docs/custom-connectors) for full webhook setup details.
 
+## Telemetry Connector Quick Start
+
+> **Status: proof of concept.** This is the custom-agent leg of on-demand runtime log and telemetry retrieval. The Monolith APIs, Data Collector dispatch, and Troubleshooting Agent tooling it plugs into are covered separately; this repo shows what a customer implements.
+
+Telemetry connectors answer a different question from DW and ETL connectors. Those two *collect* on a schedule so Monte Carlo can monitor your data. A telemetry connector *retrieves* on demand: when an investigation needs runtime evidence — the ECS task log that explains why dbt never ran, the memory metric that explains why a Spark job died — Monte Carlo calls your connector synchronously, uses the result as evidence, and never stores it.
+
+```
+Troubleshooting Agent ─┐
+                       ├─▶ Monolith ──▶ resolve telemetry connection for the resource
+Monte Carlo MCP server ┘                └─▶ capability advertised? ──▶ Data Collector
+                                                                        └─▶ your custom agent
+                                                                             └─▶ your connector
+```
+
+Because retrieval is on demand, there is no schedule, no collection window to reason about, and no stored copy of your logs. One call returns one page.
+
+1. **Create:**
+
+   ```bash
+   python scripts/create_connector.py <name> --telemetry
+   ```
+
+   You're asked which capabilities the connector supports. That answer lands in `manifest.json` and is the contract — Monte Carlo only ever calls a method you advertise.
+
+2. **Implement:** Edit `telemetry_connectors/<name>/connector.py` — implement `fetch_logs()` and/or `fetch_telemetry()` for the capabilities you declared.
+
+3. **Add credentials:** Fill in `telemetry_connectors/<name>/credentials.json` with your vendor API credentials only.
+
+4. **Inspect the output:** This stands in for the call Monolith makes during an investigation — one resource, one window, one page — and validates the page shape.
+
+   ```bash
+   CONNECTOR=<name> RESOURCE_ID=<vendor-resource-id> \
+     docker compose run --rm --entrypoint python test \
+     scripts/validate_telemetry_connector.py
+   ```
+
+   Optional environment variables: `WINDOW_HOURS` (default 1), `PAGE_SIZE` (default 10), `SEARCH_REGEX`, `SEVERITY` (comma-separated), `TELEMETRY_NAMES` (comma-separated).
+
+5. **Build:**
+
+   ```bash
+   python scripts/generate_agent_image.py <name>
+   ```
+
+6. **Deploy, register, and connect:** Push the image to your registry, deploy the agent, and register the connection the same way as any other custom connector. Then attach the telemetry connection to the Warehouse or ETL integration that owns the resources you want to investigate — that association is what tells Monte Carlo which connector to reach for when it has a resource in hand.
+
+### Worked example: Datadog
+
+`telemetry_connectors/datadog/` is a complete implementation against a real vendor API — Datadog's Logs Search API for `fetch_logs` and its Metrics Query API for `fetch_telemetry`. Copy `credentials.json.example` to `credentials.json` and fill in your keys to run it.
+
+Two things in it are worth stealing for any source:
+
+- **`log_query_template`** — how a Monte Carlo resource maps onto a vendor query is customer-specific (`@mcd.resource_id`, `@task_arn`, `service:`, ...), so it lives in credentials rather than being hardcoded.
+- **Filter pushdown vs. local filtering** — severity and the resource scope are pushed into the Datadog query; `search_regex` is applied to the returned page because Datadog log search has no regex operator. Push down what the vendor supports and filter the rest yourself, but always honor the filter.
+
+### Connector contract
+
+Both capabilities return one **page** in the same envelope:
+
+```python
+{
+    "items": [...],           # capability-specific records
+    "next_cursor": "..."      # opaque continuation token, or None on the last page
+}
+```
+
+| Method | Arguments | Item shape |
+| ------ | --------- | ---------- |
+| `fetch_logs` | `resource_id`, `start_time`, `end_time`, `search_regex`, `severity`, `page_size`, `cursor`, `idempotency_key` | `timestamp`, `message`, optional `severity` |
+| `fetch_telemetry` | `resource_id`, `start_time`, `end_time`, `names`, `page_size`, `cursor`, `idempotency_key` | `timestamp`, `name`, `value`, optional `attributes` |
+
+Rules that apply to both:
+
+- **Scope to `resource_id`.** It is the vendor-native identifier of the resource under investigation. Monolith resolves it from the telemetry connection, so the connector never guesses which resource to read — and must never return records for one it wasn't asked about.
+- **Timestamps are timezone-aware ISO 8601**, and items are ordered ascending so the agent reads a failure in the order it happened.
+- **`start_time` is inclusive, `end_time` is exclusive.**
+- **`cursor` is opaque to Monte Carlo.** It's handed back to you unchanged, so put whatever your vendor's pagination needs in it. Return `next_cursor: None` on the last page.
+- **`idempotency_key` is stable across retries** of the same logical retrieval. Reads are naturally idempotent, so most connectors just log it for correlation.
+- **An empty page is a valid result.** `{"items": [], "next_cursor": None}` means "queried the source, nothing matched" — don't raise for no results. Raise only when the retrieval genuinely failed.
+
+### Manifest format
+
+```json
+{
+  "connection_type": "custom-telemetry-connector-dd01a2b",
+  "connection_name": "datadog",
+  "asset_class": "telemetry",
+  "capabilities": {
+    "supports_logs": true,
+    "supports_telemetry": true
+  },
+  "credentials_schema": {},
+  "icon_url": "https://example.com/icon.png"
+}
+```
+
+`capabilities` is the routing contract. Monte Carlo never probes for support: it reads the manifest, and a request for a capability you don't advertise is rejected before your agent is ever called. A capability you advertise but don't implement surfaces to the caller as `TELEMETRY_INTEGRATION_UNAVAILABLE`, so declare only what you actually implement. At least one capability is required — the image build fails otherwise.
+
+`credentials_schema` is optional and follows the same [cerberus](https://docs.python-cerberus.org/validation-rules.html) format as DW and ETL connectors.
+
 ## Requirements
 
 - [Docker](https://docs.docker.com/get-docker/)
@@ -630,12 +732,25 @@ custom-connector-setup/
       manifest.json                       # connection_type, name, terminology, credentials_schema
       requirements.txt                    # Vendor client library deps
       Dockerfile.extra                    # System dependencies (optional)
+  telemetry_connectors/
+    _base/                                # Provided — do not edit
+      connector.py                        # Connector template (copied into new connectors)
+      validators.py                       # Page-shape validation for returned dicts
+    datadog/                              # Worked example (Datadog logs + metrics)
+    <your-telemetry-source>/              # Created by you
+      connector.py                        # Your implementation
+      credentials.json                    # Vendor API credentials (gitignored)
+      manifest.json                       # connection_type, name, capabilities, credentials_schema
+      requirements.txt                    # Vendor client library deps
+      Dockerfile.extra                    # System dependencies (optional)
   output/                                 # Auto-generated by --export (gitignored)
     <your-database>/
       manifest.json                       # Test results and supported features
       templates/                          # Passing .j2 templates
   scripts/                                # Provided
     create_connector.py                   # Scaffolding helper (stdlib only)
+    validate_etl_connector.py             # Prints how one asset + run map into Monte Carlo's model
+    validate_telemetry_connector.py       # Fetches and validates one log/telemetry page
     generate_agent_image.py               # Builds deployable custom agent Docker image
     generate_test_dockerfile.py           # Regenerates root Dockerfile from Dockerfile.extra files
   tests/                                  # Provided — do not edit

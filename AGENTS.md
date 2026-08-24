@@ -97,10 +97,47 @@ CONNECTOR=<name> docker compose run --rm --entrypoint python test \
 
 Each test group includes **capability tests** that probe optional features (groups, tasks, lineage, schedule, error details, webhook mode, etc.). Features absent from the returned data show as `xfail`. After the tests, an **ETL Capability Summary** prints showing which features are implemented — review it to identify opportunities to enrich the connector.
 
-### Combined Agent Images
+## Telemetry Connector Workflow
 
-To ship a DW connector and an ETL connector in a single agent image:
+**Status: proof of concept.** Telemetry connectors serve on-demand runtime log and telemetry retrieval for the Troubleshooting Agent. Unlike DW and ETL connectors, they are not on a collection schedule: Monolith resolves the telemetry connection attached to a Warehouse or ETL integration, checks the capability, and invokes the connector synchronously through the Data Collector. The result is returned to the caller and never stored.
+
+**Reference implementation:** `telemetry_connectors/datadog/` — Datadog Logs Search API for `fetch_logs`, Metrics Query API for `fetch_telemetry`. Study it before writing your own.
+
+There are no Claude Code skills for this workflow yet. Steps:
 
 ```bash
-python scripts/generate_agent_image.py <dw-name> <etl-name>
+# 1. Scaffold — prompts for which capabilities the connector supports
+python scripts/create_connector.py <name> --telemetry
+
+# 2. Implement telemetry_connectors/<name>/connector.py, then fill in credentials.json
+
+# 3. Fetch and validate one page — stands in for the call Monolith makes during an
+#    investigation. Not a pytest run, so override the entrypoint.
+CONNECTOR=<name> RESOURCE_ID=<vendor-resource-id> \
+  docker compose run --rm --entrypoint python test \
+  scripts/validate_telemetry_connector.py
+
+# 4. Build
+python scripts/generate_agent_image.py <name>
+```
+
+Optional environment variables for step 3: `WINDOW_HOURS` (default 1), `PAGE_SIZE` (default 10), `SEARCH_REGEX`, `SEVERITY`, `TELEMETRY_NAMES`.
+
+**Contract rules that trip people up:**
+
+- `capabilities.supports_logs` / `capabilities.supports_telemetry` in `manifest.json` are the routing contract. Monte Carlo only calls what is advertised — declare only what you actually implement. At least one is required or the image build fails.
+- Every query must be scoped to the `resource_id` argument. Never return records for a resource that wasn't asked for.
+- Items are timezone-aware ISO 8601, ordered by `timestamp` ascending. `start_time` is inclusive, `end_time` exclusive.
+- `cursor`/`next_cursor` are opaque to Monte Carlo — carry whatever the vendor's pagination needs. `None` means last page.
+- An empty page (`{"items": [], "next_cursor": None}`) is a valid, correct result. Never raise for no results.
+- Push filters (`search_regex`, `severity`, `names`) into the vendor query where the API supports it, and apply the rest to the page yourself — but always honor them.
+
+See the full contract in `telemetry_connectors/_base/connector.py` and README → "Telemetry Connector Quick Start".
+
+### Combined Agent Images
+
+To ship connectors of different kinds in a single agent image, pass them together — the script resolves each name to its directory and detects the type:
+
+```bash
+python scripts/generate_agent_image.py <dw-name> <etl-name> <telemetry-name>
 ```

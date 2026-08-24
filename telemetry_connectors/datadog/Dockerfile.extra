@@ -1,0 +1,4 @@
+# Add Docker instructions for system dependencies needed by your connector.
+#
+# After editing, regenerate the test Dockerfile:
+#   python scripts/generate_test_dockerfile.py

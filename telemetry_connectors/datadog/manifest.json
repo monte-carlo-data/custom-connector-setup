@@ -1,0 +1,40 @@
+{
+  "connection_type": "custom-telemetry-connector-dd01a2b",
+  "connection_name": "datadog",
+  "asset_class": "telemetry",
+  "capabilities": {
+    "supports_logs": true,
+    "supports_telemetry": true
+  },
+  "credentials_schema": {
+    "api_key": {
+      "type": "string",
+      "required": true,
+      "empty": false
+    },
+    "application_key": {
+      "type": "string",
+      "required": true,
+      "empty": false
+    },
+    "site": {
+      "type": "string",
+      "required": false,
+      "empty": false
+    },
+    "log_query_template": {
+      "type": "string",
+      "required": false,
+      "empty": false
+    },
+    "metric_queries": {
+      "type": "dict",
+      "required": false,
+      "valuesrules": {
+        "type": "string",
+        "empty": false
+      }
+    }
+  },
+  "icon_url": "https://imgix.datadoghq.com/img/about/presskit/logo-v/dd_vertical_purple.png"
+}
