@@ -3,6 +3,8 @@ connectors/*/credentials.json
 connectors/*/.env
 etl_connectors/*/credentials.json
 etl_connectors/*/.env
+bi_connectors/*/credentials.json
+bi_connectors/*/.env
 .env
 
 # Python

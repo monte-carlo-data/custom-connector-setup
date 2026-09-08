@@ -22,21 +22,24 @@ def pytest_addoption(parser):
 def _resolve_connector(config):
     """Resolve connector name and type from flag, env var, or auto-detect.
 
-    Returns (name, connector_type) where connector_type is "dw" or "etl".
+    Returns (name, connector_type) where connector_type is "dw", "etl", or "bi".
     Returns (None, None) when no connector can be resolved.
     """
     project_root = os.path.dirname(os.path.dirname(__file__))
     connectors_dir = os.path.join(project_root, "connectors")
     etl_dir = os.path.join(project_root, "etl_connectors")
+    bi_dir = os.path.join(project_root, "bi_connectors")
 
     def _classify(name):
-        """Determine whether *name* is a DW or ETL connector."""
+        """Determine whether *name* is a DW, ETL, or BI connector."""
         if os.path.isdir(os.path.join(connectors_dir, name)):
             return name, "dw"
         if os.path.isdir(os.path.join(etl_dir, name)):
             return name, "etl"
+        if os.path.isdir(os.path.join(bi_dir, name)):
+            return name, "bi"
         raise pytest.UsageError(
-            f"Connector '{name}' not found in connectors/ or etl_connectors/."
+            f"Connector '{name}' not found in connectors/, etl_connectors/, or bi_connectors/."
         )
 
     # 1. Explicit flag
@@ -49,7 +52,7 @@ def _resolve_connector(config):
     if name:
         return _classify(name)
 
-    # 3. Auto-detect: exactly one connector across both directories
+    # 3. Auto-detect: exactly one connector across all directories
     all_dirs = []
     if os.path.isdir(connectors_dir):
         all_dirs.extend(
@@ -63,6 +66,12 @@ def _resolve_connector(config):
             if not d.startswith("_") and not d.startswith(".")
             and os.path.isdir(os.path.join(etl_dir, d))
         )
+    if os.path.isdir(bi_dir):
+        all_dirs.extend(
+            d for d in os.listdir(bi_dir)
+            if not d.startswith("_") and not d.startswith(".")
+            and os.path.isdir(os.path.join(bi_dir, d))
+        )
 
     if len(all_dirs) == 1:
         return _classify(all_dirs[0])
@@ -73,12 +82,13 @@ def _resolve_connector(config):
 def pytest_configure(config):
     name, connector_type = _resolve_connector(config)
     config._connector_name = name
-    config._connector_type = connector_type  # "dw", "etl", or None
+    config._connector_type = connector_type  # "dw", "etl", "bi", or None
 
     if not name:
         # Check if there were multiple connectors (ambiguous)
         connectors_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "connectors")
         etl_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "etl_connectors")
+        bi_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bi_connectors")
         all_dirs = []
         if os.path.isdir(connectors_dir):
             all_dirs.extend(
@@ -91,6 +101,12 @@ def pytest_configure(config):
                 d for d in os.listdir(etl_dir)
                 if not d.startswith("_") and not d.startswith(".")
                 and os.path.isdir(os.path.join(etl_dir, d))
+            )
+        if os.path.isdir(bi_dir):
+            all_dirs.extend(
+                d for d in os.listdir(bi_dir)
+                if not d.startswith("_") and not d.startswith(".")
+                and os.path.isdir(os.path.join(bi_dir, d))
             )
         if not all_dirs:
             raise pytest.UsageError(

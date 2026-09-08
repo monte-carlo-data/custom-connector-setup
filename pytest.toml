@@ -13,4 +13,6 @@ markers = [
     "etl_metadata: ETL metadata collection tests",
     "etl_run_details: ETL run details collection tests",
     "etl_capability: ETL optional feature capability tests",
+    "bi_connection: BI connector connection tests",
+    "bi_metadata: BI metadata collection tests",
 ]

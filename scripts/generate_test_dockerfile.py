@@ -48,6 +48,14 @@ def _build_footer():
             "RUN find etl_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;"
         )
 
+    has_bi_requirements = bool(
+        glob.glob(os.path.join(REPO_ROOT, "bi_connectors", "*", "requirements.txt"))
+    )
+    if has_bi_requirements:
+        footer_lines.append(
+            "RUN find bi_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;"
+        )
+
     footer_lines.append("")
     footer_lines.append('ENTRYPOINT ["pytest"]')
     footer_lines.append("")
