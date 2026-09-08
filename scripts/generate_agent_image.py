@@ -148,8 +148,12 @@ def validate_bi_connector(name):
 
     manifest_path = os.path.join(BI_CONNECTORS_DIR, name, "manifest.json")
     if os.path.isfile(manifest_path):
-        with open(manifest_path) as f:
-            manifest = json.load(f)
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            errors.append(f"  - manifest.json is not valid JSON: {e}")
+            return errors
         connection_type = manifest.get("connection_type", "")
         if not connection_type.startswith("custom-bi-connector-"):
             errors.append(

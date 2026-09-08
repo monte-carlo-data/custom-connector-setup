@@ -1,1 +1,0 @@
-# No Python dependencies — this connector reads a local JSON file.

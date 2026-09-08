@@ -54,7 +54,7 @@ def _validate_asset_refs(
     event_index: str,
     errors: list[ValidationError],
 ) -> None:
-    """Validate a list of asset-ref dicts (inputs or outputs).
+    """Validate a list of asset-ref dicts (inputs).
 
     Checks:
     - Each item is a dict

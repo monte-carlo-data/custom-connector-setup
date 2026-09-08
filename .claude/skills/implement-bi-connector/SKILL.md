@@ -7,14 +7,6 @@ disable-model-invocation: false
 
 # Implement BI Connector: Research, Implement, and Test
 
-## Reference implementation
-
-This repo ships a worked BI example: **`bi_connectors/example_bi/`**. It shows the full
-connector shape — a `Connector` subclassing `bi_connectors/_base/connector.py`, a valid
-`manifest.json`, and a `sample_assets.json` of valid asset dicts — verified end to end by the
-`bi_connection`/`bi_metadata` tests. Use it as the model for structure and idioms, adapting it
-to the vendor you're implementing rather than copying blindly.
-
 ## Arguments
 
 `$ARGUMENTS` contains the BI connector name (required). Example: `looker`, `domo`, `oas`.
@@ -26,7 +18,7 @@ to the vendor you're implementing rather than copying blindly.
 
 Read the following files:
 - `bi_connectors/<name>/connector.py` — your implementation file
-- `bi_connectors/<name>/manifest.json` — connector identity and terminology
+- `bi_connectors/<name>/manifest.json` — connector identity (connection_type, asset_class, credentials_schema)
 - `bi_connectors/<name>/credentials.json` — credential structure
 - `bi_connectors/<name>/requirements.txt` — vendor client dependencies
 

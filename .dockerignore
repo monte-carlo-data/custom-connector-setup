@@ -3,6 +3,8 @@ connectors/*/.env
 connectors/*/credentials.json
 etl_connectors/*/.env
 etl_connectors/*/credentials.json
+bi_connectors/*/.env
+bi_connectors/*/credentials.json
 .git
 .idea
 __pycache__
