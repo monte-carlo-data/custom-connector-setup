@@ -9,14 +9,15 @@ disable-model-invocation: true
 
 ## Arguments
 
-`$ARGUMENTS` contains the connector name (required) and optionally `--etl`.
+`$ARGUMENTS` contains the connector name (required) and optionally `--etl` or `--bi`.
 
 Parse `$ARGUMENTS`:
 - If `--etl` is present, this is an ETL connector
+- If `--bi` is present, this is a BI connector
 - Everything else is the connector name
 - Default is data warehouse (no flag)
 
-Examples: `snowflake`, `bigquery`, `coalesce --etl`, `talend --etl`.
+Examples: `snowflake`, `bigquery`, `coalesce --etl`, `talend --etl`, `domo --bi`, `looker --bi`.
 
 ## Step 1: Run the scaffold script
 
@@ -53,6 +54,25 @@ This creates `etl_connectors/<name>/` with:
 - `credentials.json` — vendor API credential template (not database credentials)
 - `requirements.txt` — vendor SDK dependencies
 
+**For BI connectors** (`--bi`):
+
+```bash
+python scripts/create_connector.py <connector-name> --bi
+```
+
+This is interactive — it prompts for an asset terminology label and an optional icon URL. **Before running the script, ask the user** for both:
+
+1. **Asset terminology** — propose the vendor's word for an asset/report (e.g., for Looker: "Dashboard"; for Domo: "Card"; for OAS: "Analysis") and let the user confirm or adjust. BI has a single `asset` terminology key — no job/task/run hierarchy.
+2. **Icon URL** — ask if they want a custom icon for the integration (shown in the Monte Carlo UI). Must be a publicly reachable image URL (SVG/PNG). Verify it returns HTTP 200 before using. Skip if they don't want one — it can be added later as the `icon_url` key in `manifest.json` (requires rebuilding the agent image).
+
+Then answer the script's prompts with those values (pipe via stdin if running non-interactively).
+
+This creates `bi_connectors/<name>/` with:
+- `connector.py` — `Connector` subclass with a single `fetch_metadata` stub (no `fetch_run_details` — BI assets have no run pipeline)
+- `manifest.json` — connector identity with `asset_class: "bi"` and the `terminology` asset label
+- `credentials.json` — vendor API credential template
+- `requirements.txt` — vendor client dependencies
+
 ## Step 2: Verify
 
 Confirm the directory was created and list its contents:
@@ -67,6 +87,11 @@ ls -la connectors/<name>/
 ls -la etl_connectors/<name>/
 ```
 
+**BI:**
+```bash
+ls -la bi_connectors/<name>/
+```
+
 ## Step 3: Report and suggest next step
 
 **For DW connectors:**
@@ -74,3 +99,6 @@ ls -la etl_connectors/<name>/
 
 **For ETL connectors:**
 > ETL connector `<name>` scaffolded. Next step: run `/implement-etl-connector <name>` to research the vendor API and implement the connector methods.
+
+**For BI connectors:**
+> BI connector `<name>` scaffolded. Next step: run `/implement-bi-connector <name>` to research the vendor BI API and implement `fetch_metadata`.
