@@ -33,7 +33,7 @@ The repo includes skills that automate the full workflow end-to-end for both DW 
 
 | Step | Skill                                                       | What it does                                                                                          |
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 1    | `/create-connector <name> --bi`                             | Scaffold a BI connector with interactive prompts for the asset terminology label and an optional icon URL |
+| 1    | `/create-connector <name> --bi`                             | Scaffold a BI connector with an optional icon URL prompt                                     |
 | 2    | `/implement-bi-connector <name>`                            | Research vendor BI API, implement `fetch_metadata`, verify with tests — **pauses for you to fill in credentials** |
 | 3    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
 
@@ -686,13 +686,12 @@ Optional keys: `description`, `asset_url`, `folder`, `view_count`, `is_certified
   "connection_type": "custom-bi-connector-{7hex}",
   "connection_name": "looker",
   "asset_class": "bi",
-  "terminology": { "asset": "Dashboard" },
   "credentials_schema": {},
   "icon_url": "https://example.com/vendor-icon.svg"
 }
 ```
 
-`terminology.asset` is the vendor's word for a report/asset. `credentials_schema` and `icon_url` behave exactly as for DW/ETL connectors (see [step 5b](#5b-add-a-credentials-schema-optional)).
+There is no `terminology` block (unlike ETL) — the asset kind is per-asset display data on each returned dict's `asset_type`, not a connector-level noun. `credentials_schema` and `icon_url` behave exactly as for DW/ETL connectors (see [step 5b](#5b-add-a-credentials-schema-optional)).
 
 ### Lineage
 

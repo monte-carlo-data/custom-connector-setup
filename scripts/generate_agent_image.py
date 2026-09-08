@@ -156,8 +156,6 @@ def validate_bi_connector(name):
                 f"  - manifest.json connection_type must match 'custom-bi-connector-*', "
                 f"got '{connection_type}'"
             )
-        if "terminology" not in manifest:
-            errors.append(f"  - manifest.json is missing required 'terminology' key")
         creds_schema = manifest.get("credentials_schema")
         if creds_schema is not None and not isinstance(creds_schema, dict):
             errors.append(

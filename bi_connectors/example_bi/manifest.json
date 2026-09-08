@@ -2,8 +2,5 @@
   "connection_type": "custom-bi-connector-example",
   "connection_name": "example_bi",
   "asset_class": "bi",
-  "terminology": {
-    "asset": "Asset"
-  },
   "credentials_schema": {}
 }

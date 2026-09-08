@@ -60,16 +60,17 @@ This creates `etl_connectors/<name>/` with:
 python scripts/create_connector.py <connector-name> --bi
 ```
 
-This is interactive — it prompts for an asset terminology label and an optional icon URL. **Before running the script, ask the user** for both:
+This is interactive — it prompts for an optional icon URL. **Before running the script, ask the user:**
 
-1. **Asset terminology** — propose the vendor's word for an asset/report (e.g., for Looker: "Dashboard"; for Domo: "Card"; for OAS: "Analysis") and let the user confirm or adjust. BI has a single `asset` terminology key — no job/task/run hierarchy.
-2. **Icon URL** — ask if they want a custom icon for the integration (shown in the Monte Carlo UI). Must be a publicly reachable image URL (SVG/PNG). Verify it returns HTTP 200 before using. Skip if they don't want one — it can be added later as the `icon_url` key in `manifest.json` (requires rebuilding the agent image).
+1. **Icon URL** — ask if they want a custom icon for the integration (shown in the Monte Carlo UI). Must be a publicly reachable image URL (SVG/PNG). Verify it returns HTTP 200 before using. Skip if they don't want one — it can be added later as the `icon_url` key in `manifest.json` (requires rebuilding the agent image).
 
-Then answer the script's prompts with those values (pipe via stdin if running non-interactively).
+Unlike ETL, there is no terminology prompt — a BI asset's kind is per-asset display data (`asset_type` on each returned dict), not a connector-level declaration.
+
+Then answer the script's prompt (pipe via stdin if running non-interactively).
 
 This creates `bi_connectors/<name>/` with:
 - `connector.py` — `Connector` subclass with a single `fetch_metadata` stub (no `fetch_run_details` — BI assets have no run pipeline)
-- `manifest.json` — connector identity with `asset_class: "bi"` and the `terminology` asset label
+- `manifest.json` — connector identity with `asset_class: "bi"`
 - `credentials.json` — vendor API credential template
 - `requirements.txt` — vendor client dependencies
 

@@ -205,7 +205,7 @@ def _create_etl_connector(name, repo_root):
 
 
 def _create_bi_connector(name, repo_root):
-    """Create a BI connector scaffold with an interactive terminology prompt."""
+    """Create a BI connector scaffold."""
     bi_dir = os.path.join(repo_root, "bi_connectors")
     target_dir = os.path.join(bi_dir, name)
 
@@ -213,10 +213,10 @@ def _create_bi_connector(name, repo_root):
         print(f"Error: BI connector '{name}' already exists at {target_dir}", file=sys.stderr)
         sys.exit(1)
 
-    # Interactive terminology prompt (BI is metadata-only — a single asset label)
+    # Interactive icon prompt (BI is metadata-only — asset types are per-asset
+    # display data on the returned dicts, not manifest-level terminology)
     print(f"Creating BI connector '{name}'...")
     print()
-    asset_label = _prompt("What does this tool call an asset/report?", "Dashboard")
     icon_url = _prompt("Icon URL (leave blank to skip)", "")
     print()
 
@@ -233,15 +233,12 @@ def _create_bi_connector(name, repo_root):
         os.path.join(target_dir, "connector.py"),
     )
 
-    # Generate manifest.json with unique connector type and terminology
+    # Generate manifest.json with unique connector type
     connection_type = f"custom-bi-connector-{secrets.token_hex(4)[:7]}"
     manifest = {
         "connection_type": connection_type,
         "connection_name": name,
         "asset_class": "bi",
-        "terminology": {
-            "asset": asset_label,
-        },
     }
     manifest["credentials_schema"] = {}
     if icon_url:
@@ -279,7 +276,6 @@ def _create_bi_connector(name, repo_root):
 
     print(f"Created BI connector '{name}' at bi_connectors/{name}/")
     print(f"  connection_type: {connection_type}")
-    print(f"  terminology: asset={asset_label}")
     print()
     print("Next steps:")
     print(f"  1. Edit bi_connectors/{name}/connector.py      — implement fetch_metadata")

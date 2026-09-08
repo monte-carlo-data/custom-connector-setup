@@ -39,19 +39,15 @@ The dict schema (`BiAsset`, `BiAssetRef`, `BiOwner`) is defined in pycarlo:
 `pycarlo.features.ingestion.bi` (requires pycarlo >= 0.15.240). Read the pycarlo source or use
 web search to understand the full field list.
 
-## Step 2: Read the terminology
+## Step 2: Understand the asset model
 
-Read `manifest.json`. BI connectors use a single terminology key — the vendor's word for an
-asset/report:
+Read `manifest.json` — there is no terminology block (unlike ETL): the asset's kind is per-asset
+display data carried on each returned dict's `asset_type` field, not a connector-level declaration.
 
-```json
-{
-  "terminology": { "asset": "Dashboard" }
-}
-```
-
-There is no job/task/run hierarchy — BI assets are flat. Use the vendor's term to guide your API
-exploration (e.g. Looker "dashboard/look", Domo "card/page/dataset", OAS "analysis/workbook").
+`asset_type` is a free-form label (e.g. Looker "dashboard"/"look", Domo "card"/"page"/"dataset",
+OAS "analysis"/"workbook"). It is never validated server-side — it becomes the type chip on the
+lineage node. There is no job/task/run hierarchy — BI assets are flat, and one connector may
+emit several `asset_type`s.
 
 ## Step 3: Research the vendor API
 
