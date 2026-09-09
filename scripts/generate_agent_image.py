@@ -551,12 +551,14 @@ def main():
             print(f"  {name}: bi")
         print()
 
-        # Run docker build
-        result = subprocess.run(
-            ["docker", "build", "--pull", "--platform", args.docker_platform, "-t", tag, "."],
-            cwd=tmp_dir,
-            check=False,
-        )
+        # Run docker build. --pull keeps the published base image fresh, but it
+        # forces the base to be resolved from a registry — which fails outright
+        # for a local-only image, the very case --base-image exists to support.
+        build_cmd = ["docker", "build"]
+        if not args.base_image:
+            build_cmd.append("--pull")
+        build_cmd += ["--platform", args.docker_platform, "-t", tag, "."]
+        result = subprocess.run(build_cmd, cwd=tmp_dir, check=False)
         if result.returncode != 0:
             print("\nError: Docker build failed.", file=sys.stderr)
             sys.exit(result.returncode)
