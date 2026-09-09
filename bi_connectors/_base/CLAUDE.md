@@ -1,6 +1,6 @@
 # BI Connector Base Module
 
-Shared foundation for all BI connectors. Connector implementations live in sibling directories (e.g. `bi_connectors/looker/`); this `_base/` module provides the template and validation logic they depend on.
+Shared foundation for all BI connectors. Connector implementations live in sibling directories (e.g. `bi_connectors/looker/`). This `_base/` module is **authoring-time only**: `connector.py` is the template the scaffold copies into each new connector, and `validators.py` runs in tests. Nothing here ships in the agent image — connector code must never import `bi_connectors._base` (the import fails in the agent with `No module named 'bi_connectors'`).
 
 ## Key Files
 

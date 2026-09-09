@@ -645,14 +645,18 @@ BI connectors monitor BI tools (Looker, Domo, Oracle Analytics Server, etc.) by 
 
 ### Connector contract
 
-```python
-from bi_connectors._base.connector import Connector as _BaseConnector
+The scaffolded `connector.py` is a standalone class — implement its stubs in place:
 
-class Connector(_BaseConnector):
+```python
+class Connector:
     def setup_connection(self): ...          # optional — initialize API client using self.credentials
     def close_connection(self): ...          # optional — clean up sessions
     def fetch_metadata(self, limit, offset) -> list[dict]: ...   # required — the only fetch method
 ```
+
+Connector code must not import `bi_connectors._base` — only the connector's own directory is baked
+into the agent image, so a `_base` import fails at runtime with `No module named 'bi_connectors'`.
+The base module is authoring-time only (template + test validators).
 
 The agent sets `self.credentials` (a dict from `credentials.json`'s `connect_args`) before calling any methods. `fetch_metadata(limit, offset)` returns dicts describing the BI assets; `limit`/`offset` paginate. **There is no `fetch_run_details` and no webhook** — BI assets have no run/execution pipeline.
 

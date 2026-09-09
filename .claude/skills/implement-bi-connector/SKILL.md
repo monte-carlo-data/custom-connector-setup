@@ -113,17 +113,20 @@ section in the repo README for the exact shape.
 
 ## Step 6: Implement the connector
 
-Edit `bi_connectors/<name>/connector.py`. The connector **subclasses** the base:
+Edit `bi_connectors/<name>/connector.py`. The scaffold already generated the full class —
+implement the stubs in place:
 
 ```python
-from bi_connectors._base.connector import Connector as _BaseConnector
-
-
-class Connector(_BaseConnector):
+class Connector:
     def setup_connection(self): ...
     def close_connection(self): ...
     def fetch_metadata(self, limit: int, offset: int) -> list[dict]: ...
 ```
+
+**Never import `bi_connectors._base` in connector code.** Only `bi_connectors/<name>/` is baked
+into the agent image, so any `_base` import fails at runtime with `No module named 'bi_connectors'`.
+The base module is authoring-time only: `_base/connector.py` is the template the scaffold copied,
+and `_base/validators.py` runs in tests.
 
 ### `setup_connection(self)`
 
