@@ -211,6 +211,39 @@ This calls `fetch_metadata()` and validates it returns a non-empty list of dicts
 `asset_source_id`, `name`, and `asset_type`, and that all dicts pass
 `validate_bi_metadata_events()`. Fix and re-test.
 
+The validators check *shape*, not *sense* — a quoted FQN, a wrong `asset_type` label, or a
+missing lineage edge all pass validation. Step 9b closes that gap.
+
+## Step 9b: Preview the actual output
+
+```bash
+CONNECTOR=<name> python scripts/preview.py
+```
+
+(If the local Python env lacks the connector's dependencies, use Docker instead:
+`CONNECTOR=<name> docker compose run --rm preview`.)
+
+This runs `fetch_metadata` against the real credentials and prints the exact dicts the
+connector would send as an aligned table — one row per asset with `TYPE`, `NAME`, `READS`
+(warehouse table inputs), and `UPSTREAM` (BI assets it derives from, shown by name) — plus a
+field-coverage line (`2/4 inputs · 0/4 folder`). It is the difference between "shape is valid"
+and "the content is right", and it catches content bugs *before* the agent deploys rather than
+in Monte Carlo.
+
+Show the output to the user and have them sanity-check it against what they expect:
+
+- `asset_type` labels read correctly (e.g. a data flow isn't labeled a generic `app`)
+- table `inputs` carry clean `database.schema.table` FQNs — no SQL identifier quoting
+  (`"DB"."SCHEMA"."T"`), no bare/junk names
+- expected BI→BI lineage edges are present (a dashboard points at its dataset, an app at its
+  data flow)
+- the coverage line has no surprising zeros (e.g. `0/N owner` may mean the credential lacks a
+  scope; `0/N inputs` on a connector that should have lineage is a red flag)
+
+Use `--raw` to dump the full asset dicts as JSON, and `--limit N` for a cheap spot-check on a
+large tenant. If anything looks off, fix `fetch_metadata` and re-run preview until it reads
+correctly — do this *before* building the image.
+
 ## Step 10: Report and suggest next step
 
 Print a summary of what was implemented and how many assets the test discovered. Then suggest:

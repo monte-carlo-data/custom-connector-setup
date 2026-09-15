@@ -6,3 +6,12 @@ services:
       - CONNECTOR=${CONNECTOR:-}
     volumes:
       - .:/app
+  preview:
+    build: .
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    environment:
+      - CONNECTOR=${CONNECTOR:-}
+    volumes:
+      - .:/app
+    working_dir: /app
+    entrypoint: ["python", "scripts/preview.py"]

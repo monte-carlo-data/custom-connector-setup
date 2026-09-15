@@ -631,13 +631,25 @@ BI connectors monitor BI tools (Looker, Domo, Oracle Analytics Server, etc.) by 
    CONNECTOR=<name> docker compose run --rm test -m bi_metadata
    ```
 
-5. **Build:**
+5. **Preview** the actual output before deploying — `bi_metadata` checks the dicts' *shape*, not their *content*. Preview runs `fetch_metadata` and prints exactly what will be collected as a table (one row per asset: `TYPE`, `NAME`, `READS` table inputs, `UPSTREAM` BI assets by name) plus a field-coverage line:
+
+   ```bash
+   CONNECTOR=<name> python scripts/preview.py                  # table + coverage
+   CONNECTOR=<name> python scripts/preview.py --raw            # full dicts as JSON
+   CONNECTOR=<name> python scripts/preview.py --limit 5        # cheap spot-check
+   ```
+
+   (Or via Docker: `CONNECTOR=<name> docker compose run --rm preview`.)
+
+   Sanity-check that `asset_type` labels, table FQNs (clean `database.schema.table`, no SQL quoting), and lineage edges read correctly — fix and re-run before building the image.
+
+6. **Build:**
 
    ```bash
    python scripts/generate_agent_image.py <name>
    ```
 
-6. **Deploy, register, and connect:**
+7. **Deploy, register, and connect:**
 
    Push the image to your container registry and follow the Monte Carlo documentation to deploy the agent, register it, and add the connection:
 
