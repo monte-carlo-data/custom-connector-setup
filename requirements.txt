@@ -3,4 +3,4 @@ Jinja2==3.1.6
 dataclasses-json==0.6.7
 # pycarlo is Monte Carlo's SDK. Using >= (not pinned) because the agent image
 # may ship any newer version and connectors must remain compatible.
-pycarlo>=0.12.514
+pycarlo>=0.15.240

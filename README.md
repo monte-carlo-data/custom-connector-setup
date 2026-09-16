@@ -1,6 +1,6 @@
 # custom-connector-setup
 
-A toolkit for building custom database connectors and ETL pipeline connectors for Monte Carlo. For database (DW) connectors, you implement base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your connector supports. For ETL connectors, you implement two Python methods that return structured run events and job metadata from your pipeline orchestrator. Both produce a generic agent image that you host, deploy, and then register in Monte Carlo.
+A toolkit for building custom database connectors, ETL pipeline connectors, and BI connectors for Monte Carlo. For database (DW) connectors, you implement base classes — providing connection logic and Jinja SQL templates for your database dialect — then run the included test suite to verify correctness and discover which metrics and capabilities your connector supports. For ETL connectors, you implement two Python methods that return structured run events and job metadata from your pipeline orchestrator. For BI connectors, you implement a single Python method that returns BI asset metadata (dashboards, analyses, cards) from your BI tool. All three produce a generic agent image that you host, deploy, and then register in Monte Carlo.
 
 Supports multiple connectors side by side so you can build and test several at once.
 
@@ -27,6 +27,14 @@ The repo includes skills that automate the full workflow end-to-end for both DW 
 | ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | 1    | `/create-connector <name> --etl`                            | Scaffold an ETL connector with interactive prompts for terminology and an optional icon URL           |
 | 2    | `/implement-etl-connector <name>`                           | Research vendor API, implement `fetch_metadata` and `fetch_run_details`, verify with tests — **pauses for you to fill in credentials** |
+| 3    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
+
+**BI connector workflow:**
+
+| Step | Skill                                                       | What it does                                                                                          |
+| ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1    | `/create-connector <name> --bi`                             | Scaffold a BI connector with an optional icon URL prompt                                     |
+| 2    | `/implement-bi-connector <name>`                            | Research vendor BI API, implement `fetch_metadata`, verify with tests — **pauses for you to fill in credentials** |
 | 3    | `/build-agent-image <name>`                                 | Build deployable Docker image (auto-detects connector type)                                           |
 
 The only manual step is filling in `credentials.json` when the implementation skill pauses. Everything else — scaffolding, API research, implementation, testing, and image building — is handled by the skills.
@@ -602,6 +610,109 @@ The webhook ignores any request body — all parameters are passed as query stri
 
 See the [Monte Carlo documentation](https://docs.getmontecarlo.com/docs/custom-connectors) for full webhook setup details.
 
+## BI Connector Quick Start
+
+BI connectors monitor BI tools (Looker, Domo, Oracle Analytics Server, etc.) by returning structured asset metadata. They are the simplest connector kind: a single Python method returns plain dicts describing the BI assets, and the agent framework pushes them to Monte Carlo. There are no runs, no webhooks, and no SQL templates.
+
+1. **Create:** Scaffold your own connector with `/create-connector <name> --bi`, or run:
+
+   ```bash
+   python scripts/create_connector.py <name> --bi
+   ```
+
+2. **Implement:** Edit `bi_connectors/<name>/connector.py` — implement `fetch_metadata()`.
+
+3. **Add credentials:** Fill in `bi_connectors/<name>/credentials.json` with your vendor API credentials only.
+
+4. **Test:**
+
+   ```bash
+   CONNECTOR=<name> docker compose run --rm test -m bi_connection
+   CONNECTOR=<name> docker compose run --rm test -m bi_metadata
+   ```
+
+5. **Preview** the actual output before deploying — `bi_metadata` checks the dicts' *shape*, not their *content*. Preview runs `fetch_metadata` and prints exactly what will be collected as a table (one row per asset: `TYPE`, `NAME`, `READS` table inputs, `UPSTREAM` BI assets by name) plus a field-coverage line:
+
+   ```bash
+   CONNECTOR=<name> python scripts/preview.py                  # table + coverage
+   CONNECTOR=<name> python scripts/preview.py --raw            # full dicts as JSON
+   CONNECTOR=<name> python scripts/preview.py --limit 5        # cheap spot-check
+   ```
+
+   (Or via Docker: `CONNECTOR=<name> docker compose run --rm preview`.)
+
+   Sanity-check that `asset_type` labels, table FQNs (clean `database.schema.table`, no SQL quoting), and lineage edges read correctly — fix and re-run before building the image.
+
+6. **Build:**
+
+   ```bash
+   python scripts/generate_agent_image.py <name>
+   ```
+
+7. **Deploy, register, and connect:**
+
+   Push the image to your container registry and follow the Monte Carlo documentation to deploy the agent, register it, and add the connection:
+
+   **[Custom Connectors — Deploy the Agent](https://docs.getmontecarlo.com/docs/custom-connectors#4-deploy-the-agent)**
+
+### Connector contract
+
+The scaffolded `connector.py` is a standalone class — implement its stubs in place:
+
+```python
+class Connector:
+    def setup_connection(self): ...          # optional — initialize API client using self.credentials
+    def close_connection(self): ...          # optional — clean up sessions
+    def fetch_metadata(self, limit, offset) -> list[dict]: ...   # required — the only fetch method
+```
+
+Connector code must not import `bi_connectors._base` — only the connector's own directory is baked
+into the agent image, so a `_base` import fails at runtime with `No module named 'bi_connectors'`.
+The base module is authoring-time only (template + test validators).
+
+The agent sets `self.credentials` (a dict from `credentials.json`'s `connect_args`) before calling any methods. `fetch_metadata(limit, offset)` returns dicts describing the BI assets; `limit`/`offset` paginate. **There is no `fetch_run_details` and no webhook** — BI assets have no run/execution pipeline.
+
+### Dict schema reference
+
+Connectors return plain dicts matching the models in [`pycarlo.features.ingestion.bi`](https://github.com/monte-carlo-data/python-sdk/blob/main/pycarlo/features/ingestion/bi/models.py) (requires pycarlo >= 0.15.240) — these are the canonical schema reference. The test validators check returned dicts against this schema; connector code never imports the models directly.
+
+| Schema | Required keys | Purpose |
+| --- | --- | --- |
+| `BiAsset` | `asset_source_id`, `name`, `asset_type` | BI asset metadata (dashboard/analysis/card/workbook) |
+
+Optional keys: `description`, `asset_url`, `folder`, `view_count`, `is_certified`, `certification_note`, `is_archived`, plus:
+
+| Structure | Keys | Purpose |
+| --- | --- | --- |
+| owner | `email`, `name`, `source_id` (all optional) | Asset owner |
+| bi_asset_ref | `asset_source_id` (req), `relationship_type` (`CONTAINED_IN`/`DERIVES_FROM`/`REFERENCES`) | BI→BI lineage via `upstream_assets`/`downstream_assets` |
+| asset_ref | `asset_type`, `role` (`INPUT`), `fully_qualified_name`/`mcon` | Warehouse-table lineage via `inputs` |
+| tag | `key`, `value` | `BiAsset` properties |
+
+- **`asset_source_id` is the identity seed** — it must be vendor-stable across renames/moves, or Monte Carlo treats the asset as new.
+- **`container_source_id` is unsupported in v1** — never set it on a BI→BI ref (it's dropped server-side).
+- Omit `None` values and empty lists — the agent expects sparse dicts.
+
+### Manifest format
+
+```json
+{
+  "connection_type": "custom-bi-connector-{7hex}",
+  "connection_name": "looker",
+  "asset_class": "bi",
+  "credentials_schema": {},
+  "icon_url": "https://example.com/vendor-icon.svg"
+}
+```
+
+There is no `terminology` block (unlike ETL) — the asset kind is per-asset display data on each returned dict's `asset_type`, not a connector-level noun. `credentials_schema` and `icon_url` behave exactly as for DW/ETL connectors (see [step 5b](#5b-add-a-credentials-schema-optional)).
+
+### Lineage
+
+- **BI→BI** (dashboard contains analysis, card derives from dataset) uses `upstream_assets`/`downstream_assets` bi_asset_ref dicts.
+- **Table lineage** (a dashboard reads warehouse tables) uses `inputs` asset-ref dicts — same shared `asset_ref` shape as ETL, with `role: "INPUT"`.
+- If the BI tool queries the warehouse directly and the API can't tell you which tables an asset reads, use **SQL query tagging** instead (see [Alternative: lineage via SQL query tagging](#alternative-lineage-via-sql-query-tagging)) — tag the BI-generated SQL with the asset's `asset_source_id`.
+
 ## Requirements
 
 - [Docker](https://docs.docker.com/get-docker/)
@@ -630,6 +741,16 @@ custom-connector-setup/
       manifest.json                       # connection_type, name, terminology, credentials_schema
       requirements.txt                    # Vendor client library deps
       Dockerfile.extra                    # System dependencies (optional)
+  bi_connectors/
+    _base/                                # Provided — do not edit
+      connector.py                        # Single-method Connector base (fetch_metadata only)
+      validators.py                       # Cross-field validation for returned dicts
+    <your-bi-tool>/                       # Created by you
+      connector.py                        # Your implementation (implements the base contract standalone)
+      credentials.json                    # Vendor API credentials (gitignored)
+      manifest.json                       # connection_type, connection_name, asset_class "bi", credentials_schema
+      requirements.txt                    # Vendor client library deps
+      Dockerfile.extra                    # System dependencies (optional)
   output/                                 # Auto-generated by --export (gitignored)
     <your-database>/
       manifest.json                       # Test results and supported features
@@ -653,13 +774,19 @@ custom-connector-setup/
     test_etl_metadata.py                  # ETL metadata test
     test_etl_run_details.py               # ETL run details test
     test_etl_capabilities.py              # Per-feature capability tests (xfail when absent)
+  tests/bi/                               # BI connector tests
+    conftest.py                           # BI-specific fixtures
+    test_bi_connection.py                 # BI connection test
+    test_bi_metadata.py                   # BI metadata test
+    test_bi_validators.py                 # Validator unit tests (no vendor needed)
   .claude/
     skills/                               # Claude Code automation skills
-      create-connector/SKILL.md           # DW + ETL scaffolding
+      create-connector/SKILL.md           # DW + ETL + BI scaffolding
       setup-connection/SKILL.md           # DW driver + connection
       implement-connector/SKILL.md        # DW template implementation
       implement-etl-connector/SKILL.md    # ETL API implementation
-      build-agent-image/SKILL.md          # DW + ETL Docker image
+      implement-bi-connector/SKILL.md     # BI API implementation
+      build-agent-image/SKILL.md          # DW + ETL + BI Docker image
   AGENTS.md                               # Instructions for AI coding agents
   pytest.toml                             # Pytest configuration and markers
   requirements.txt                        # Shared Python dependencies

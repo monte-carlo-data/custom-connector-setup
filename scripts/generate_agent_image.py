@@ -20,10 +20,12 @@ AGENT_TYPE = "generic"
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONNECTORS_DIR = os.path.join(REPO_ROOT, "connectors")
 ETL_CONNECTORS_DIR = os.path.join(REPO_ROOT, "etl_connectors")
+BI_CONNECTORS_DIR = os.path.join(REPO_ROOT, "bi_connectors")
 OUTPUT_DIR = os.path.join(REPO_ROOT, "output")
 
 REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
 ETL_REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
+BI_REQUIRED_SOURCE_FILES = ["connector.py", "manifest.json", "requirements.txt"]
 
 
 def read_dockerfile_extra(base_dir, name):
@@ -48,14 +50,17 @@ def read_dockerfile_extra(base_dir, name):
 def resolve_connector_dir(name):
     """Return (base_dir, connector_type) for a connector name.
 
-    Checks connectors/<name>/ and etl_connectors/<name>/.
+    Checks connectors/<name>/, etl_connectors/<name>/, and bi_connectors/<name>/.
     """
     dw_path = os.path.join(CONNECTORS_DIR, name)
     etl_path = os.path.join(ETL_CONNECTORS_DIR, name)
+    bi_path = os.path.join(BI_CONNECTORS_DIR, name)
     if os.path.isdir(dw_path):
         return CONNECTORS_DIR, "dw"
     if os.path.isdir(etl_path):
         return ETL_CONNECTORS_DIR, "etl"
+    if os.path.isdir(bi_path):
+        return BI_CONNECTORS_DIR, "bi"
     return None, None
 
 
@@ -116,6 +121,68 @@ def build_etl_context(tmp_dir, connectors):
         shutil.copytree(
             src, dest,
             ignore=shutil.ignore_patterns(*_ETL_EXCLUDE),
+        )
+
+
+def discover_bi_connectors():
+    """Return BI connector names from the bi_connectors/ directory."""
+    if not os.path.isdir(BI_CONNECTORS_DIR):
+        return []
+    return sorted(
+        name
+        for name in os.listdir(BI_CONNECTORS_DIR)
+        if not name.startswith("_")
+        and not name.startswith(".")
+        and os.path.isdir(os.path.join(BI_CONNECTORS_DIR, name))
+    )
+
+
+def validate_bi_connector(name):
+    """Validate that a BI connector has all required artifacts. Returns list of errors."""
+    errors = []
+
+    for filename in BI_REQUIRED_SOURCE_FILES:
+        path = os.path.join(BI_CONNECTORS_DIR, name, filename)
+        if not os.path.isfile(path):
+            errors.append(f"  - Missing bi_connectors/{name}/{filename}")
+
+    manifest_path = os.path.join(BI_CONNECTORS_DIR, name, "manifest.json")
+    if os.path.isfile(manifest_path):
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            errors.append(f"  - manifest.json is not valid JSON: {e}")
+            return errors
+        connection_type = manifest.get("connection_type", "")
+        if not connection_type.startswith("custom-bi-connector-"):
+            errors.append(
+                f"  - manifest.json connection_type must match 'custom-bi-connector-*', "
+                f"got '{connection_type}'"
+            )
+        creds_schema = manifest.get("credentials_schema")
+        if creds_schema is not None and not isinstance(creds_schema, dict):
+            errors.append(
+                f"  - manifest.json 'credentials_schema' must be a dict, "
+                f"got {type(creds_schema).__name__}"
+            )
+
+    return errors
+
+
+def build_bi_context(tmp_dir, connectors):
+    """Copy BI connector artifacts into the temporary build context.
+
+    Copies only the files needed for the image — credentials.json and .env
+    are explicitly excluded to prevent secrets from being baked into images.
+    """
+    _BI_EXCLUDE = {"credentials.json", ".env"}
+    for name in connectors:
+        src = os.path.join(BI_CONNECTORS_DIR, name)
+        dest = os.path.join(tmp_dir, "custom-bi-connectors", name)
+        shutil.copytree(
+            src, dest,
+            ignore=shutil.ignore_patterns(*_BI_EXCLUDE),
         )
 
 
@@ -220,7 +287,7 @@ def check_metric_warnings(name):
     return None
 
 
-def generate_dockerfile(connectors, version, base_image=None, etl_connectors=None):
+def generate_dockerfile(connectors, version, base_image=None, etl_connectors=None, bi_connectors=None):
     """Generate Dockerfile contents for the custom agent image."""
     from_image = base_image or f"montecarlodata/agent:{version}-{AGENT_TYPE}"
     lines = [f"FROM {from_image}", "", "ENV MCD_CUSTOM_CONNECTORS_ENABLED=true", ""]
@@ -249,6 +316,17 @@ def generate_dockerfile(connectors, version, base_image=None, etl_connectors=Non
         lines.append(f"COPY custom-etl-connectors/{name}/ /opt/custom-etl-connectors/{name}/")
         lines.append(
             f"RUN pip install --no-cache-dir -r /opt/custom-etl-connectors/{name}/requirements.txt"
+        )
+        lines.append("")
+
+    for name in (bi_connectors or []):
+        lines.append(f"# BI Connector: {name}")
+        extra_content = read_dockerfile_extra(BI_CONNECTORS_DIR, name)
+        if extra_content:
+            lines.append(extra_content)
+        lines.append(f"COPY custom-bi-connectors/{name}/ /opt/custom-bi-connectors/{name}/")
+        lines.append(
+            f"RUN pip install --no-cache-dir -r /opt/custom-bi-connectors/{name}/requirements.txt"
         )
         lines.append("")
 
@@ -295,7 +373,7 @@ def main():
     parser.add_argument(
         "names",
         nargs="*",
-        help="Connector names to include. Auto-discovers from connectors/ and etl_connectors/ if omitted.",
+        help="Connector names to include. Auto-discovers from connectors/, etl_connectors/, and bi_connectors/ if omitted.",
     )
     parser.add_argument(
         "--docker-platform",
@@ -325,29 +403,35 @@ def main():
     if args.names:
         connectors = []
         etl_connectors = []
+        bi_connectors = []
         for name in args.names:
             base_dir, connector_type = resolve_connector_dir(name)
             if connector_type == "dw":
                 connectors.append(name)
             elif connector_type == "etl":
                 etl_connectors.append(name)
+            elif connector_type == "bi":
+                bi_connectors.append(name)
             else:
                 print(
-                    f"Error: '{name}' not found in connectors/ or etl_connectors/.",
+                    f"Error: '{name}' not found in connectors/, etl_connectors/, or bi_connectors/.",
                     file=sys.stderr,
                 )
                 sys.exit(1)
     else:
         connectors = discover_connectors()
         etl_connectors = discover_etl_connectors()
+        bi_connectors = discover_bi_connectors()
 
-    if not connectors and not etl_connectors:
+    if not connectors and not etl_connectors and not bi_connectors:
         print(
-            "Error: No connectors found. Run tests and export first, or pass connector names.",
+            "Error: No connectors found. Run tests and export first (DW only), "
+            "scaffold one (create_connector.py <name> [--etl | --bi]), or pass connector names.",
             file=sys.stderr,
         )
         print(
-            "\n  CONNECTOR=<name> docker compose run --rm test --export\n",
+            "\n  CONNECTOR=<name> docker compose run --rm test --export   # DW connectors only\n"
+            "  python scripts/create_connector.py <name> [--etl | --bi]\n",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -369,20 +453,39 @@ def main():
         if errors:
             all_errors[name] = errors
 
+    # Validate BI connectors
+    for name in bi_connectors:
+        errors = validate_bi_connector(name)
+        if errors:
+            all_errors[name] = errors
+
     if all_errors:
         print("Error: Some connectors are missing required artifacts:\n", file=sys.stderr)
+        # DW connectors export their capabilities via the test suite; ETL and
+        # BI manifests are authored in place, so point those at their dirs.
+        dw_names = [n for n in all_errors if n in connector_modes]
         for name, errors in all_errors.items():
             if name in connector_modes:
                 print(f"  {name} (mode: {connector_modes[name]}):", file=sys.stderr)
+            elif name in bi_connectors:
+                print(f"  {name} (bi):", file=sys.stderr)
             else:
                 print(f"  {name} (etl):", file=sys.stderr)
             for err in errors:
                 print(err, file=sys.stderr)
-        print(
-            "\nRun the full test suite and export first:\n"
-            "  CONNECTOR=<name> docker compose run --rm test --export\n",
-            file=sys.stderr,
-        )
+        if dw_names:
+            print(
+                "\nRun the full test suite and export first:\n"
+                "  CONNECTOR=<name> docker compose run --rm test --export\n",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "\nFix the artifacts in etl_connectors/<name>/ or "
+                "bi_connectors/<name>/ directly — these connector types are "
+                "manifest-authored and have no export step.\n",
+                file=sys.stderr,
+            )
         sys.exit(1)
 
     # Warn when metric templates exist but prerequisite support is missing
@@ -424,6 +527,7 @@ def main():
             args.version,
             base_image=args.base_image,
             etl_connectors=etl_connectors,
+            bi_connectors=bi_connectors,
         )
         dockerfile_path = os.path.join(tmp_dir, "Dockerfile")
         with open(dockerfile_path, "w") as f:
@@ -434,6 +538,8 @@ def main():
             build_context(tmp_dir, connectors)
         if etl_connectors:
             build_etl_context(tmp_dir, etl_connectors)
+        if bi_connectors:
+            build_bi_context(tmp_dir, bi_connectors)
 
         base_image = args.base_image or f"montecarlodata/agent:{args.version}-{AGENT_TYPE}"
 
@@ -443,6 +549,8 @@ def main():
             all_connector_names.extend(connectors)
         if etl_connectors:
             all_connector_names.extend(f"{n} (etl)" for n in etl_connectors)
+        if bi_connectors:
+            all_connector_names.extend(f"{n} (bi)" for n in bi_connectors)
         print(f"Building image '{tag}' with connectors: {', '.join(all_connector_names)}")
         print(f"Base image: {base_image}")
         print(f"Docker platform: {args.docker_platform}")
@@ -452,14 +560,18 @@ def main():
             print(f"  {name}: {mode_label}")
         for name in etl_connectors:
             print(f"  {name}: etl")
+        for name in bi_connectors:
+            print(f"  {name}: bi")
         print()
 
-        # Run docker build
-        result = subprocess.run(
-            ["docker", "build", "--pull", "--platform", args.docker_platform, "-t", tag, "."],
-            cwd=tmp_dir,
-            check=False,
-        )
+        # Run docker build. --pull keeps the published base image fresh, but it
+        # forces the base to be resolved from a registry — which fails outright
+        # for a local-only image, the very case --base-image exists to support.
+        build_cmd = ["docker", "build"]
+        if not args.base_image:
+            build_cmd.append("--pull")
+        build_cmd += ["--platform", args.docker_platform, "-t", tag, "."]
+        result = subprocess.run(build_cmd, cwd=tmp_dir, check=False)
         if result.returncode != 0:
             print("\nError: Docker build failed.", file=sys.stderr)
             sys.exit(result.returncode)
@@ -485,6 +597,11 @@ def main():
         for name in etl_connectors:
             print(f"  {name}")
         print()
+    if bi_connectors:
+        print("BI connectors:")
+        for name in bi_connectors:
+            print(f"  {name}")
+        print()
     print("Next steps:")
     step = 1
     if connectors:
@@ -492,6 +609,9 @@ def main():
         step += 1
     if etl_connectors:
         print(f"  {step}. Verify ETL connectors: docker run --rm --entrypoint ls {tag} /opt/custom-etl-connectors/")
+        step += 1
+    if bi_connectors:
+        print(f"  {step}. Verify BI connectors: docker run --rm --entrypoint ls {tag} /opt/custom-bi-connectors/")
         step += 1
     print(f"  {step}. Push to your container registry:")
     print(f"     docker tag {tag} <your-registry>/{tag}")
@@ -508,6 +628,10 @@ def main():
             creds_files.append(creds_path)
     for name in etl_connectors:
         creds_path = os.path.join(ETL_CONNECTORS_DIR, name, "credentials.json")
+        if os.path.isfile(creds_path):
+            creds_files.append(creds_path)
+    for name in bi_connectors:
+        creds_path = os.path.join(BI_CONNECTORS_DIR, name, "credentials.json")
         if os.path.isfile(creds_path):
             creds_files.append(creds_path)
 

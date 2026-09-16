@@ -10,7 +10,6 @@ works without an extra step for people who haven't changed connectors.
 """
 import glob
 import os
-import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCKERFILE_PATH = os.path.join(REPO_ROOT, "Dockerfile")
@@ -38,15 +37,13 @@ def _build_footer():
         "COPY . .",
         "",
         "RUN find connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;",
+        # The family dirs are git-tracked, so these lines are emitted
+        # unconditionally: gating them on a */requirements.txt existing at
+        # generation time makes the output machine-dependent (a fresh
+        # checkout would delete them from the committed Dockerfile).
+        "RUN find etl_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;",
+        "RUN find bi_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;",
     ]
-
-    has_etl_requirements = bool(
-        glob.glob(os.path.join(REPO_ROOT, "etl_connectors", "*", "requirements.txt"))
-    )
-    if has_etl_requirements:
-        footer_lines.append(
-            "RUN find etl_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;"
-        )
 
     footer_lines.append("")
     footer_lines.append('ENTRYPOINT ["pytest"]')
@@ -56,46 +53,28 @@ def _build_footer():
 
 
 def main():
-    connector_extras = sorted(
-        glob.glob(os.path.join(REPO_ROOT, "connectors", "*", "Dockerfile.extra"))
-    )
-    etl_extras = sorted(
-        glob.glob(os.path.join(REPO_ROOT, "etl_connectors", "*", "Dockerfile.extra"))
-    )
-
     lines = [HEADER.format(agent_type=AGENT_TYPE)]
     included = []
-    etl_included = []
 
-    for path in connector_extras:
-        name = os.path.basename(os.path.dirname(path))
-        with open(path) as f:
-            content = f.read().strip()
-        # Skip files that contain only comments and whitespace
-        has_instructions = any(
-            line.strip() and not line.strip().startswith("#")
-            for line in content.splitlines()
-        )
-        if content and has_instructions:
-            lines.append(f"# From connectors/{name}/Dockerfile.extra")
-            lines.append(content)
-            lines.append("")
-            included.append(name)
-
-    for path in etl_extras:
-        name = os.path.basename(os.path.dirname(path))
-        with open(path) as f:
-            content = f.read().strip()
-        # Skip files that contain only comments and whitespace
-        has_instructions = any(
-            line.strip() and not line.strip().startswith("#")
-            for line in content.splitlines()
-        )
-        if content and has_instructions:
-            lines.append(f"# From etl_connectors/{name}/Dockerfile.extra")
-            lines.append(content)
-            lines.append("")
-            etl_included.append(name)
+    # Collect Dockerfile.extra system-dependency instructions across all three
+    # connector families, in a stable family order.
+    for family in ("connectors", "etl_connectors", "bi_connectors"):
+        for path in sorted(
+            glob.glob(os.path.join(REPO_ROOT, family, "*", "Dockerfile.extra"))
+        ):
+            name = os.path.basename(os.path.dirname(path))
+            with open(path) as f:
+                content = f.read().strip()
+            # Skip files that contain only comments and whitespace
+            has_instructions = any(
+                line.strip() and not line.strip().startswith("#")
+                for line in content.splitlines()
+            )
+            if content and has_instructions:
+                lines.append(f"# From {family}/{name}/Dockerfile.extra")
+                lines.append(content)
+                lines.append("")
+                included.append(f"{family}/{name}")
 
     lines.append(_build_footer())
 
@@ -104,9 +83,8 @@ def main():
     with open(DOCKERFILE_PATH, "w") as f:
         f.write(dockerfile)
 
-    all_included = included + etl_included
-    if all_included:
-        print(f"Dockerfile generated with extras from: {', '.join(all_included)}")
+    if included:
+        print(f"Dockerfile generated with extras from: {', '.join(included)}")
     else:
         print("Dockerfile generated (no Dockerfile.extra instructions found)")
 
