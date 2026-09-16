@@ -746,7 +746,7 @@ custom-connector-setup/
       connector.py                        # Single-method Connector base (fetch_metadata only)
       validators.py                       # Cross-field validation for returned dicts
     <your-bi-tool>/                       # Created by you
-      connector.py                        # Your implementation (subclasses the base)
+      connector.py                        # Your implementation (implements the base contract standalone)
       credentials.json                    # Vendor API credentials (gitignored)
       manifest.json                       # connection_type, connection_name, asset_class "bi", credentials_schema
       requirements.txt                    # Vendor client library deps

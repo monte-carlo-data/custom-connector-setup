@@ -18,8 +18,11 @@ class Connector:
     There is **no** ``fetch_run_details`` and **no** webhook — BI assets
     have no run/execution pipeline, so the connector exposes only the
     metadata method above. Unlike ETL connectors (which redefine this base
-    and implement both fetch methods), BI connectors may **subclass** this
-    base to enforce the single-method contract.
+    and implement both fetch methods), BI connectors implement the same
+    contract standalone. Do **not** subclass or import this module from
+    connector code — only the connector's own directory ships in the agent
+    image, so a ``_base`` import fails at runtime with
+    ``No module named 'bi_connectors'``.
 
     Return values are ``List[dict]`` — see ``pycarlo.features.ingestion.bi``
     for the full schema (``BiAsset`` for metadata).

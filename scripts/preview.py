@@ -44,23 +44,35 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _resolve_connector():
-    """Return (name, type) for the single requested/auto-detected connector."""
+    """Return (name, type) for the single requested/auto-detected connector.
+
+    A name present in more than one connector family is an error, not a
+    silent pick — the families resolve the same name differently and the
+    user is the only one who knows which they meant.
+    """
     name = os.environ.get("CONNECTOR")
-    kinds = {}
+    found = {}  # name -> [kind, ...] — a list, so collisions survive
     for kind, base in (("dw", "connectors"), ("etl", "etl_connectors"), ("bi", "bi_connectors")):
         base = os.path.join(_ROOT, base)
         if os.path.isdir(base):
             for d in os.listdir(base):
                 if not d.startswith(("_", ".")) and os.path.isdir(os.path.join(base, d)):
-                    kinds[d] = kind
+                    found.setdefault(d, []).append(kind)
     if name:
-        if name not in kinds:
+        if name not in found:
             sys.exit(f"Connector '{name}' not found in connectors/, etl_connectors/, or bi_connectors/.")
-        return name, kinds[name]
-    if len(kinds) == 1:
-        only = next(iter(kinds))
-        return only, kinds[only]
-    sys.exit("Set CONNECTOR=<name> (found: " + ", ".join(sorted(kinds)) + ")")
+        if len(found[name]) > 1:
+            sys.exit(
+                f"Connector '{name}' exists in multiple families: "
+                + ", ".join(found[name])
+                + ". Preview cannot pick for you — rename one or remove the other."
+            )
+        return name, found[name][0]
+    unambiguous = {n: ks[0] for n, ks in found.items() if len(ks) == 1}
+    if len(unambiguous) == 1:
+        only = next(iter(unambiguous))
+        return only, unambiguous[only]
+    sys.exit("Set CONNECTOR=<name> (found: " + ", ".join(sorted(found)) + ")")
 
 
 def _load_connector(name, kind):

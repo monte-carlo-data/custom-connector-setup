@@ -373,7 +373,7 @@ def main():
     parser.add_argument(
         "names",
         nargs="*",
-        help="Connector names to include. Auto-discovers from connectors/ and etl_connectors/ if omitted.",
+        help="Connector names to include. Auto-discovers from connectors/, etl_connectors/, and bi_connectors/ if omitted.",
     )
     parser.add_argument(
         "--docker-platform",
@@ -425,11 +425,13 @@ def main():
 
     if not connectors and not etl_connectors and not bi_connectors:
         print(
-            "Error: No connectors found. Run tests and export first, or pass connector names.",
+            "Error: No connectors found. Run tests and export first (DW only), "
+            "scaffold one (create_connector.py <name> [--etl | --bi]), or pass connector names.",
             file=sys.stderr,
         )
         print(
-            "\n  CONNECTOR=<name> docker compose run --rm test --export\n",
+            "\n  CONNECTOR=<name> docker compose run --rm test --export   # DW connectors only\n"
+            "  python scripts/create_connector.py <name> [--etl | --bi]\n",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -459,6 +461,9 @@ def main():
 
     if all_errors:
         print("Error: Some connectors are missing required artifacts:\n", file=sys.stderr)
+        # DW connectors export their capabilities via the test suite; ETL and
+        # BI manifests are authored in place, so point those at their dirs.
+        dw_names = [n for n in all_errors if n in connector_modes]
         for name, errors in all_errors.items():
             if name in connector_modes:
                 print(f"  {name} (mode: {connector_modes[name]}):", file=sys.stderr)
@@ -468,11 +473,19 @@ def main():
                 print(f"  {name} (etl):", file=sys.stderr)
             for err in errors:
                 print(err, file=sys.stderr)
-        print(
-            "\nRun the full test suite and export first:\n"
-            "  CONNECTOR=<name> docker compose run --rm test --export\n",
-            file=sys.stderr,
-        )
+        if dw_names:
+            print(
+                "\nRun the full test suite and export first:\n"
+                "  CONNECTOR=<name> docker compose run --rm test --export\n",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "\nFix the artifacts in etl_connectors/<name>/ or "
+                "bi_connectors/<name>/ directly — these connector types are "
+                "manifest-authored and have no export step.\n",
+                file=sys.stderr,
+            )
         sys.exit(1)
 
     # Warn when metric templates exist but prerequisite support is missing

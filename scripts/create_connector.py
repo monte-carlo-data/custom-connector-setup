@@ -290,12 +290,15 @@ def _create_bi_connector(name, repo_root):
 def main():
     parser = argparse.ArgumentParser(description="Create a new connector scaffold")
     parser.add_argument("name", help="Connector name (e.g. postgres, coalesce)")
-    parser.add_argument(
+    # A connector is exactly one family — passing two type flags is an error,
+    # not a silent pick of whichever branch runs first.
+    type_group = parser.add_mutually_exclusive_group()
+    type_group.add_argument(
         "--etl",
         action="store_true",
         help="Create an ETL pipeline connector instead of a data-warehouse connector",
     )
-    parser.add_argument(
+    type_group.add_argument(
         "--bi",
         action="store_true",
         help="Create a BI connector instead of a data-warehouse connector",

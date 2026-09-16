@@ -74,19 +74,22 @@ _ETL_CAPABILITY_LABELS = {
 }
 
 
-def pytest_configure(config):
-    if getattr(config, "_connector_type", None) == "etl":
+def pytest_sessionstart(session):
+    # Reject --export for ETL and BI connectors here, not in
+    # pytest_configure: hooks run LIFO, so at configure time this plugin runs
+    # before the root conftest has set config._connector_type. By session
+    # start the type is known. --export walks the DW capability/export path;
+    # for manifest-authored ETL/BI connectors it would write a phantom
+    # output/<name>/ directory that later name-less builds then fail on.
+    config = session.config
+    if getattr(config, "_connector_type", None) in ("etl", "bi"):
         if config.getoption("--export", default=False):
             raise pytest.UsageError(
-                "--export is not supported for ETL connectors"
+                "--export is not supported for ETL or BI connectors"
             )
-        config._capabilities_results = {
-            "templates": {},
-            "capabilities": {},
-            "etl_capabilities": {},
-        }
-        return
 
+
+def pytest_configure(config):
     if config.getoption("--export", default=False) and config.getoption("-m", default=""):
         raise pytest.UsageError(
             "--export requires the full test suite. Remove the -m filter and re-run."
@@ -346,7 +349,9 @@ def _get_setup_version():
 
 
 def pytest_sessionfinish(session, exitstatus):
-    if getattr(session.config, "_connector_type", None) == "etl":
+    # ETL and BI connectors have no capability export — the DW path below
+    # would write a phantom output/<name>/ manifest for them.
+    if getattr(session.config, "_connector_type", None) in ("etl", "bi"):
         return
 
     export = session.config.getoption("--export", default=False)

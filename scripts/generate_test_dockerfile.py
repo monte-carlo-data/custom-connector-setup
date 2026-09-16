@@ -10,7 +10,6 @@ works without an extra step for people who haven't changed connectors.
 """
 import glob
 import os
-import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCKERFILE_PATH = os.path.join(REPO_ROOT, "Dockerfile")
@@ -38,23 +37,13 @@ def _build_footer():
         "COPY . .",
         "",
         "RUN find connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;",
+        # The family dirs are git-tracked, so these lines are emitted
+        # unconditionally: gating them on a */requirements.txt existing at
+        # generation time makes the output machine-dependent (a fresh
+        # checkout would delete them from the committed Dockerfile).
+        "RUN find etl_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;",
+        "RUN find bi_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;",
     ]
-
-    has_etl_requirements = bool(
-        glob.glob(os.path.join(REPO_ROOT, "etl_connectors", "*", "requirements.txt"))
-    )
-    if has_etl_requirements:
-        footer_lines.append(
-            "RUN find etl_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;"
-        )
-
-    has_bi_requirements = bool(
-        glob.glob(os.path.join(REPO_ROOT, "bi_connectors", "*", "requirements.txt"))
-    )
-    if has_bi_requirements:
-        footer_lines.append(
-            "RUN find bi_connectors -name requirements.txt -exec pip install --no-cache-dir -r {} \\;"
-        )
 
     footer_lines.append("")
     footer_lines.append('ENTRYPOINT ["pytest"]')

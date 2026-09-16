@@ -32,7 +32,9 @@ def _parse_iso8601(value: str, field_name: str, event_index: str) -> list[Valida
     try:
         # Handle Z suffix for Python < 3.11
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
+        # TypeError: a non-string (e.g. a native datetime from a vendor SDK)
+        # hits datetime.replace and raises instead of failing the parse.
         return [ValidationError(
             field=field_name,
             message=f"Invalid ISO 8601 datetime: {value!r}",
@@ -62,6 +64,9 @@ def _validate_asset_refs(
     - ``role`` is one of the allowed values and matches the list context
     - At least one of ``mcon`` or ``fully_qualified_name`` is present
     """
+    if not isinstance(refs, list):
+        errors.append(ValidationError(field_name, f"{field_name} must be a list", event_index))
+        return
     for ref_idx, ref in enumerate(refs):
         if len(errors) >= MAX_ERRORS:
             return
